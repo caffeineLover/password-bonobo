@@ -47,7 +47,10 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Data effect: File data is loaded into memory without changing the file.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:86-95`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1288-1610`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1479-1507`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1670-1702`;
+    kind: `source`.
 - Bonobo note: Authentication success, record loading, and active-file replacement form one visible open operation.
 
 ### GOR-BEH-004 - Reject an inaccessible file before authentication
@@ -76,16 +79,17 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 
 ### GOR-BEH-006 - Open with a nonfatal integrity warning
 
-- Confidence: `Confirmed`.
+- Confidence: `Supported`.
 - Preconditions: A version 3 file decrypts but its stored integrity value does not match its contents.
 - Action: The user opens the file with the correct master password.
 - Observable result: The file opens and a warning says its integrity could not be authenticated.
 - Data effect: Decoded data becomes active despite the warning; the file is not changed by opening.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:719-732`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:447-458`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:450-458`;
     kind: `source`.
-- Bonobo note: Integrity failure is warning-only at this revision and must not be conflated with a hard open error.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1594-1609`;
+    kind: `source`.
+- Bonobo note: Static source establishes the nonfatal path, but no executable observation raises confidence further.
 
 ### GOR-BEH-007 - Change the master password
 
@@ -103,12 +107,18 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Confidence: `Confirmed`.
 - Preconditions: A file-backed vault contains unsaved changes and its destination is writable.
 - Action: The user saves.
-- Observable result: Progress and completion status are shown, and the dirty indication clears after success.
-- Data effect: The selected PasswordSafe version is written to the existing path.
+- Observable result: Progress is shown. The dirty state clears after the primary write and initial backup succeed,
+  before any later enabled-backup attempt.
+- Data effect: The selected PasswordSafe version is written to the existing path before either backup outcome.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4363-4435`; kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:147-157`; kind: `message`.
-- Bonobo note: Dirty-state clearing is contingent on the save path's complete success handling.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4382-4390`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4409`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4420-4435`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:151-157`; kind: `message`.
+- Bonobo note: Primary output, the initial backup, and a later enabled backup are separate save outcomes.
 
 ### GOR-BEH-009 - Save to a different path
 
@@ -134,17 +144,17 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:143-146`; kind: `message`.
 - Bonobo note: Retry and cancel are data-preserving outcomes distinct from a write attempt that later fails.
 
-### GOR-BEH-011 - Contain an interrupted file write
+### GOR-BEH-011 - Clean up a caught write-stage failure
 
 - Confidence: `Supported`.
-- Preconditions: A save begins for an existing or new destination.
-- Action: Writing fails before the replacement is ready.
-- Observable result: The save fails and temporary output is removed when the handled write path reports an error.
-- Data effect: The prior destination remains until a complete temporary file can replace it.
+- Preconditions: A save has opened temporary output and its format writer reports a caught error.
+- Action: The caught write-stage operation fails before replacement begins.
+- Observable result: The save reports failure and removes the temporary output.
+- Data effect: The prior destination is not replaced by this caught writer failure.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe.tcl:142-192`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe.tcl:157-180`;
     kind: `source`.
-- Bonobo note: This is the only directly evidenced interruption safeguard for vault-file replacement.
+- Bonobo note: Replacement failure and process or system interruption are separate unverified cases in GOR-BEH-065.
 
 ### GOR-BEH-012 - Resolve unsaved work before opening another vault
 
@@ -180,18 +190,23 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4849-4869`; kind: `source`.
 - Bonobo note: Clean closure has privacy effects even without a vault-data write.
 
-### GOR-BEH-015 - Lock an active vault
+### GOR-BEH-015 - Enter the locked state
 
-- Confidence: `Confirmed`.
+- Confidence: `Supported`.
 - Preconditions: A vault is active and not already locked.
 - Action: The user requests a lock or the idle timer expires.
 - Observable result: Clipboard data is cleared, open secondary windows are hidden, and an unlock prompt takes focus.
-- Data effect: Decrypted in-memory vault data is retained; optional backup behavior may touch disk.
+- Data effect: Decrypted in-memory vault data is retained; the general lock transition does not discard unsaved edits.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4957-5017`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4957-4986`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5040-5068`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5088-5117`;
+    kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `unit-tests/lock-database/lock.test`;
     test: `lock-database-1.1`; kind: `test`.
-- Bonobo note: Locking obscures access without closing or re-reading the vault.
+- Bonobo note: The smoke test exercises lock entry but does not prove every composite interface and data effect.
 
 ### GOR-BEH-016 - Unlock or exit from the locked state
 
@@ -201,7 +216,8 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: Correct input restores hidden windows; wrong input is cleared; exit uses close safeguards.
 - Data effect: Unlock preserves in-memory changes; exiting may save or discard them after confirmation.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5013-5175`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5119-5175`;
+    kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:160-165`; kind: `message`.
 - Bonobo note: Locked-state exit can still expose the ordinary unsaved-change decision.
 
@@ -214,7 +230,12 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Data effect: Vault data remains in memory and no unsaved change is discarded by the timeout alone.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:382-391`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4919-4946`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4919-4935`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4944-4946`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5115-5117`;
+    kind: `source`.
 - Bonobo note: Timeout, explicit lock, and optional minimization are distinct observable settings.
 
 ### GOR-BEH-018 - Enable and locate save backups
@@ -226,7 +247,10 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Data effect: A same-directory or configured-directory copy may be replaced or timestamped.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:297-301`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4423`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4402`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4420-4423`;
+    kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `unit-tests/backup/backup.test`;
     tests: `backup-1.1`, `backup-1.2`; kind: `test`.
 - Bonobo note: A disabled-preference black-box observation is missing, so backup enablement remains contradictory.
@@ -234,14 +258,28 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 ### GOR-BEH-019 - Report a backup failure after vault output
 
 - Confidence: `Supported`.
-- Preconditions: Vault output succeeds but the configured backup destination is invalid or unwritable.
-- Action: A save attempts its backup phase.
-- Observable result: An error or status reports that backup failed and the overall operation returns a backup error.
-- Data effect: The primary file may already contain the new data even though the operation reports failure.
+- Preconditions: Primary vault output succeeds and either the initial or later enabled backup fails.
+- Action: The user saves directly or through the close confirmation.
+- Observable result: An initial backup failure returns before the dirty state clears. A later enabled-backup failure
+  returns an error after the dirty state clears. If Close requested the save, either error stops that close attempt.
+  On close retry without later edits, only the initial failure prompts again; the later failure then closes
+  without another prompt.
+- Data effect: The primary file already contains new data in both cases. The later failure follows a successful
+  initial backup and leaves the in-memory vault clean despite the reported error.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4406`; kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4611-4636`; kind: `source`.
-- Bonobo note: Primary-save success and backup-copy success must be reported separately to avoid retry confusion.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4402`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4404-4409`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4420-4430`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4611-4624`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4627-4636`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4816-4847`;
+    kind: `source`.
+- Bonobo note: Retry and close behavior depends on which backup phase failed, not only on the returned error.
 
 ### GOR-BEH-020 - Recover a forgotten master password
 
@@ -282,13 +320,19 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 ### GOR-BEH-023 - Edit entry fields and timestamps
 
 - Confidence: `Confirmed`.
-- Preconditions: An entry is selected and is not already open in another edit session.
+- Preconditions: An entry is selected.
 - Action: The user changes group, title, URL, username, password, or notes and accepts.
 - Observable result: Password content starts concealed; changed content replaces the tree item and reports modification.
 - Data effect: Fields update; password changes update password-change time; any change updates modification time.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:186-249`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:2333-2429`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:188-195`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:197-243`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:2340-2362`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:2375-2429`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:2463-2492`;
+    kind: `source`.
 - Bonobo note: Concealment, user-authored metadata, and timestamp side effects are part of the visible edit contract.
 
 ### GOR-BEH-024 - Validate minimum entry identity and group syntax
@@ -471,7 +515,16 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Data effect: Preference storage changes; vault contents do not.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:284-289`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6127-6165`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1581-1588`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4532-4540`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6134-6146`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6234-6247`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6313-6322`;
+    kind: `source`.
 - Bonobo note: Zero capacity and explicit clearing are privacy-relevant observable choices.
 
 ### GOR-BEH-039 - Apply global, default, and vault preferences
@@ -479,12 +532,22 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Confidence: `Confirmed`.
 - Preconditions: The relevant preferences scope is available.
 - Action: The user accepts global settings, new-vault defaults, export settings, or active-vault settings.
-- Observable result: Cancel discards global edits. Defaults affect new vaults; vault settings affect the active vault.
-- Data effect: Global settings persist outside the vault; active-vault settings make that vault dirty.
+- Observable result: Cancel discards buffered global edits. Clearing recent history is an exception: Cancel does not
+  restore the already-cleared live list described by GOR-BEH-038. Defaults affect new vaults; vault settings affect
+  the active vault.
+- Data effect: Accepted global settings change application preference state outside the vault; clearing recent history
+  mutates that live state immediately, while active-vault setting changes make that vault dirty.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:265-380`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5829-6170`; kind: `source`.
-- Bonobo note: Preference scope is observable and affects portability of user choices.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:265-271`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:345-348`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:377-380`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5784-5816`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:5834-5839`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6134-6165`;
+    kind: `source`.
+- Bonobo note: Preference cancellation has a deliberate recent-history exception with a distinct privacy effect.
 
 ### GOR-BEH-040 - Save automatically after a change
 
@@ -518,9 +581,12 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: Control is used on Windows and X11; Command is used on macOS for documented actions.
 - Data effect: The invoked action has the same data effect as its non-keyboard path.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:670-713`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:430-454`; kind: `source`.
-- Bonobo note: Keyboard access is a platform-specific compatibility surface, including the macOS open delay.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:674-686`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:444-454`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:643-658`;
+    kind: `source`.
+- Bonobo note: Keyboard access is a platform-specific compatibility surface.
 
 ### GOR-BEH-043 - Copy a URL by keyboard
 
@@ -542,8 +608,13 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: Copy or missing-field status is reported. A nonzero timer and scheduled exit cleanup clear content.
 - Data effect: Vault data is unchanged; operating-system clipboard or selection ownership changes.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:210-239`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6650-6702`; kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:210-228`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6660-6700`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4877-4910`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4859-4862`;
+    kind: `source`.
 - Bonobo note: Missing data, timed clearing, manual clearing, and exit clearing are distinct privacy outcomes.
 
 ### GOR-BEH-045 - Auto-copy after an X11 paste
@@ -572,14 +643,15 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 
 ### GOR-BEH-047 - Report browser-launch failures
 
-- Confidence: `Supported`.
+- Confidence: `Unverified`.
 - Preconditions: URL data, executable configuration, parameter substitution, or operating-system execution is invalid.
 - Action: The user requests browser launch.
-- Observable result: Missing URL, configuration, or substitution reports status. Execution failure shows an error.
+- Observable result: Static evidence assigns status results to missing URL, configuration, and substitution cases and
+  an error result to launch failure, but the missing-URL presentation has not been observed during execution.
 - Data effect: Vault data is unchanged and username auto-copy occurs only after successful process launch.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:7537-7567`; kind: `source`.
-- Bonobo note: Configuration validation and operating-system failure have different visible presentations.
+- Bonobo note: Executable evidence for the missing URL result is missing; the static failure distinctions remain useful.
 
 ### GOR-BEH-048 - Perform AutoType
 
@@ -605,9 +677,14 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: UTF-8 CSV is written; password and notes inclusion is configurable and completion is reported.
 - Data effect: A new unencrypted file containing selected vault data is created or truncated.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:351-374`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `unit-tests/csv-export/csv-export.test`;
-    test: `csv-export.test-1.0`; kind: `test`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:353-369`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:371-374`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3387-3400`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3432-3492`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`;
+    location: `unit-tests/csv-export/csv-export.test:48-60`; kind: `test`.
 - Bonobo note: The warning can be disabled, so export remains an explicit high-risk data disclosure action.
 
 ### GOR-BEH-050 - Import supported CSV columns
@@ -618,10 +695,18 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: Valid rows become entries; missing group or title receives a generated batch default.
 - Data effect: Valid records are added in memory and the vault becomes dirty when at least one succeeds.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:898-986`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `unit-tests/csv-import/csv-import.test`;
-    tests: `csv-import.test-1.1`, `csv-import.test-1.10`, `csv-import.test-2.1`, `csv-import.test-2.2`,
-    `csv-import.test-2.3`; kind: `test`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:924-948`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:950-986`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3532-3547`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3589-3600`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3677-3732`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`;
+    location: `unit-tests/csv-import/csv-import.test:120-124`; kind: `test`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`;
+    location: `unit-tests/csv-import/csv-import.test:153-188`; kind: `test`.
 - Bonobo note: Imported metadata includes identifiers and timestamps, not only visible login fields.
 
 ### GOR-BEH-051 - Handle CSV import errors and partial success
@@ -632,9 +717,18 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: File and header failures stop import. Invalid rows are skipped; valid rows continue.
 - Data effect: A partially valid file can add records; invalid provisional records are removed.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3501-3737`; kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `unit-tests/csv-import/csv-import.test`;
-    tests: `csv-import.test-1.2` through `csv-import.test-1.13`; kind: `test`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3526-3587`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3604-3620`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3622-3673`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3677-3702`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3706-3732`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`;
+    location: `unit-tests/csv-import/csv-import.test:70-144`; kind: `test`.
 - Bonobo note: Import is not all-or-nothing for row-level errors, which is a material data expectation.
 
 ### GOR-BEH-052 - Merge another vault
@@ -653,13 +747,16 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 
 - Confidence: `Confirmed`.
 - Preconditions: A merge produced one or more conflict pairs.
-- Action: The user chooses or edits every conflicting field, then combines the pair, resets choices, or defers it.
+- Action: The user chooses or edits every conflicting field and combines the pair.
 - Observable result: Combine is unavailable until all differing fields have a choice; passwords begin concealed.
-- Data effect: Combining updates one record and deletes its paired duplicate; deferral retains both.
+- Data effect: Combining updates one record and deletes its paired duplicate.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:1030-1087`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:7998-8354`; kind: `source`.
-- Bonobo note: Combine and defer have different deletion effects and must remain distinguishable.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:1039-1068`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:8257-8266`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:8319-8354`;
+    kind: `source`.
+- Bonobo note: Combine mechanics are distinct from the post-save close boundary in GOR-BEH-063.
 
 ### GOR-BEH-054 - Leave merge conflicts unresolved
 
@@ -696,19 +793,24 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
 - Bonobo note: These omissions are explicit legacy limitations and can affect lossless round trips.
 
-### GOR-BEH-057 - Preserve unrecognized record fields
+### GOR-BEH-057 - Handle unrecognized record fields
 
 - Confidence: `Supported`.
 - Preconditions: A version 2 or 3 record contains a field type without specialized interpretation.
-- Action: The file is opened and later saved in the same or another supported version.
-- Observable result: No user-facing editor is established, but the generic value remains associated with the record.
-- Data effect: Read and write retain unrecognized field numbers and raw values unless the record is removed.
+- Action: The file is opened and later saved.
+- Observable result: No user-facing editor or warning is established for an unrecognized field.
+- Data effect: Static evidence indicates that a generic numeric type and value remain available to output, but no
+  executable preservation or loss result is established.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v2.tcl:210-323`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v2.tcl:234-323`;
     kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:186-304`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v2.tcl:508-634`;
     kind: `source`.
-- Bonobo note: Same-version and cross-version black-box round trips are still missing, so confidence remains one-kind.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:218-304`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:636-738`;
+    kind: `source`.
+- Bonobo note: A same-format save and a format-conversion observation are missing, so confidence remains one-kind.
 
 ### GOR-BEH-058 - Reject truncation but warn on authentication mismatch
 
@@ -718,8 +820,14 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 - Observable result: Truncation and invalid lengths stop opening; an integrity mismatch permits opening with warning.
 - Data effect: Hard failure rejects decoded records; warning-only failure activates them without changing the file.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:719-732`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:48-126`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:728-730`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:48-111`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:343-376`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:435-458`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1594-1609`;
     kind: `source`.
 - Bonobo note: Structural and integrity failures deliberately have different visible and data-loading outcomes.
 
@@ -749,15 +857,21 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 
 ### GOR-BEH-061 - Apply platform-specific file and preference locations
 
-- Confidence: `Confirmed`.
+- Confidence: `Supported`.
 - Preconditions: The application saves vault data or global preferences on a supported desktop platform.
 - Action: A save or preference persistence occurs.
-- Observable result: Unix permissions follow filesystem policy; macOS uses its preferences directory.
-- Data effect: Vault access bits and preference-file locations vary by platform without changing record content.
+- Observable result: On macOS, the preferences directory is used only when present; otherwise the home-file fallback
+  is used. Unix vault permissions follow the creation mask, and replacement attempts restore prior access bits.
+- Data effect: Preference-file location and Unix vault permissions vary by platform without changing record content.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:808-823`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4354-4418`; kind: `source`.
-- Bonobo note: File permissions and preference locations are platform concerns, not vault-format differences.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:818-823`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4354-4360`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4411-4418`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:6277-6287`;
+    kind: `source`.
+- Bonobo note: The macOS preference fallback and Unix permission behavior are separately supported static outcomes.
 
 ### GOR-BEH-062 - Present operation errors without mutating data
 
@@ -770,3 +884,54 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:3741-3752`; kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:115-156`; kind: `message`.
 - Bonobo note: Generic presentation does not override the operation-specific partial-success and data-loss cases above.
+
+### GOR-BEH-063 - Lose a post-save conflict resolution on close
+
+- Confidence: `Supported`.
+- Preconditions: A merge conflict remains after the vault is saved, leaving no earlier unsaved-change indication.
+- Action: The user combines the conflict; that mutation updates one record and deletes its duplicate without marking
+  the vault dirty, then the user closes without another change.
+- Observable result: The conflict tab closes, and application close proceeds without an unsaved-change prompt.
+- Data effect: Closing loses the combined field choices and duplicate deletion; the saved file retains the earlier
+  conflicting pair.
+- Evidence:
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:1063-1068`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:8319-8354`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4816-4847`;
+    kind: `source`.
+- Bonobo note: This is a destructive-data boundary distinct from deferring and saving both records in GOR-BEH-054.
+
+### GOR-BEH-064 - Lock an untitled vault while backups are enabled
+
+- Confidence: `Supported`.
+- Preconditions: An active vault has no file path and global backup-on-save behavior is enabled.
+- Action: The user locks and answers the prompt about saving the untitled vault.
+- Observable result: Choosing Yes requests a save destination; completed primary output creates the file before the
+  backup outcome and lock prompt. Choosing No creates no file. A non-success result is reported, then locking continues.
+- Data effect: The Yes path can create the primary file even if a later backup phase reports failure before lock.
+- Evidence:
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4997-5011`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4473-4482`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4492-4515`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4517-4524`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4544-4555`;
+    kind: `source`.
+- Bonobo note: Untitled-vault lock has a file-creation choice not present in the general lock transition.
+
+### GOR-BEH-065 - Handle replacement failure or external interruption
+
+- Confidence: `Unverified`.
+- Preconditions: A vault save has completed temporary output but has not completed destination replacement, or the
+  process or system interrupts the save outside the caught writer-error stage.
+- Action: Replacement fails, or the process or system stops during staging or replacement.
+- Observable result: Cleanup, retry presentation, and application state are not established.
+- Data effect: Which of the prior destination, temporary output, or replacement survives is not established.
+- Evidence:
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe.tcl:150-190`;
+    kind: `source`.
+- Bonobo note: Fault injection and process or system interruption evidence are missing for the replacement boundary.
