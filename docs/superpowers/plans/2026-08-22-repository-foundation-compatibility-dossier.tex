@@ -45,14 +45,6 @@
 \setlength{\emergencystretch}{3em} % prevent overfull lines
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-\lstset{
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  breakatwhitespace=false,
-  columns=fullflexible,
-  keepspaces=true,
-  showstringspaces=false
-}
 \usepackage{bookmark}
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
@@ -121,8 +113,10 @@ and Poppler.
   No Gorilla source, comments, identifiers, file organization, control
   flow, UI assets, or translations enter Bonobo.
 \item
-  No upstream PasswordSafe database becomes a fixture without separate
-  provenance and sensitive-data review.
+  No upstream PasswordSafe database may enter a tracked fixture path.
+  Every tracked credential or vault fixture needs recorded proof that
+  its content is synthetic or fabricated. License review, sensitive-data
+  scanning, and approval are additional mandatory gates.
 \item
   Bonobo-authored code uses SPDX identifier
   \passthrough{\lstinline!GPL-3.0-or-later!}.

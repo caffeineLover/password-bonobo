@@ -86,7 +86,9 @@ The research pass must not:
 
 - Modify the Gorilla checkout.
 - Copy source, comments, identifiers, file organization, control flow, UI assets, or translations into Bonobo.
-- Import upstream `.psafe3` files as Bonobo fixtures without a separate provenance and sensitive-data review.
+- Import upstream `.psafe3` files as Bonobo fixtures.  Upstream vault files remain external research-only and may never
+  enter tracked fixture paths; every tracked credential or vault fixture requires recorded synthetic-data proof,
+  license review, sensitive-data scanning, and approval.
 - Add Python type hints or Bonobo comments to Tcl files.
 - Cite source fragments in product code.
 - Treat the absence of an upstream test as proof that a behavior is unsupported.

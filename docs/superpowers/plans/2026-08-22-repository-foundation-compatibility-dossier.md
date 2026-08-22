@@ -21,7 +21,9 @@ GitHub Actions, Pandoc, XeLaTeX, and Poppler.
 - Gorilla baseline commit: `6728e85c05ac25357b8f19f541487b9d26a97402`.
 - Gorilla source stays untouched and outside the Bonobo repository.
 - No Gorilla source, comments, identifiers, file organization, control flow, UI assets, or translations enter Bonobo.
-- No upstream PasswordSafe database becomes a fixture without separate provenance and sensitive-data review.
+- No upstream PasswordSafe database may enter a tracked fixture path.  Every tracked credential or vault fixture needs
+  recorded proof that its content is synthetic or fabricated.  License review, sensitive-data scanning, and approval
+  are additional mandatory gates.
 - Bonobo-authored code uses SPDX identifier `GPL-3.0-or-later`.
 - The iOS distribution exception remains a review item; do not publish provisional wording as approved license text.
 - Target CPython `>=3.14,<3.15`.

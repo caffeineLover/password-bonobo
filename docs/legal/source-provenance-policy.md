@@ -6,6 +6,10 @@ This policy protects Password Bonobo's original implementation work and records 
 reviewable, neutral project knowledge.  It applies to Bonobo-authored source, tests, fixtures, documentation,
 dependencies, assets, and research records.  It does not grant permission to reuse material owned by another party.
 
+Before commit, every future file must be classified and receive accurate per-file or appropriately bounded REUSE
+annotation metadata.  Third-party notices must be preserved and cannot be supplemented with ungranted Bonobo ownership
+or licensing claims.
+
 ## 2. Allowed authoritative inputs
 
 Product implementation and tests may use these authoritative inputs:
@@ -32,8 +36,8 @@ uses the approved Bonobo documents, official format documentation, and synthetic
 
 Do not copy or adapt external source, comments, identifiers, file organization, control flow, UI assets, translations,
 test fixtures, screenshots, or other copyrightable implementation expression.  Do not quote external source fragments
-in product code or compatibility documents.  Do not import upstream vault files unless they pass the fixture intake
-process and receive explicit approval.
+in product code or compatibility documents.  Upstream vault files remain external research-only and may never enter
+tracked fixture paths.
 
 ## 5. Evidence citation format
 
@@ -49,10 +53,11 @@ source expression it references.
 
 ## 6. Fixture intake
 
-Before a fixture is accepted, record its origin and license, establish that its data is synthetic or otherwise approved
-for redistribution, scan it for sensitive data, and obtain the required approval.  The intake record must state the
-reviewer or approving authority only when that role and decision have been formally defined; it must not invent one.
-Fixtures containing real credentials, personal vault data, tokens, or provider metadata are prohibited.
+Before a fixture is accepted, record proof that every credential and vault content is synthetic or fabricated, together
+with its origin and license.  Approval, license review, and sensitive-data scanning are additional mandatory gates;
+none can substitute for synthetic provenance proof.  The intake record must state the reviewer or approving authority
+only when that role and decision have been formally defined; it must not invent one.  Real, personal, or upstream vault
+files and fixtures containing real credentials, tokens, or provider metadata are prohibited from tracked fixture paths.
 
 ## 7. Dependency and asset ledger
 
