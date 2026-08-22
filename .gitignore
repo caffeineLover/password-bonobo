@@ -1,0 +1,35 @@
+# Shared standards are read from the canonical external standards repository.
+/docs/prompts/
+
+# Generated documentation and render intermediates are not versioned.
+*.pdf
+/tmp/
+
+# Runtime and development state.
+/logs/
+/.venv/
+/.mypy_cache/
+/.pytest_cache/
+/.ruff_cache/
+/.coverage
+/htmlcov/
+/dist/
+/build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+/.worktrees/
+/.superpowers/
+
+# Editors and operating systems.
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Vaults are denied by default.  Later synthetic fixtures require an explicit exception.
+*.psafe3
+*.psafe
+*.dat
+!/tests/fixtures/synthetic/**/*.psafe3
+!/tests/fixtures/synthetic/**/*.psafe

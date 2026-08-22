@@ -1,0 +1,2135 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  letterpaper,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{listings}
+\newcommand{\passthrough}[1]{#1}
+\lstset{defaultdialect=[5.3]Lua}
+\lstset{defaultdialect=[x86masm]Assembler}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+% fallback for those not using the hyperref driver hyperxmp:
+\makeatletter
+\@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
+\makeatother
+\hypersetup{
+  pdftitle={Password Bonobo Repository Foundation and Compatibility Dossier Plan},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Password Bonobo Repository Foundation and Compatibility Dossier
+Plan}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\section{Repository Foundation and Compatibility Dossier Implementation
+Plan}\label{repository-foundation-and-compatibility-dossier-implementation-plan}
+
+\begin{quote}
+\textbf{For agentic workers:} REQUIRED SUB-SKILL: Use
+superpowers:subagent-driven-development (recommended) or
+superpowers:executing-plans to implement this plan task-by-task. Steps
+use checkbox (\passthrough{\lstinline!- [ ]!}) syntax for tracking.
+\end{quote}
+
+\textbf{Goal:} Establish a policy-enforced Bonobo repository and convert
+a pinned, untouched Gorilla source baseline into a neutral compatibility
+dossier, parity matrix, and test-oracle catalog.
+
+\textbf{Architecture:} Gorilla remains in a detached sibling research
+checkout and never enters the Bonobo repository. The repository contains
+only original foundation code, enforceable quality policy, neutral
+behavioral documentation, and an empty typed
+\passthrough{\lstinline!bonobo\_core!} package boundary for the next
+subproject.
+
+\textbf{Tech Stack:} Git, CPython 3.14, Hatchling, uv, autopep8, Ruff,
+mypy, pytest, Bandit, pip-audit, REUSE, GitHub Actions, Pandoc, XeLaTeX,
+and Poppler.
+
+\textbf{Spec:}
+\passthrough{\lstinline!docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md!}
+
+\subsection{Global Constraints}\label{global-constraints}
+
+\begin{itemize}
+\tightlist
+\item
+  Gorilla baseline URL:
+  \passthrough{\lstinline!https://github.com/zdia/gorilla.git!}.
+\item
+  Gorilla baseline commit:
+  \passthrough{\lstinline!6728e85c05ac25357b8f19f541487b9d26a97402!}.
+\item
+  Gorilla source stays untouched and outside the Bonobo repository.
+\item
+  No Gorilla source, comments, identifiers, file organization, control
+  flow, UI assets, or translations enter Bonobo.
+\item
+  No upstream PasswordSafe database becomes a fixture without separate
+  provenance and sensitive-data review.
+\item
+  Bonobo-authored code uses SPDX identifier
+  \passthrough{\lstinline!GPL-3.0-or-later!}.
+\item
+  The iOS distribution exception remains a review item; do not publish
+  provisional wording as approved license text.
+\item
+  Target CPython \passthrough{\lstinline!>=3.14,<3.15!}.
+\item
+  Every maintained Python module has a responsibility-focused
+  triple-double-quoted module docstring.
+\item
+  Every maintained Python class, function, and method has the required
+  immediately preceding \passthrough{\lstinline!\#\#\#\#!} comment
+  block.
+\item
+  Every maintained Python declaration is fully typed and passes strict
+  mypy.
+\item
+  Required three-blank-line declaration spacing must survive formatting.
+\item
+  Documentation lines are at most 120 characters.
+\item
+  Real credentials, vaults, tokens, sensitive URLs, and provider
+  metadata are prohibited.
+\item
+  Markdown and same-basename LaTeX are committed for substantial
+  documents; generated PDFs remain uncommitted.
+\end{itemize}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Planned File Structure}\label{planned-file-structure}
+
+\begin{lstlisting}
+Password Bonobo/
+|-- .editorconfig                         # Cross-editor whitespace and line-length defaults.
+|-- .gitattributes                        # Text normalization and binary-file declarations.
+|-- .gitignore                            # Secret-bearing, generated, shared, and local-file exclusions.
+|-- .python-version                       # CPython 3.14 development baseline.
+|-- AGENTS.md                             # Project instruction router.
+|-- CONTRIBUTING.md                       # Contribution hold and future acceptance requirements.
+|-- LICENSES/
+|   `-- GPL-3.0-or-later.txt              # Canonical project license text.
+|-- README.md                             # Product intent, status, and safe development entry points.
+|-- REUSE.toml                            # License annotations for non-source files.
+|-- SECURITY.md                           # Private reporting and sensitive-data rules.
+|-- pyproject.toml                        # Package metadata and all Python tool configuration.
+|-- uv.lock                               # Reproducible development dependency lock.
+|-- .github/workflows/foundation.yml      # Three-platform quality and package workflow.
+|-- docs/compatibility/gorilla/
+|   |-- upstream-baseline.md              # Exact source pin and external-checkout procedure.
+|   |-- behavior-dossier.md               # Neutral behavior and evidence catalog.
+|   |-- feature-parity-matrix.md          # Bonobo disposition for every feature family.
+|   `-- test-oracles.md                   # Synthetic black-box compatibility scenarios.
+|-- docs/legal/
+|   |-- app-store-distribution-exception-plan.md
+|   `-- source-provenance-policy.md
+|-- docs/project-memory/
+|   |-- DECISIONS.md
+|   |-- PROJECT.md
+|   |-- STATE.md
+|   `-- VERIFICATION.md
+|-- src/bonobo_core/
+|   |-- __init__.py                       # Typed package identity only.
+|   `-- py.typed                          # PEP 561 marker.
+|-- tests/fixtures/python_structure/
+|   |-- documented.py.txt                 # Positive structural-policy fixture.
+|   `-- undocumented.py.txt               # Negative structural-policy fixture.
+|-- tests/foundation/
+|   |-- test_package_contract.py          # Package identity and typing marker tests.
+|   `-- test_python_structure.py          # Structural-policy checker behavior.
+`-- tools/
+    |-- check_python_structure.py          # AST-backed source documentation validator.
+    `-- check_tracked_files.py             # Tracked-file and credential-artifact validator.
+\end{lstlisting}
+
+The sibling research checkout defaults to
+\passthrough{\lstinline!../Password Bonobo Research/gorilla!} and is not
+part of this tree.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 1: Establish the Git boundary and baseline
+controls}\label{task-1-establish-the-git-boundary-and-baseline-controls}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create: \passthrough{\lstinline!.gitignore!}
+\item
+  Create: \passthrough{\lstinline!.gitattributes!}
+\item
+  Create: \passthrough{\lstinline!.editorconfig!}
+\item
+  Create: \passthrough{\lstinline!README.md!}
+\item
+  Track: \passthrough{\lstinline!AGENTS.md!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/specs/password-bonobo-url-audit-design.md!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/specs/password-bonobo-python-reimplementation-design.md!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/specs/password-bonobo-python-reimplementation-design.tex!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.tex!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.md!}
+\item
+  Track:
+  \passthrough{\lstinline!docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.tex!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: The existing workspace and approved specifications.
+\item
+  Produces: A \passthrough{\lstinline!main!} repository whose ignore
+  rules define every later task's tracked-file boundary.
+\item[$\square$]
+  \textbf{Step 1: Reconfirm the repository boundary}
+\end{itemize}
+
+Run from the workspace root:
+
+\begin{lstlisting}
+$workspace = (Resolve-Path -LiteralPath '.').Path
+$parent = (Resolve-Path -LiteralPath '..').Path
+git -C $workspace rev-parse --show-toplevel
+git -C $parent rev-parse --show-toplevel
+\end{lstlisting}
+
+Expected: both Git commands fail with
+\passthrough{\lstinline!not a git repository!}. Stop if either resolves
+to an existing repository.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Initialize the primary branch}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git init -b main
+git status --short
+\end{lstlisting}
+
+Expected: Git reports untracked workspace files and branch
+\passthrough{\lstinline!main!}.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Create the repository exclusions}
+\end{itemize}
+
+Create \passthrough{\lstinline!.gitignore!} with exactly these initial
+rules:
+
+\begin{lstlisting}
+# Shared standards are read from the canonical external standards repository.
+/docs/prompts/
+
+# Generated documentation and render intermediates are not versioned.
+*.pdf
+/tmp/
+
+# Runtime and development state.
+/logs/
+/.venv/
+/.mypy_cache/
+/.pytest_cache/
+/.ruff_cache/
+/.coverage
+/htmlcov/
+/dist/
+/build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# Editors and operating systems.
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Vaults are denied by default.  Later synthetic fixtures require an explicit exception.
+*.psafe3
+*.psafe
+*.dat
+!/tests/fixtures/synthetic/**/*.psafe3
+!/tests/fixtures/synthetic/**/*.psafe
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Create text and editor policy}
+\end{itemize}
+
+Create \passthrough{\lstinline!.gitattributes!}:
+
+\begin{lstlisting}
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.psafe binary
+*.psafe3 binary
+\end{lstlisting}
+
+Create \passthrough{\lstinline!.editorconfig!}:
+
+\begin{lstlisting}
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 120
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{md,tex}]
+trim_trailing_whitespace = false
+
+[*.ps1]
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Create the project entry document}
+\end{itemize}
+
+Create \passthrough{\lstinline!README.md!} with these sections and
+claims:
+
+\begin{lstlisting}
+# Password Bonobo
+
+Password Bonobo is an original, local-file-first password manager built around a fully typed Python core.
+
+The project is in foundation and compatibility-research development.  It does not yet provide a usable vault.
+
+## Design
+
+The approved program design is in `docs/specs/password-bonobo-python-reimplementation-design.md`.
+
+## Source boundary
+
+Password Gorilla is studied only through an external, pinned, read-only research checkout.  Gorilla source and other
+copyrightable implementation material do not enter this repository or Bonobo product builds.
+
+## Security
+
+Never add real credentials, personal PasswordSafe databases, tokens, or sensitive provider metadata.  Report security
+issues using `SECURITY.md` after that document is added by the foundation plan.
+
+## License
+
+Bonobo-authored code is intended for GPL-3.0-or-later licensing.  Formal license files and contribution terms are added
+by the repository-foundation plan before product implementation begins.
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Verify the ignore boundary before staging}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git check-ignore -v docs/prompts/AGENTS.md
+git check-ignore -v docs/specs/password-bonobo-python-reimplementation-design.pdf
+git check-ignore -v tmp/pdfs/password-bonobo-final-page-1.png
+git status --short
+\end{lstlisting}
+
+Expected: each queried generated or shared file matches an ignore rule.
+\passthrough{\lstinline!git status!} must not list
+\passthrough{\lstinline!docs/prompts/!}, any PDF, or
+\passthrough{\lstinline!tmp/!}.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 7: Commit the intentional baseline}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add .editorconfig .gitattributes .gitignore AGENTS.md README.md docs/specs docs/superpowers/plans
+git diff --cached --check
+git diff --cached --name-only
+git commit -m "docs: establish Password Bonobo design baseline"
+git switch -c foundation/compatibility-dossier
+\end{lstlisting}
+
+Expected: the staged-name audit contains only Bonobo-authored policy and
+design files. The commit succeeds, and the working branch becomes
+\passthrough{\lstinline!foundation/compatibility-dossier!}.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 2: Configure the typed Python package and
+reproducible
+toolchain}\label{task-2-configure-the-typed-python-package-and-reproducible-toolchain}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create: \passthrough{\lstinline!.python-version!}
+\item
+  Create: \passthrough{\lstinline!pyproject.toml!}
+\item
+  Create: \passthrough{\lstinline!uv.lock!}
+\item
+  Create: \passthrough{\lstinline!src/bonobo\_core/\_\_init\_\_.py!}
+\item
+  Create: \passthrough{\lstinline!src/bonobo\_core/py.typed!}
+\item
+  Create: \passthrough{\lstinline!tools/\_\_init\_\_.py!}
+\item
+  Create:
+  \passthrough{\lstinline!tests/foundation/test\_package\_contract.py!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Git and repository policy from Task 1.
+\item
+  Produces:
+  \passthrough{\lstinline!bonobo\_core.\_\_version\_\_: Final[str]!}, an
+  importable typed package, and \passthrough{\lstinline!uv run!} quality
+  commands.
+\item[$\square$]
+  \textbf{Step 1: Install uv and CPython 3.14 outside the repository}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+python -m pip install --user uv
+uv python install 3.14
+uv python pin 3.14
+\end{lstlisting}
+
+Expected: \passthrough{\lstinline!.python-version!} contains
+\passthrough{\lstinline!3.14!}, and
+\passthrough{\lstinline!uv run python --version!} reports Python 3.14.x.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Create package and tool configuration}
+\end{itemize}
+
+Create \passthrough{\lstinline!pyproject.toml!}:
+
+\begin{lstlisting}
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "password-bonobo"
+version = "0.0.0"
+description = "A local-file-first PasswordSafe-compatible password manager core."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = "GPL-3.0-or-later"
+authors = [{ name = "Password Bonobo contributors" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "autopep8>=2.3,<3",
+  "bandit[toml]>=1.8,<2",
+  "build>=1.3,<2",
+  "mypy>=1.18,<2",
+  "pip-audit>=2.9,<3",
+  "pytest>=8.4,<9",
+  "pytest-cov>=7,<8",
+  "reuse>=6.2,<7",
+  "ruff>=0.12,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bonobo_core"]
+
+[tool.autopep8]
+max_line_length = 120
+ignore = ["E303"]
+recursive = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "ANN", "B", "SIM", "RUF"]
+ignore = ["E303"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "tests", "tools"]
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=bonobo_core --cov=tools --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["bonobo_core", "tools"]
+
+[tool.bandit]
+targets = ["src", "tools"]
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Lock and install the development environment}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv lock
+uv sync --all-groups
+\end{lstlisting}
+
+Expected: \passthrough{\lstinline!uv.lock!} is created and
+\passthrough{\lstinline!uv run python --version!} reports Python 3.14.x.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Write the failing package-contract test}
+\end{itemize}
+
+Create
+\passthrough{\lstinline!tests/foundation/test\_package\_contract.py!}:
+
+\begin{lstlisting}[language=Python]
+"""Verify that the foundation exposes only a typed package identity.
+
+Product behavior remains excluded until the lossless PasswordSafe core subproject.
+"""
+
+from pathlib import Path
+
+import bonobo_core
+
+
+
+#### Verify that package metadata and the PEP 561 marker are present.
+####
+def test_package_identity_is_typed() -> None:
+    assert bonobo_core.__file__ is not None
+    package_directory = Path(bonobo_core.__file__).parent
+
+    assert bonobo_core.__version__ == "0.0.0"
+    assert (package_directory / "py.typed").is_file()
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Run the contract test and verify failure}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run pytest tests/foundation/test_package_contract.py -v
+\end{lstlisting}
+
+Expected: collection fails with
+\passthrough{\lstinline!ModuleNotFoundError: No module named 'bonobo\_core'!}.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Add the minimum typed package identity}
+\end{itemize}
+
+Create \passthrough{\lstinline!src/bonobo\_core/\_\_init\_\_.py!}:
+
+\begin{lstlisting}[language=Python]
+"""Define the public identity of the Password Bonobo core package.
+
+Vault behavior is intentionally absent until the lossless PasswordSafe core subproject.
+"""
+
+from typing import Final
+
+__version__: Final[str] = "0.0.0"
+\end{lstlisting}
+
+Create an empty \passthrough{\lstinline!src/bonobo\_core/py.typed!}
+file.
+
+Create \passthrough{\lstinline!tools/\_\_init\_\_.py!}:
+
+\begin{lstlisting}[language=Python]
+"""Provide repository-owned validation utilities that never enter product builds."""
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 7: Run foundation quality checks}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run autopep8 --diff --recursive src tests tools
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest tests/foundation/test_package_contract.py -v
+uv build
+\end{lstlisting}
+
+Expected: the formatter prints no diff; lint, typing, and test commands
+pass; wheel and source distribution are built.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 8: Commit the package foundation}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add .python-version pyproject.toml uv.lock src tools/__init__.py tests/foundation/test_package_contract.py
+git diff --cached --check
+git commit -m "build: add typed Python foundation"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 3: Enforce Python documentation and spacing
+policy}\label{task-3-enforce-python-documentation-and-spacing-policy}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Modify: \passthrough{\lstinline!tools/\_\_init\_\_.py!}
+\item
+  Create: \passthrough{\lstinline!tools/check\_python\_structure.py!}
+\item
+  Create:
+  \passthrough{\lstinline!tests/foundation/test\_python\_structure.py!}
+\item
+  Create:
+  \passthrough{\lstinline!tests/fixtures/python\_structure/documented.py.txt!}
+\item
+  Create:
+  \passthrough{\lstinline!tests/fixtures/python\_structure/undocumented.py.txt!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Python 3.14 and pytest from Task 2.
+\item
+  Produces: \passthrough{\lstinline!Violation!},
+  \passthrough{\lstinline!check\_source(path, source)!},
+  \passthrough{\lstinline!check\_paths(paths)!}, and a CLI returning
+  zero only when policy passes.
+\item[$\square$]
+  \textbf{Step 1: Create positive and negative source fixtures}
+\end{itemize}
+
+Create
+\passthrough{\lstinline!tests/fixtures/python\_structure/documented.py.txt!}:
+
+\begin{lstlisting}[language=Python]
+"""Provide a structurally valid sample module."""
+
+
+
+#### Return the supplied value without transforming it.
+####
+def identity(value: str) -> str:
+    return value
+\end{lstlisting}
+
+Create
+\passthrough{\lstinline!tests/fixtures/python\_structure/undocumented.py.txt!}:
+
+\begin{lstlisting}[language=Python]
+def missing_comment(value):
+    return value
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Write failing checker tests}
+\end{itemize}
+
+Create
+\passthrough{\lstinline!tests/foundation/test\_python\_structure.py!}
+with these public-contract tests:
+
+\begin{lstlisting}[language=Python]
+"""Verify the repository-specific Python source structure policy."""
+
+from pathlib import Path
+
+from tools.check_python_structure import check_paths, check_source
+
+FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures" / "python_structure"
+
+
+
+#### Accept a module with documentation, typing, and exact declaration spacing.
+####
+def test_documented_fixture_passes() -> None:
+    path = FIXTURE_DIRECTORY / "documented.py.txt"
+
+    assert check_source(path, path.read_text(encoding="utf-8")) == ()
+
+
+
+#### Report each missing structural requirement in an undocumented declaration.
+####
+def test_undocumented_fixture_fails() -> None:
+    path = FIXTURE_DIRECTORY / "undocumented.py.txt"
+    messages = tuple(
+        violation.message
+        for violation in check_source(path, path.read_text(encoding="utf-8"))
+    )
+
+    assert "module docstring is required" in messages
+    assert "declaration requires an immediately preceding #### block" in messages
+    assert "parameter 'value' requires a type annotation" in messages
+    assert "return type annotation is required" in messages
+
+
+
+#### Check every maintained Python source file through the same public entry point.
+####
+def test_repository_python_sources_pass() -> None:
+    assert check_paths((Path("src"), Path("tests"), Path("tools"))) == ()
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Run the tests and verify the missing checker failure}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run pytest tests/foundation/test_python_structure.py -v
+\end{lstlisting}
+
+Expected: collection fails because
+\passthrough{\lstinline!tools.check\_python\_structure!} does not exist.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Implement the AST-backed checker}
+\end{itemize}
+
+Keep the responsibility docstring in
+\passthrough{\lstinline!tools/\_\_init\_\_.py!}. Implement
+\passthrough{\lstinline!tools/check\_python\_structure.py!} with these
+exact public types and rules:
+
+\begin{lstlisting}[language=Python]
+"""Validate Bonobo's required Python documentation, typing, and spacing structure.
+
+The checker complements Ruff and mypy where the project profile intentionally differs from conventional PEP 8 spacing.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+
+
+#### Describe one source-policy failure at its original location.
+####
+@dataclass(frozen=True, slots=True)
+class Violation:
+    path: Path
+    line: int
+    message: str
+
+
+
+#### Return all structural violations found in one source string.
+####
+def check_source(path: Path, source: str) -> tuple[Violation, ...]:
+    tree = ast.parse(source, filename=str(path))
+    lines = source.splitlines()
+    violations: list[Violation] = []
+
+    if ast.get_docstring(tree, clean=False) is None:
+        violations.append(Violation(path, 1, "module docstring is required"))
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        start_line = min(
+            (decorator.lineno for decorator in node.decorator_list),
+            default=node.lineno,
+        )
+        block_end = start_line - 1
+        block_start = block_end
+        while block_start > 0 and lines[block_start - 1].lstrip().startswith("####"):
+            block_start -= 1
+
+        block = lines[block_start:block_end]
+        if not block or block[-1].strip() != "####":
+            violations.append(
+                Violation(path, start_line, "declaration requires an immediately preceding #### block")
+            )
+        elif any(line.strip() != "####" and not line.lstrip().startswith("#### ") for line in block):
+            violations.append(Violation(path, start_line, "declaration block uses invalid #### syntax"))
+
+        preceding = lines[max(0, block_start - 3):block_start]
+        if len(preceding) != 3 or any(line.strip() for line in preceding):
+            violations.append(Violation(path, start_line, "declaration requires exactly three preceding blank lines"))
+        elif block_start >= 4 and not lines[block_start - 4].strip():
+            violations.append(Violation(path, start_line, "declaration has more than three preceding blank lines"))
+
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            arguments = (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
+            for argument in arguments:
+                if argument.arg not in {"self", "cls"} and argument.annotation is None:
+                    violations.append(
+                        Violation(path, argument.lineno, f"parameter '{argument.arg}' requires a type annotation")
+                    )
+            if node.args.vararg is not None and node.args.vararg.annotation is None:
+                violations.append(
+                    Violation(path, node.lineno, "variadic positional parameter requires a type annotation")
+                )
+            if node.args.kwarg is not None and node.args.kwarg.annotation is None:
+                violations.append(Violation(path, node.lineno, "variadic keyword parameter requires a type annotation"))
+            if node.returns is None:
+                violations.append(Violation(path, node.lineno, "return type annotation is required"))
+
+    return tuple(sorted(violations, key=lambda item: (str(item.path), item.line, item.message)))
+
+
+
+#### Check maintained Python files beneath the supplied files and directories.
+####
+def check_paths(paths: Iterable[Path]) -> tuple[Violation, ...]:
+    files: set[Path] = set()
+    for path in paths:
+        if path.is_file() and path.suffix in {".py", ".pyi"}:
+            files.add(path)
+        elif path.is_dir():
+            files.update(path.rglob("*.py"))
+            files.update(path.rglob("*.pyi"))
+
+    violations: list[Violation] = []
+    for path in sorted(files):
+        violations.extend(check_source(path, path.read_text(encoding="utf-8")))
+    return tuple(violations)
+
+
+
+#### Parse command-line paths, print safe diagnostics, and return process status.
+####
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("paths", nargs="+", type=Path)
+    arguments = parser.parse_args(argv)
+    violations = check_paths(arguments.paths)
+    for violation in violations:
+        print(f"{violation.path}:{violation.line}: {violation.message}")
+    return 1 if violations else 0
+
+
+
+# Return the command status to the invoking shell without configuring runtime logging.
+if __name__ == "__main__":
+    raise SystemExit(main())
+\end{lstlisting}
+
+Before accepting this implementation, add a test case for a decorated
+declaration and one for more than three blank lines. Use the same
+fixture-string approach and assert the exact violation messages shown
+above.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Run the full validation cycle}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run autopep8 --diff --recursive src tests tools
+uv run ruff check src tests tools
+uv run mypy src tests tools
+uv run pytest tests/foundation -v
+uv run python -m tools.check_python_structure src tests tools
+\end{lstlisting}
+
+Expected: every command passes. Confirm manually that formatting did not
+remove required blank lines or \passthrough{\lstinline!\#\#\#\#!}
+blocks.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Commit the source-policy gate}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add tools tests/foundation/test_python_structure.py tests/fixtures/python_structure
+git diff --cached --check
+git commit -m "test: enforce Python source structure policy"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 4: Enforce tracked-file
+safety}\label{task-4-enforce-tracked-file-safety}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create: \passthrough{\lstinline!tools/check\_tracked\_files.py!}
+\item
+  Create:
+  \passthrough{\lstinline!tests/foundation/test\_tracked\_files.py!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Git repository and Python policy from Tasks 1-3.
+\item
+  Produces:
+  \passthrough{\lstinline!find\_forbidden(paths) -> tuple[ForbiddenPath, ...]!}
+  and a CI-safe tracked-file audit command.
+\item[$\square$]
+  \textbf{Step 1: Write failing path-policy tests}
+\end{itemize}
+
+Create tests covering these exact cases:
+
+\begin{lstlisting}[language=Python]
+"""Verify that generated, upstream, and credential-bearing files cannot be tracked."""
+
+from pathlib import Path
+
+from tools.check_tracked_files import find_forbidden
+
+
+
+#### Reject every prohibited tracked-file category.
+####
+def test_forbidden_categories_are_reported() -> None:
+    paths = (
+        Path("docs/prompts/AGENTS.md"),
+        Path("docs/specs/generated.pdf"),
+        Path("tmp/pdfs/page-1.png"),
+        Path("research/gorilla/sources/gorilla.tcl"),
+        Path("customer.psafe3"),
+        Path("logs/bonobo.log"),
+    )
+
+    assert tuple(item.path for item in find_forbidden(paths)) == paths
+
+
+
+#### Permit Bonobo sources and explicitly synthetic fixtures.
+####
+def test_safe_paths_are_allowed() -> None:
+    paths = (
+        Path("src/bonobo_core/__init__.py"),
+        Path("docs/compatibility/gorilla/behavior-dossier.md"),
+        Path("tests/fixtures/synthetic/minimal.psafe3"),
+    )
+
+    assert find_forbidden(paths) == ()
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Verify the tests fail because the module is missing}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run pytest tests/foundation/test_tracked_files.py -v
+\end{lstlisting}
+
+Expected: collection fails because
+\passthrough{\lstinline!tools.check\_tracked\_files!} does not exist.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Implement the tracked-file validator}
+\end{itemize}
+
+Implement \passthrough{\lstinline!tools/check\_tracked\_files.py!}:
+
+\begin{lstlisting}[language=Python]
+"""Reject generated, upstream, and credential-bearing repository paths.
+
+The command examines path names only and never opens a possible vault or secret-bearing file.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
+
+
+
+#### Describe one forbidden path without reading or exposing its contents.
+####
+@dataclass(frozen=True, slots=True)
+class ForbiddenPath:
+    path: Path
+    reason: str
+
+
+
+#### Return a safe rejection reason for one normalized repository path.
+####
+def _forbidden_reason(path: Path) -> str | None:
+    normalized = path.as_posix().lstrip("./")
+    lowered = normalized.lower()
+    parts = lowered.split("/")
+
+    for prefix in ("docs/prompts", "tmp", "logs", "research"):
+        if lowered == prefix or lowered.startswith(f"{prefix}/"):
+            return f"path is below prohibited directory '{prefix}'"
+
+    allowed_gorilla_docs = lowered == "docs/compatibility/gorilla" or lowered.startswith(
+        "docs/compatibility/gorilla/"
+    )
+    if "gorilla" in parts and not allowed_gorilla_docs:
+        return "upstream Gorilla material is prohibited"
+
+    if path.suffix.lower() == ".pdf":
+        return "generated PDF is prohibited"
+
+    synthetic_fixture = lowered.startswith("tests/fixtures/synthetic/")
+    if path.suffix.lower() in {".psafe", ".psafe3", ".dat"} and not synthetic_fixture:
+        return "vault-like file is outside the synthetic fixture allowlist"
+
+    filename = path.name.lower()
+    if filename == ".env" or filename.endswith((".key", ".pem")):
+        return "secret-bearing filename is prohibited"
+    if filename in {"id_rsa", "id_ed25519"}:
+        return "private-key filename is prohibited"
+
+    return None
+
+
+
+#### Return prohibited repository paths in input order without reading them.
+####
+def find_forbidden(paths: Iterable[Path]) -> tuple[ForbiddenPath, ...]:
+    violations: list[ForbiddenPath] = []
+    for path in paths:
+        reason = _forbidden_reason(path)
+        if reason is not None:
+            violations.append(ForbiddenPath(path, reason))
+    return tuple(violations)
+
+
+
+#### Read path arguments or standard input, print safe findings, and return process status.
+####
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("paths", nargs="*", type=Path)
+    arguments = parser.parse_args(argv)
+    paths = tuple(cast(list[Path], arguments.paths))
+    if not paths:
+        paths = tuple(Path(line.strip()) for line in sys.stdin if line.strip())
+
+    violations = find_forbidden(paths)
+    for violation in violations:
+        print(f"{violation.path}: {violation.reason}")
+    return 1 if violations else 0
+
+
+
+# Return the command status to the invoking shell without configuring runtime logging.
+if __name__ == "__main__":
+    raise SystemExit(main())
+\end{lstlisting}
+
+The implementation rejects:
+
+\begin{itemize}
+\tightlist
+\item
+  Any path below \passthrough{\lstinline!docs/prompts/!},
+  \passthrough{\lstinline!tmp/!}, \passthrough{\lstinline!logs/!},
+  \passthrough{\lstinline!research/!}, or a directory named
+  \passthrough{\lstinline!gorilla!} outside
+  \passthrough{\lstinline!docs/compatibility/gorilla/!}.
+\item
+  Any \passthrough{\lstinline!.pdf!} path.
+\item
+  Any \passthrough{\lstinline!.psafe!},
+  \passthrough{\lstinline!.psafe3!}, or \passthrough{\lstinline!.dat!}
+  path outside \passthrough{\lstinline!tests/fixtures/synthetic/!}.
+\item
+  Any filename matching \passthrough{\lstinline!.env!},
+  \passthrough{\lstinline!*.key!}, \passthrough{\lstinline!*.pem!},
+  \passthrough{\lstinline!id\_rsa!}, or
+  \passthrough{\lstinline!id\_ed25519!}.
+\end{itemize}
+
+The command reads newline-delimited paths from standard input when no
+path arguments are supplied, prints only path and non-sensitive reason,
+and returns one on a violation.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Exercise the command entry point}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run pytest tests/foundation/test_tracked_files.py -v
+git ls-files | uv run python -m tools.check_tracked_files
+uv run ruff check tools tests
+uv run mypy tools tests
+uv run python -m tools.check_python_structure tools tests
+\end{lstlisting}
+
+Expected: all commands pass and no tracked path is reported.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Commit the tracked-file gate}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add tools/check_tracked_files.py tests/foundation/test_tracked_files.py
+git diff --cached --check
+git commit -m "test: block unsafe tracked artifacts"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 5: Establish licensing, provenance, contribution,
+and security
+policy}\label{task-5-establish-licensing-provenance-contribution-and-security-policy}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create: \passthrough{\lstinline!LICENSES/GPL-3.0-or-later.txt!}
+\item
+  Create: \passthrough{\lstinline!REUSE.toml!}
+\item
+  Create: \passthrough{\lstinline!CONTRIBUTING.md!}
+\item
+  Create: \passthrough{\lstinline!SECURITY.md!}
+\item
+  Create:
+  \passthrough{\lstinline!docs/legal/source-provenance-policy.md!}
+\item
+  Create:
+  \passthrough{\lstinline!docs/legal/app-store-distribution-exception-plan.md!}
+\item
+  Modify: \passthrough{\lstinline!README.md!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: REUSE installed by Task 2 and source boundary from the
+  specification.
+\item
+  Produces: Machine-checkable GPL licensing and human-readable rules for
+  all later contributions and source research.
+\item[$\square$]
+  \textbf{Step 1: Download the canonical GPL text with REUSE}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run reuse download GPL-3.0-or-later
+\end{lstlisting}
+
+Expected: \passthrough{\lstinline!LICENSES/GPL-3.0-or-later.txt!} exists
+and \passthrough{\lstinline!reuse lint!} recognizes the license
+identifier.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Create machine-readable file annotations}
+\end{itemize}
+
+Create \passthrough{\lstinline!REUSE.toml!} using REUSE specification
+version 3.3:
+
+\begin{lstlisting}
+version = 1
+SPDX-PackageName = "Password Bonobo"
+SPDX-PackageSupplier = "NOASSERTION"
+SPDX-PackageDownloadLocation = "NOASSERTION"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Password Bonobo contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+\end{lstlisting}
+
+This annotation covers Bonobo-authored source, tests, tools,
+configuration, documentation, and the canonical license artifact.
+Ignored \passthrough{\lstinline!docs/prompts/!}, generated PDFs, and the
+external Gorilla checkout are not repository content.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Create the source-provenance policy}
+\end{itemize}
+
+Write \passthrough{\lstinline!docs/legal/source-provenance-policy.md!}
+with these mandatory sections:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Purpose and scope.
+\item
+  Allowed authoritative inputs: Bonobo specifications, official format
+  documentation, neutral dossier, and synthetic tests.
+\item
+  External research boundary and read-only checkout rules.
+\item
+  Prohibited copying categories.
+\item
+  Evidence citation format: revision, relative path, line range or test
+  name, evidence kind, neutral observation.
+\item
+  Fixture intake: origin, license, synthetic-data proof, sensitive-data
+  scan, and approval.
+\item
+  Dependency and asset ledger requirements.
+\item
+  Upstream revision update procedure.
+\item
+  Incident response for suspected copied expression.
+\end{enumerate}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Document the iOS exception work without publishing
+  license language}
+\end{itemize}
+
+Write
+\passthrough{\lstinline!docs/legal/app-store-distribution-exception-plan.md!}
+with:
+
+\begin{itemize}
+\item
+  The distribution problem the exception is intended to address.
+\item
+  Scope limited to Bonobo-authored code whose contributors granted the
+  necessary permission.
+\item
+  Exclusion of Gorilla-derived code and incompatible dependencies from
+  the iOS build.
+\item
+  Required dependency, contributor, Apple-term, and legal reviews.
+\item
+  A decision gate before accepting external contributions.
+\item
+  A decision gate before the first iOS distribution build.
+\item
+  A statement that this planning document is not license text or legal
+  advice.
+\item[$\square$]
+  \textbf{Step 5: Add contribution and security entry points}
+\end{itemize}
+
+Create \passthrough{\lstinline!CONTRIBUTING.md!} stating that external
+contributions are not yet accepted, why the distribution-exception
+rights must first be settled, and how that status will be changed
+deliberately. Create \passthrough{\lstinline!SECURITY.md!} prohibiting
+public issue content that includes credentials or vaults and directing
+reporters to the repository owner's private GitHub security reporting
+channel once enabled. Do not invent an email address.
+
+Update \passthrough{\lstinline!README.md!} so the license and security
+links point to these completed files.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Verify policy and license metadata}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv run reuse lint
+git ls-files | uv run python -m tools.check_tracked_files
+rg -n "Gorilla source|GPL-3.0-or-later|not license text" README.md CONTRIBUTING.md SECURITY.md docs/legal REUSE.toml
+\end{lstlisting}
+
+Expected: REUSE passes, the tracked-file audit passes, and each required
+policy phrase appears in its intended document.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 7: Commit licensing and policy}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add LICENSES REUSE.toml README.md CONTRIBUTING.md SECURITY.md docs/legal
+git diff --cached --check
+git commit -m "docs: establish licensing and provenance policy"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 6: Pin and verify the external Gorilla research
+checkout}\label{task-6-pin-and-verify-the-external-gorilla-research-checkout}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create:
+  \passthrough{\lstinline!docs/compatibility/gorilla/upstream-baseline.md!}
+\item
+  External create:
+  \passthrough{\lstinline!../Password Bonobo Research/gorilla/!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Upstream URL and commit from Global Constraints.
+\item
+  Produces: A reproducible detached checkout and an evidence-citation
+  baseline for Tasks 7 and 8.
+\item[$\square$]
+  \textbf{Step 1: Resolve and verify the external target}
+\end{itemize}
+
+Run from the Bonobo root:
+
+\begin{lstlisting}
+$bonoboRoot = (Resolve-Path -LiteralPath '.').Path
+$researchRoot = Join-Path (Split-Path -Parent $bonoboRoot) 'Password Bonobo Research'
+$gorillaRoot = Join-Path $researchRoot 'gorilla'
+Write-Output "BONOBO=$bonoboRoot"
+Write-Output "RESEARCH=$researchRoot"
+Write-Output "GORILLA=$gorillaRoot"
+\end{lstlisting}
+
+Expected: \passthrough{\lstinline!$gorillaRoot!} is not inside
+\passthrough{\lstinline!$bonoboRoot!}. Stop if it resolves beneath the
+Bonobo repository.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Create the research checkout at the exact revision}
+\end{itemize}
+
+If the target does not exist, run:
+
+\begin{lstlisting}
+New-Item -ItemType Directory -Path $researchRoot
+git clone --filter=blob:none --no-checkout https://github.com/zdia/gorilla.git $gorillaRoot
+git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
+\end{lstlisting}
+
+If the target already exists, verify that it is the expected Gorilla
+repository and contains no local changes before fetching the exact
+commit. Never reset or delete an existing research checkout
+automatically.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Verify identity and immutability evidence}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git -C $gorillaRoot remote get-url origin
+git -C $gorillaRoot rev-parse HEAD
+git -C $gorillaRoot status --short
+git -C $gorillaRoot show -s --format='%H%n%T%n%aI%n%s' HEAD
+\end{lstlisting}
+
+Expected: origin equals the approved URL, \passthrough{\lstinline!HEAD!}
+equals the pinned commit, the worktree is clean, and Git prints the
+commit hash, tree hash, author date, and subject for the evidence
+record.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Write the upstream baseline record}
+\end{itemize}
+
+Create
+\passthrough{\lstinline!docs/compatibility/gorilla/upstream-baseline.md!}
+with:
+
+\begin{itemize}
+\item
+  Approved URL, branch observation, exact commit, observation date, and
+  the tree hash from Step 3.
+\item
+  The upstream GPL-2.0-or-later declaration as a license observation,
+  not a Bonobo license grant.
+\item
+  The default external path and the rule permitting another external
+  location.
+\item
+  Exact clone, detached-checkout, identity, and clean-worktree commands.
+\item
+  The evidence-record fields used by the dossier.
+\item
+  The no-modification and no-copy rules.
+\item
+  The reviewed source categories from the subproject specification.
+\item
+  The update procedure requiring a new pin and dossier delta.
+\item[$\square$]
+  \textbf{Step 5: Prove that upstream material is absent from Bonobo}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git status --short
+git ls-files | uv run python -m tools.check_tracked_files
+git ls-files | Select-String -Pattern '(^|/)gorilla/(sources|unit-tests)/'
+\end{lstlisting}
+
+Expected: only the new neutral baseline Markdown is untracked; the
+validators pass; no upstream source path is tracked.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Commit the baseline record}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add docs/compatibility/gorilla/upstream-baseline.md
+git diff --cached --check
+git commit -m "docs: pin Gorilla research baseline"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 7: Produce the neutral Gorilla behavior
+dossier}\label{task-7-produce-the-neutral-gorilla-behavior-dossier}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create:
+  \passthrough{\lstinline!docs/compatibility/gorilla/behavior-dossier.md!}
+\item
+  Modify:
+  \passthrough{\lstinline!docs/compatibility/gorilla/upstream-baseline.md!}
+  only if the evidence convention needs clarification
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Detached Gorilla checkout and evidence format from Task 6.
+\item
+  Produces: Stable behavior identifiers
+  \passthrough{\lstinline!GOR-BEH-001!} onward for the parity matrix and
+  test oracles.
+\item[$\square$]
+  \textbf{Step 1: Inventory the upstream evidence without modifying it}
+\end{itemize}
+
+Run read-only searches from \passthrough{\lstinline!$gorillaRoot!}:
+
+\begin{lstlisting}
+rg -n "proc |method |Save|Open|Lock|Merge|Backup|Import|Export|AutoType|Clipboard|Password|History|Alias|Shortcut" `
+  sources/gorilla.tcl sources/pwsafe sources/help.txt unit-tests
+git -C $gorillaRoot status --short
+\end{lstlisting}
+
+Expected: the search identifies candidate evidence, and the upstream
+worktree remains clean.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Establish the dossier evidence schema}
+\end{itemize}
+
+Begin \passthrough{\lstinline!behavior-dossier.md!} with:
+
+\begin{lstlisting}
+# Password Gorilla Neutral Behavior Dossier
+
+## Evidence convention
+
+Each statement uses a sequential three-digit `GOR-BEH` identifier.  Evidence is recorded as revision, relative path,
+line range or test name, evidence kind (`source`, `test`, `help`, `message`, or `observed`), and a neutral behavioral
+observation.  Source text, source identifiers, control flow, and UI expression are not reproduced.
+
+## Confidence
+
+- `Confirmed`: supported by at least two independent evidence kinds or one executable black-box observation.
+- `Supported`: supported by one direct source, test, or user-documentation item.
+- `Unverified`: evidence is incomplete, contradictory, or unavailable in the research environment.
+\end{lstlisting}
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Analyze vault and record lifecycle behavior}
+\end{itemize}
+
+Read the relevant regions of
+\passthrough{\lstinline!sources/gorilla.tcl!},
+\passthrough{\lstinline!sources/pwsafe/*.tcl!},
+\passthrough{\lstinline!sources/help.txt!}, and corresponding unit
+tests. Record separate \passthrough{\lstinline!GOR-BEH!} entries for
+creation, open/authentication, save/save-as, close, lock, timeout,
+backup, recovery, entry create/edit/delete, protected entries, password
+history, aliases, and shortcuts.
+
+For every entry, write:
+
+\begin{lstlisting}
+### GOR-BEH-001 - Create a new vault
+
+- Confidence: `Confirmed`, `Supported`, or `Unverified`.
+- Preconditions: User-visible state required before the action.
+- Action: User or lifecycle event expressed without Tcl or widget terminology.
+- Observable result: State, file, confirmation, or error visible outside the implementation.
+- Data effect: Created, changed, preserved, or deleted user-authored data.
+- Evidence: Pinned revision, relative path, exact line range or test name, and evidence kind.
+- Bonobo note: Compatibility implication stated without implementation direction.
+\end{lstlisting}
+
+Increment the identifier for each analyzed behavior and replace the
+example statements with evidence-backed facts.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Analyze navigation and user workflows}
+\end{itemize}
+
+Add evidence-backed entries for groups, tree operations, selection,
+search, filtering, recent files, preferences, password generation and
+policies, clipboard, browser launch, AutoType, confirmations, and error
+presentation.
+
+Record behavior rather than pixel layout. Preserve distinctions that
+affect keyboard access, destructive-action safety, or user-authored
+data.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Analyze interchange and edge cases}
+\end{itemize}
+
+Add entries for CSV import/export, merge, PasswordSafe version handling,
+unknown or unsupported content, malformed files, database locking,
+backup behavior, interrupted operations, and relevant platform
+differences. Treat upstream test databases only as research evidence; do
+not copy them.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Run dossier quality and boundary checks}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+$dossier = 'docs/compatibility/gorilla/behavior-dossier.md'
+rg -n "GOR-BEH-[0-9]{3}" $dossier
+rg -n "example statements|Unassigned|INSERT" $dossier
+$line = 0; Get-Content -LiteralPath $dossier | ForEach-Object { $line++; if ($_.Length -gt 120) { "$line" } }
+git -C $gorillaRoot status --short
+git ls-files | uv run python -m tools.check_tracked_files
+\end{lstlisting}
+
+Expected: the first command lists every behavior; the token scan prints
+nothing; the line-length scan prints nothing; the Gorilla checkout
+remains clean; the tracked-file audit passes.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 7: Commit the neutral dossier}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add docs/compatibility/gorilla/behavior-dossier.md docs/compatibility/gorilla/upstream-baseline.md
+git diff --cached --check
+git commit -m "docs: record Gorilla behavior dossier"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 8: Build the parity matrix and test-oracle
+catalog}\label{task-8-build-the-parity-matrix-and-test-oracle-catalog}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create:
+  \passthrough{\lstinline!docs/compatibility/gorilla/feature-parity-matrix.md!}
+\item
+  Create:
+  \passthrough{\lstinline!docs/compatibility/gorilla/test-oracles.md!}
+\item
+  Modify:
+  \passthrough{\lstinline!docs/compatibility/gorilla/behavior-dossier.md!}
+  when a missing evidence link is discovered
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: Three-digit \passthrough{\lstinline!GOR-BEH!} identifiers
+  from Task 7.
+\item
+  Produces: Three-digit \passthrough{\lstinline!GOR-FEAT!} rows and
+  \passthrough{\lstinline!GOR-TEST!} scenarios for all later
+  subprojects.
+\item[$\square$]
+  \textbf{Step 1: Create the parity-matrix schema and required feature
+  families}
+\end{itemize}
+
+Create a Markdown table with columns:
+
+\begin{lstlisting}
+| ID | Feature family | Disposition | Evidence | Owner | Platforms | Data-loss | Security | Tests |
+|---|---|---|---|---|---|---|---|---|
+\end{lstlisting}
+
+Create rows for vault lifecycle, entry lifecycle, groups, search/filter,
+generator/policies, history, aliases, shortcuts, protected entries,
+clipboard, browser launch, AutoType, import, export, merge,
+backup/recovery, preferences, recent files, locking/idle timeout,
+PasswordSafe versions, errors, localization, help, and
+accessibility-relevant keyboard behavior.
+
+Add Bonobo-extension rows for URL audit/cleanup, provider conflict
+safety, Android Autofill, biometric unlock, and the iOS credential
+provider. Use only the dispositions defined in the subproject
+specification.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Assign evidence and owner subprojects}
+\end{itemize}
+
+For every \passthrough{\lstinline!GOR-FEAT!} row:
+
+\begin{itemize}
+\item
+  Link at least one \passthrough{\lstinline!GOR-BEH!} identifier, or use
+  \passthrough{\lstinline!Unverified!} with a precise evidence gap.
+\item
+  Assign one of the eight owner subprojects from the program design.
+\item
+  List applicable desktop, Android, ChromeOS, iOS, or BSD targets.
+\item
+  Mark data-loss and security relevance as
+  \passthrough{\lstinline!Critical!},
+  \passthrough{\lstinline!Material!}, or
+  \passthrough{\lstinline!Routine!}.
+\item
+  Link one or more \passthrough{\lstinline!GOR-TEST!} identifiers
+  created in the next step.
+\item[$\square$]
+  \textbf{Step 3: Create black-box test-oracle scenarios}
+\end{itemize}
+
+Begin \passthrough{\lstinline!test-oracles.md!} with definitions for
+evidence authority and synthetic-data rules. For each matrix feature,
+add:
+
+\begin{lstlisting}
+### GOR-TEST-001 - Create and reopen a synthetic vault
+
+- Authority: `PasswordSafe`, `Gorilla`, or `Bonobo`.
+- Evidence: One or more `GOR-BEH` identifiers or an approved Bonobo specification section.
+- Synthetic setup: Exact vault state with non-secret example values.
+- Action: Exact user or lifecycle operation.
+- Expected observation: File, state, prompt, classification, or error visible to a black-box test.
+- Preservation requirement: User-authored fields and identifiers that must remain unchanged.
+- Cleanup: Files or state removed after the test.
+- Required clients: Bonobo plus Gorilla, Password Safe, or both when cross-client confirmation is required.
+\end{lstlisting}
+
+Increment the identifier for each scenario and replace the example
+statements with exact synthetic test facts.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Add no-loss and cross-client oracle coverage}
+\end{itemize}
+
+Include explicit scenarios for:
+
+\begin{itemize}
+\item
+  Open and save without semantic edits.
+\item
+  Edit one known field while preserving unrelated and unknown fields.
+\item
+  Unsupported content failing closed with original encrypted bytes
+  retained.
+\item
+  Archive creation, reopen, identity verification, and deletion staging.
+\item
+  Ordinary edit persistence independent of staged URL-audit cleanup.
+\item
+  External file mutation causing conflict rather than overwrite.
+\item
+  Gorilla and Password Safe round trips for every claimed metadata
+  extension.
+\item[$\square$]
+  \textbf{Step 5: Validate matrix closure}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+$matrix = 'docs/compatibility/gorilla/feature-parity-matrix.md'
+$oracles = 'docs/compatibility/gorilla/test-oracles.md'
+$dossier = 'docs/compatibility/gorilla/behavior-dossier.md'
+rg -n "GOR-FEAT-[0-9]{3}" $matrix
+rg -n "GOR-TEST-[0-9]{3}" $matrix $oracles
+rg -n "GOR-BEH-[0-9]{3}" $matrix $oracles $dossier
+rg -n "example statements|Unassigned|INSERT" $matrix $oracles
+\end{lstlisting}
+
+Expected: every identifier class is present; the token scan prints
+nothing; every matrix row has evidence, owner, platform, relevance, and
+test values.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Commit the compatibility contract}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add docs/compatibility/gorilla
+git diff --cached --check
+git commit -m "docs: define Gorilla parity and test oracles"
+\end{lstlisting}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Task 9: Add continuous integration, project memory, and
+final
+verification}\label{task-9-add-continuous-integration-project-memory-and-final-verification}
+
+\textbf{Files:}
+
+\begin{itemize}
+\tightlist
+\item
+  Create: \passthrough{\lstinline!.github/workflows/foundation.yml!}
+\item
+  Create: \passthrough{\lstinline!docs/project-memory/PROJECT.md!}
+\item
+  Create: \passthrough{\lstinline!docs/project-memory/STATE.md!}
+\item
+  Create: \passthrough{\lstinline!docs/project-memory/DECISIONS.md!}
+\item
+  Create: \passthrough{\lstinline!docs/project-memory/VERIFICATION.md!}
+\item
+  Modify: \passthrough{\lstinline!README.md!}
+\end{itemize}
+
+\textbf{Interfaces:}
+
+\begin{itemize}
+\item
+  Consumes: All local validation commands and compatibility documents
+  from Tasks 1-8.
+\item
+  Produces: Three-platform CI, durable handoff state, and evidence that
+  subproject 1 is complete.
+\item[$\square$]
+  \textbf{Step 1: Create the three-platform workflow}
+\end{itemize}
+
+Create \passthrough{\lstinline!.github/workflows/foundation.yml!} with:
+
+\begin{lstlisting}
+name: foundation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - run: uv run autopep8 --diff --recursive src tests tools
+      - run: uv run ruff check src tests tools
+      - run: uv run mypy src tests tools
+      - run: uv run pytest
+      - run: uv run python -m tools.check_python_structure src tests tools
+      - shell: bash
+        run: git ls-files | uv run python -m tools.check_tracked_files
+      - run: uv run bandit -c pyproject.toml -r src tools
+      - run: uv run pip-audit
+      - run: uv run reuse lint
+      - run: uv build
+\end{lstlisting}
+
+Verify the two pinned action commits against their documented
+major-version refs before committing. Record each tag-to-SHA resolution
+in \passthrough{\lstinline!docs/project-memory/VERIFICATION.md!}; do not
+introduce floating tags.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 2: Write durable project identity and current state}
+\end{itemize}
+
+Create memory files with these responsibilities:
+
+\begin{itemize}
+\tightlist
+\item
+  \passthrough{\lstinline!PROJECT.md!}: product purpose, supported
+  platforms, local-file-first rule, no-loss rule, licensing intent, and
+  links to approved specifications.
+\item
+  \passthrough{\lstinline!STATE.md!}: subproject 1 status, current
+  branch, completed artifacts, active risks, and next approved
+  subproject \passthrough{\lstinline!Lossless PasswordSafe core!}.
+\item
+  \passthrough{\lstinline!DECISIONS.md!}: dated records for clean-room
+  source boundary, Gorilla pin, Python 3.14, tool choices, Git boundary,
+  generated-document policy, and external contribution hold.
+\item
+  \passthrough{\lstinline!VERIFICATION.md!}: exact commands, dates,
+  results, environment limitations, PDF page counts, and CI action pin
+  evidence.
+\end{itemize}
+
+Do not include raw command transcripts, machine-specific research paths,
+credentials, or copied upstream content.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 3: Update the README development entry points}
+\end{itemize}
+
+Add concise setup and validation commands:
+
+\begin{lstlisting}
+uv python install 3.14
+uv sync --locked --all-groups
+uv run autopep8 --diff --recursive src tests tools
+uv run ruff check src tests tools
+uv run mypy src tests tools
+uv run pytest
+uv run python -m tools.check_python_structure src tests tools
+git ls-files | uv run python -m tools.check_tracked_files
+uv run bandit -c pyproject.toml -r src tools
+uv run pip-audit
+uv run reuse lint
+uv build
+\end{lstlisting}
+
+State explicitly that these commands never require the Gorilla checkout.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 4: Generate LaTeX and PDFs for substantial new documents}
+\end{itemize}
+
+For each substantial Markdown document created by this plan, run Pandoc
+to create a same-basename \passthrough{\lstinline!.tex!}, compile it
+with XeLaTeX into \passthrough{\lstinline!tmp/pdfs/!}, and copy the PDF
+beside its Markdown source for local review. At minimum this includes:
+
+\begin{itemize}
+\tightlist
+\item
+  The subproject specification.
+\item
+  This implementation plan.
+\item
+  The behavior dossier.
+\item
+  The feature-parity matrix.
+\item
+  The test-oracle catalog.
+\end{itemize}
+
+Run XeLaTeX until references stabilize. Render every final PDF page with
+\passthrough{\lstinline!pdftoppm!}, inspect every page, and correct all
+clipping, overlap, glyph, hierarchy, and page-transition defects. Add
+only Markdown and LaTeX sources to Git.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 5: Run the complete local release gate}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+uv sync --locked --all-groups
+uv run autopep8 --diff --recursive src tests tools
+uv run ruff check src tests tools
+uv run mypy src tests tools
+uv run pytest
+uv run python -m tools.check_python_structure src tests tools
+git ls-files | uv run python -m tools.check_tracked_files
+uv run bandit -c pyproject.toml -r src tools
+uv run pip-audit
+uv run reuse lint
+uv build
+git diff --check
+git status --short
+\end{lstlisting}
+
+Expected: every validation command passes.
+\passthrough{\lstinline!git status!} lists only intended Markdown/LaTeX
+changes and ignored PDFs do not appear.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 6: Commit CI, memory, and generated LaTeX sources}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git add .github README.md docs/project-memory docs/compatibility docs/specs docs/superpowers/plans
+git diff --cached --check
+git diff --cached --name-only
+git commit -m "ci: complete repository foundation and dossier gates"
+\end{lstlisting}
+
+Expected: no PDF, Gorilla source, shared standards file, vault, log, or
+temporary render file is staged.
+
+\begin{itemize}
+\tightlist
+\item[$\square$]
+  \textbf{Step 7: Review the completed branch}
+\end{itemize}
+
+Run:
+
+\begin{lstlisting}
+git status --short
+git log --oneline --decorate main..HEAD
+git diff --stat main...HEAD
+git diff --check main...HEAD
+\end{lstlisting}
+
+Expected: the branch is clean except ignored local PDFs, commits are
+task-scoped, and the diff contains foundation and neutral compatibility
+artifacts only. Use the requesting-code-review and
+verification-before-completion skills before claiming the subproject is
+ready to integrate.
+
+\end{document}
