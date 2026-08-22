@@ -104,20 +104,21 @@ observation. Source text, source identifiers, control flow, and UI expression ar
 
 ### GOR-BEH-008 - Save the active vault
 
-- Confidence: `Confirmed`.
+- Confidence: `Supported`.
 - Preconditions: A file-backed vault contains unsaved changes and its destination is writable.
 - Action: The user saves.
 - Observable result: Progress is shown. The dirty state clears after the primary write and initial backup succeed,
   before any later enabled-backup attempt.
 - Data effect: The selected PasswordSafe version is written to the existing path before either backup outcome.
 - Evidence:
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4377-4380`;
+    kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4382-4390`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4394-4409`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4420-4435`;
     kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/msgs/en.msg:151-157`; kind: `message`.
 - Bonobo note: Primary output, the initial backup, and a later enabled backup are separate save outcomes.
 
 ### GOR-BEH-009 - Save to a different path
@@ -896,6 +897,7 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   conflicting pair.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:1063-1068`; kind: `help`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:1074-1081`; kind: `help`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:8319-8354`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4816-4847`;
