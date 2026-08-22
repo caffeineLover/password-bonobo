@@ -40,7 +40,8 @@ Platform keys are normative:
 Evidence keys use the accepted behavior IDs in
 [the neutral dossier](./behavior-dossier.md). A range includes both endpoints. `GAP` keys resolve in the register
 below. Approved specification keys are `S4` for URL-audit design sections 5–14, `S5` for program design sections 6–7,
-`S6` for program design section 9.1, and `S7` for program design section 9.2. Test IDs resolve in
+`S6` for program design section 9.1, `S7` for program design section 9.2, and `S8` for program design section 10.
+Test IDs resolve in
 [the black-box oracle catalog](./test-oracles.md).
 
 ## Matrix
@@ -49,7 +50,7 @@ below. Approved specification keys are `S4` for URL-audit design sections 5–14
 |---|---|---|---|---|---|---|---|---|
 |GOR-FEAT-001|Vault lifecycle|Required|GOR-BEH-001–006|O3|ALL|Critical|Critical|GOR-TEST-001,GOR-TEST-042,GOR-TEST-048|
 | GOR-FEAT-002 | Master-password change | Required | GOR-BEH-007 | O2 | ALL | Critical | Critical | GOR-TEST-002 |
-|GOR-FEAT-003|Saving and write guards|Required|GOR-BEH-008–011|O2|ALL|Critical|Critical|GOR-TEST-003, GOR-TEST-043|
+|GOR-FEAT-003|Save path/write guards|Required|GOR-BEH-009–011|O2|ALL|Critical|Critical|GOR-TEST-043|
 | GOR-FEAT-004 | Close guards | Modernized | GOR-BEH-012–014 | O3 | ALL | Critical | Material | GOR-TEST-004 |
 |GOR-FEAT-005|Entry lifecycle|Modernized|GOR-BEH-022–025|O3|ALL|Critical|Critical|GOR-TEST-005, GOR-TEST-044|
 |GOR-FEAT-006|Groups|Modernized|GOR-BEH-030–035|O3|ALL|Critical|Material|GOR-TEST-006, GOR-TEST-045|
@@ -75,7 +76,7 @@ below. Approved specification keys are `S4` for URL-audit design sections 5–14
 | GOR-FEAT-026 | Recent files | Modernized | GOR-BEH-038 | O3 | ALL | Routine | Material | GOR-TEST-026 |
 | GOR-FEAT-027 | Locking/idle | Modernized | GOR-BEH-015–017 | O3 | ALL | Critical | Critical | GOR-TEST-027 |
 | GOR-FEAT-028 | PasswordSafe versions | Required | GOR-BEH-055–057 | O2 | ALL | Critical | Critical | GOR-TEST-028 |
-|GOR-FEAT-029|Malformed-file handling|Required|GOR-BEH-058|O2|ALL|Critical|Critical|GOR-TEST-029, GOR-TEST-048|
+|GOR-FEAT-029|Mandatory validation|Required|GOR-BEH-058; Approved:S8|O2|ALL|Critical|Critical|GOR-TEST-029,GOR-TEST-051|
 | GOR-FEAT-030 | Lock-file gap | Unverified | GOR-BEH-059; GAP-059 | O8 | D/B | Critical | Critical | GOR-TEST-030 |
 | GOR-FEAT-031 | Errors | Modernized | GOR-BEH-062 | O3 | ALL | Critical | Material | GOR-TEST-031 |
 | GOR-FEAT-032 | Localization gap | Unverified | GOR-BEH-062; GAP-900 | O8 | ALL | Routine | Material | GOR-TEST-032 |
@@ -89,6 +90,8 @@ below. Approved specification keys are `S4` for URL-audit design sections 5–14
 |GOR-FEAT-040|iOS credential provider|Bonobo extension|Approved:S7|O7|I|Critical|Critical|GOR-TEST-040|
 |GOR-FEAT-041|Biometric unlock - iOS|Bonobo extension|Approved:S6|O7|I|Critical|Critical|GOR-TEST-041|
 |GOR-FEAT-042|Untitled-vault lock save|Modernized|GOR-BEH-064|O3|ALL|Critical|Critical|GOR-TEST-050|
+|GOR-FEAT-043|V3 open edge cases|Required|GOR-BEH-058|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
+|GOR-FEAT-044|Ordinary semantic save|Required|GOR-BEH-008|O2|ALL|Critical|Critical|GOR-TEST-003,GOR-TEST-053|
 
 ## Evidence-gap register
 

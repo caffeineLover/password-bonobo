@@ -813,16 +813,21 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
 - Bonobo note: A same-format save and a format-conversion observation are missing, so confidence remains one-kind.
 
-### GOR-BEH-058 - Reject truncation but warn on authentication mismatch
+### GOR-BEH-058 - Handle malformed fields, missing Version, and HMAC mismatch
 
-- Confidence: `Confirmed`.
-- Preconditions: A version 3 file has an incomplete header, incomplete field, invalid length, or integrity mismatch.
-- Action: The user attempts to open it.
-- Observable result: Truncation and invalid lengths stop opening; an integrity mismatch permits opening with warning.
-- Data effect: Hard failure rejects decoded records; warning-only failure activates them without changing the file.
+- Confidence: `Supported`.
+- Preconditions: A version 3 file has a truncated outer header, incomplete field, invalid field length, malformed
+  Version value, no Version field before header END, or stored-HMAC mismatch.
+- Action: The user attempts to open it with the correct password.
+- Observable result: Truncation, invalid lengths, and malformed Version data reject opening. A missing Version field
+  defaults in memory to V3.0 and opening continues. A stored-HMAC mismatch also opens, with an integrity warning.
+- Data effect: Hard failure rejects decoded records. The missing-Version default and HMAC-warning paths activate
+  decoded data without changing the source file.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:728-730`; kind: `help`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:48-111`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:132-183`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:343-376`;
     kind: `source`.
@@ -830,7 +835,8 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1594-1609`;
     kind: `source`.
-- Bonobo note: Structural and integrity failures deliberately have different visible and data-loading outcomes.
+- Bonobo note: Absence of Version is not malformed in the pinned reader. Malformed data, defaulting, and integrity
+  warning are three distinct compatibility outcomes; the missing-Version default lacks an executable observation.
 
 ### GOR-BEH-059 - Coordinate concurrent access with a database lock file
 

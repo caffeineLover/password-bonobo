@@ -155,21 +155,27 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-028`; matrix `GAP-028`; official PasswordSafe `formatV3.txt` section 3.3 note 3.
-- Synthetic setup: A fabricated official-format fixture authority makes UUID `33333333-3333-4333-8333-333333333333` an
-  alias whose password field `0x06` is `[[22222222222242228222222222222222]]`, targeting `PB-SYN-BASE`.
-- Action: Activate, copy from, edit, export, and attempt to delete the fabricated alias and then its target.
+- Synthetic setup: A fabricated official-format fixture authority gives target UUID
+  `22222222-2222-4222-8222-222222222222` mandatory Title `Alpha Portal`. Alias UUID
+  `33333333-3333-4333-8333-333333333333` has mandatory Title `Alpha Alias` and password field type `0x06` value
+  `[[22222222222242228222222222222222]]`.
+- Action: Select `Alpha Alias` with UUID `33333333-3333-4333-8333-333333333333` for activate, copy, edit, export, and
+  delete attempts; in a separate copy select target `Alpha Portal` by its exact UUID and attempt deletion.
 - Expected observation: Record the visible target, copied value, mutations, export result, and deletion effects exactly.
 - Preservation requirement: Keep the original encrypted fixture; no alias parity claim passes before dossier review.
-- Cleanup: Close without saving and remove the synthetic alias copy and captured non-secret results.
+- Cleanup: Close without saving and remove all synthetic alias/target copies and captured non-secret results.
 - Required clients: Gorilla at the pinned revision; Password Safe supplies the format-valid fixture.
 
 ### GOR-TEST-012 - Characterize record-shortcut behavior
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-029`; matrix `GAP-029`; official PasswordSafe `formatV3.txt` section 3.3 note 4.
-- Synthetic setup: A fabricated official-format fixture authority makes UUID `33333333-3333-4333-8333-333333333333` a
-  shortcut whose password field `0x06` is `[~22222222222242228222222222222222~]`, targeting `PB-SYN-BASE`.
-- Action: Activate, edit, export, and attempt to delete the shortcut and then the target in separate disposable copies.
+- Synthetic setup: A fabricated official-format fixture authority gives target UUID
+  `22222222-2222-4222-8222-222222222222` mandatory Title `Alpha Portal`. Shortcut UUID
+  `33333333-3333-4333-8333-333333333333` has mandatory Title `Alpha Shortcut` and password field type `0x06` value
+  `[~22222222222242228222222222222222~]`.
+- Action: Select `Alpha Shortcut` with UUID `33333333-3333-4333-8333-333333333333` for activate, edit, export, and
+  delete attempts; in a separate copy select target `Alpha Portal` by its exact UUID and attempt deletion.
 - Expected observation: Record navigation, mutation, export, and target-deletion effects for each copy exactly.
 - Preservation requirement: Keep both original encrypted copies; no shortcut parity claim passes before dossier review.
 - Cleanup: Close without saving and remove the shortcut copies and captured non-secret results.
@@ -191,12 +197,14 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-044`.
-- Synthetic setup: Open three `PB-SYN-BASE` copies; set the clear interval to one second using fabricated values.
-- Action: In separate runs, copy username and wait; copy password and clear manually; copy username and lock without
-  manual clearing.
+- Synthetic setup: Open `PB-SYN-BASE` copies `pb-syn-clipboard-timer.psafe3`,
+  `pb-syn-clipboard-manual.psafe3`, and `pb-syn-clipboard-lock.psafe3`; set a one-second clear interval.
+- Action: In the named timer, manual, and lock copies respectively, copy username and wait, copy password and clear,
+  and copy username and lock without manual clearing.
 - Expected observation: The requested value disappears after the timer, explicit clear, or lock in its respective run.
 - Preservation requirement: Vault bytes and fields remain unchanged; copied text never enters logs or result files.
-- Cleanup: Clear the clipboard, close the vault, and remove the synthetic file.
+- Cleanup: Clear the clipboard, close all views, and remove `pb-syn-clipboard-timer.psafe3`,
+  `pb-syn-clipboard-manual.psafe3`, and `pb-syn-clipboard-lock.psafe3`.
 - Required clients: Bonobo and Gorilla at the pinned revision.
 
 ### GOR-TEST-015 - Resolve the URL-copy key conflict
@@ -370,24 +378,24 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 - Cleanup: Remove all saved synthetic version copies.
 - Required clients: Bonobo, Gorilla at the pinned revision, and Password Safe.
 
-### GOR-TEST-029 - Fail closed on malformed mandatory content
+### GOR-TEST-029 - Fail closed on a malformed mandatory Version field
 
-- Authority: `PasswordSafe`.
+- Authority: `Bonobo`.
 - Evidence: Program design section 10; `GOR-BEH-058`; official PasswordSafe `formatV3.txt` sections 2.9.1,
-  3 `Field Structure`, 3.2, and 3.3.
-- Synthetic setup: An independent official-format fixture authority creates two fabricated authenticated V3 cases:
-  - `pb-syn-length.psafe3`: in the first record's Title field type `0x03`, set the little-endian length bytes to
-    `10 00 00 00`, supply only the 11 UTF-8 bytes for `Alpha Porta`, and omit the required continuation block.
-  - `pb-syn-no-version.psafe3`: make the header contain only zero-length End field type `0xFF`, omitting mandatory
-    Version field type `0x00`; record each complete encrypted input and SHA-256 before the test.
-- Action: Attempt ordinary Open on each case once, dismiss the categorized error, and hash the same path again.
-- Expected observation: The declared length is 16 while the available data bytes are 11 in the first case; neither
-  case becomes an editable session, and Save is unavailable.
-- Preservation requirement: Each original encrypted file's bytes and SHA-256 remain exactly unchanged; no fallback
-  rewrite, format conversion, or replacement file occurs.
-- Cleanup: Retain the hashes and non-sensitive error categories, then remove both malformed synthetic inputs.
-- Required clients: Bonobo; Password Safe supplies the format authority for the fabricated invalid cases.
-- Coverage: unsupported-fail-closed-original-bytes.
+  3 `Field Structure`, and 3.2 note 1.
+- Synthetic setup: An independent official-format fixture authority creates the fabricated file
+  `pb-syn-version-length-one.psafe3`. Its header Version field type `0x00` uses little-endian declared length bytes
+  `01 00 00 00` and the exact data byte `00`, although the official Version definition requires two bytes. Header END,
+  mandatory record fields, record END, outer envelope, and EOF are otherwise valid; a recomputed stored HMAC
+  authenticates the exact plaintext fields.
+- Action: Record the complete encrypted input and SHA-256, attempt ordinary Open in Bonobo once, and dismiss the error.
+- Expected observation: Bonobo classifies the field as malformed mandatory content, fails closed before an editable
+  session exists, and offers no Save or conversion action.
+- Preservation requirement: The original encrypted file's bytes and SHA-256 remain exactly unchanged; no output
+  replacement, fallback rewrite, converted copy, or recovery file occurs.
+- Cleanup: Retain only the non-sensitive hash and error classification, then remove the malformed synthetic input.
+- Required clients: Bonobo; the official PasswordSafe format supplies the field authority, not a client run.
+- Coverage: malformed-mandatory-fail-closed.
 
 ### GOR-TEST-030 - Characterize concurrent Gorilla access
 
@@ -417,7 +425,8 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 - Evidence: `GOR-BEH-062`; `GAP-900` in the feature matrix.
 - Synthetic setup: Open `PB-SYN-BASE` in fresh profiles using default `en`, available `fr` from
   `sources/msgs/fr.msg`, and unavailable fabricated locale `zz-ZZ`.
-- Action: Trigger the same empty-title error in each run, close, restart with the same profile, and trigger it again.
+- Action: In each run edit Alpha, clear title, URL, and username, attempt to save the edit, acknowledge the error,
+  close without saving, restart with the same profile, and repeat; title fallback cannot apply.
 - Expected observation: Record selected locale, fallback, error language, missing-key display, and restart requirement.
 - Preservation requirement: No localization parity claim passes before review; vault bytes remain unchanged.
 - Cleanup: Restore the disposable locale profile and remove the synthetic vault and observation note.
@@ -514,7 +523,7 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 ### GOR-TEST-039 - Unlock with device authentication without vault metadata
 
 - Authority: `Bonobo`.
-- Evidence: Program design sections 9.1, 11, 12.6, and 12.7.
+- Evidence: Program design sections 9.1, 11, and 12.6.
 - Synthetic setup: Open `PB-SYN-BASE` with its fabricated input on enrolled Android and ChromeOS test devices.
 - Action: Enable biometric unlock, close and restart, cancel once, authenticate once, then change the master input.
 - Expected observation: Cancel remains locked; authentication unlocks; the master-input change invalidates enrollment.
@@ -557,19 +566,23 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-002`, `GOR-BEH-004`, and `GOR-BEH-005`.
-- Synthetic setup: Open `PB-SYN-BASE`, change its note to `fabricated pending note`, and retain its original hash.
+- Synthetic setup: Copy `PB-SYN-BASE` to `pb-syn-lifecycle-source.psafe3` and
+  `pb-syn-lifecycle-readable.psafe3`; open the source, change its note to `fabricated pending note`, and retain its
+  hash.
 - Action: Resolve unsaved work before a new vault by choosing Cancel; attempt to open inaccessible
-  `pb-syn-missing.psafe3`; then open a readable copy with wrong master input `fabricated-master-input-wrong`.
+  `pb-syn-missing.psafe3`; then open `pb-syn-lifecycle-readable.psafe3` with wrong master input
+  `fabricated-master-input-wrong`.
 - Expected observation: The canceled new-vault request preserves the pending edit. The inaccessible path keeps its open
   prompt available. The wrong master input is cleared and retry remains possible. Neither failure replaces Alpha.
 - Preservation requirement: The source bytes and hash remain unchanged; the pending in-memory note remains active.
-- Cleanup: Cancel the open prompt, discard the pending edit, close, and remove the readable synthetic copy.
+- Cleanup: Cancel the prompt, discard the edit, close, and remove `pb-syn-lifecycle-source.psafe3` and
+  `pb-syn-lifecycle-readable.psafe3`.
 - Required clients: Bonobo and Gorilla at the pinned revision.
 
 ### GOR-TEST-043 - Save As and preserve data on writable-path failures
 
 - Authority: `Gorilla`.
-- Evidence: `GOR-BEH-008` through `GOR-BEH-011`.
+- Evidence: `GOR-BEH-009` through `GOR-BEH-011`.
 - Synthetic setup: Open three `PB-SYN-BASE` copies and give each a distinct fabricated note edit. Make copy two's
   destination read-only. Put copy three on a controlled filesystem that returns disk-full after 64 output bytes while
   leaving its existing destination readable; record each original destination hash and directory listing.
@@ -586,13 +599,17 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-022` through `GOR-BEH-025`.
-- Synthetic setup: Open separate `PB-SYN-BASE` copies for fabricated entry creation, validation, and deletion.
+- Synthetic setup: Open five independent `PB-SYN-BASE` copies for create, fallback, two validation, and deletion runs.
+  In validation copy A, prepare a new record with blank title, URL, and username, valid group `Research.Valid`, and
+  password `fabricated-validation-a`. In separately reset validation copy B, prepare valid title `Valid Identity`,
+  username `sample-valid`, password `fabricated-validation-b`, and malformed dot-prefixed group `.Bad`.
 - Action: Create and accept Beta with a title; create Gamma with empty title to exercise title fallback from URL
-  `https://gamma.example.invalid/`; exercise Delta validation with empty title, URL, and username and malformed group
-  `.Bad`; then delete Alpha in its own copy without confirmation.
-- Expected observation: Beta appears. Gamma uses its URL as title. Delta and `.Bad` are blocked without mutation.
-  Alpha disappears immediately on delete with no confirmation; every accepted change marks its copy dirty.
-- Preservation requirement: Each rejected edit leaves its manifest unchanged; deletions affect only the chosen copy.
+  `https://gamma.example.invalid/`; attempt acceptance in validation copy A, then independently in validation copy B;
+  delete Alpha in the fifth copy without confirmation.
+- Expected observation: Beta appears and Gamma uses its URL as title. Validation copy A is rejected for missing
+  identity; validation copy B is rejected for its group. Alpha disappears immediately without a confirmation.
+- Preservation requirement: Each validation source hash and manifest remains unchanged; accepted creation and deletion
+  are confined to their independent copies.
 - Cleanup: Discard all dirty copies, close each vault, and remove every synthetic file.
 - Required clients: Bonobo and Gorilla at the pinned revision.
 
@@ -638,16 +655,18 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 ### GOR-TEST-048 - Warn on a reproducible integrity mismatch
 
-- Authority: `PasswordSafe`.
+- Authority: `Gorilla`.
 - Evidence: `GOR-BEH-006` and `GOR-BEH-058`; official PasswordSafe `formatV3.txt` sections 2.8, 2.9, and 3.
 - Synthetic setup: An official-format fixture authority copies `PB-SYN-BASE`, flips one bit in its stored HMAC after
-  the unencrypted end marker, and leaves every encrypted field and block byte unchanged.
-- Action: Open the authenticated-encryption mismatch copy with the correct fabricated master input, dismiss the
+  the unencrypted end marker, records the byte offset and XOR mask, and leaves every encrypted field and block byte
+  unchanged; retain the unmodified baseline and the mismatched fixture's pre-open SHA-256.
+- Action: Open the stored-HMAC integrity-mismatch copy in Gorilla with the correct fabricated master input, dismiss the
   warning, inspect Alpha, close without saving, and compare the entire file to its pre-open copy.
-- Expected observation: The vault opens with an integrity-mismatch warning and Alpha retains its complete manifest.
-- Preservation requirement: Opening and warning dismissal leave the original encrypted bytes exactly unchanged.
-- Cleanup: Close without saving and remove the mismatched synthetic copy and its byte-identical control.
-- Required clients: Bonobo and Gorilla at the pinned revision; PasswordSafe supplies the format authority.
+- Expected observation: Gorilla opens the vault with an integrity-mismatch warning; Alpha retains its complete manifest.
+- Preservation requirement: The mismatched fixture's entire bytes and hash, including the one-bit stored-HMAC change,
+  remain unchanged after open; its encrypted field bytes remain identical to the unmodified baseline.
+- Cleanup: Close without saving and remove the mismatched synthetic copy and its unmodified baseline control.
+- Required clients: Gorilla at the pinned revision; the official PasswordSafe format supplies the HMAC authority.
 
 ### GOR-TEST-049 - Distinguish initial and later backup failures
 
@@ -676,6 +695,59 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 - Preservation requirement: No-path dismissal writes nothing; the Yes path retains its complete saved manifest.
 - Cleanup: Close both vaults, restore backup access, and remove the synthetic primary and backup artifacts.
 - Required clients: Bonobo and Gorilla at the pinned revision.
+
+### GOR-TEST-051 - Fail closed on a synthetic unsupported major format
+
+- Authority: `Bonobo`.
+- Evidence: Program design section 10; official PasswordSafe `formatV3.txt` sections 1.2, 2.9.1, and 3.2 note 1.
+- Synthetic setup: An independent official-format fixture authority creates the fabricated file
+  `pb-syn-unsupported-major.psafe3` as a structurally valid authenticated envelope. Header Version field type `0x00`
+  declares length 2 and holds bytes `00 04`, the little-endian value `0x0400`. Header END, every mandatory record
+  field, record END, EOF, and stored HMAC are valid. This is a synthetic later-major 4.0 probe, not an actual V4
+  format or product claim, and the mandatory Version value is not an unknown preservable field.
+- Action: Record the complete encrypted input and SHA-256, attempt ordinary Open in Bonobo once, and dismiss the error.
+- Expected observation: Bonobo classifies the input as unsupported major content, fails closed before an editable
+  session exists, and offers no Save or conversion action; it does not classify the structurally valid field as
+  malformed mandatory content.
+- Preservation requirement: The original encrypted file's bytes and SHA-256 remain exactly unchanged; no output
+  replacement, fallback rewrite, converted copy, or recovery file occurs.
+- Cleanup: Retain only the non-sensitive hash and error classification, then remove the unsupported synthetic input.
+- Required clients: Bonobo; the official PasswordSafe format supplies byte order and major-version authority.
+- Coverage: unsupported-major-fail-closed; unsupported-fail-closed-original-bytes.
+
+### GOR-TEST-052 - Observe Gorilla's missing-Version default
+
+- Authority: `Gorilla`.
+- Evidence: `GOR-BEH-058`; official PasswordSafe `formatV3.txt` sections 2.9.1, 2.11, and 3.2 note 1.
+- Synthetic setup: An independent official-format fixture authority creates `pb-syn-missing-version.psafe3`. It omits
+  the Version header field, but has a valid header END, mandatory record fields, record END, EOF, and stored HMAC
+  computed over every plaintext field actually present.
+- Action: Record the original hash, open it in Gorilla with the fabricated input, and Save As only to
+  `pb-syn-defaulted-version.psafe3`; close, then inspect both files with the official-format manifest reader.
+- Expected observation: Gorilla opens without a missing-Version error. The saved copy contains Version field type
+  `0x00`, length 2, and bytes `00 03` for V3.0; all other fields match the original manifest.
+- Preservation requirement: The original missing-Version file's bytes and hash remain unchanged; only the named
+  Save As copy gains the pinned reader's in-memory default.
+- Cleanup: Close Gorilla and remove both synthetic files and their non-sensitive manifests.
+- Required clients: Gorilla at the pinned revision; the official PasswordSafe format supplies the manifest authority.
+
+### GOR-TEST-053 - Save a semantic edit through the initial-backup boundary
+
+- Authority: `Gorilla`.
+- Evidence: `GOR-BEH-008`; pinned evidence locations `sources/gorilla.tcl:4382-4407` and `4584-4636`.
+- Synthetic setup: Copy `PB-SYN-BASE` to `pb-syn-save-success.psafe3` and retain
+  `pb-syn-save-control.psafe3` with `fabricated note A`. Disable timestamp and later enabled backups, use the same
+  directory for initial backup `pb-syn-save-success.bak`, and place an external filesystem gate on that backup path.
+- Action: Change the active note to `fabricated note saved` and invoke Save once. When the gate pauses initial-backup
+  creation, copy the completed primary to `pb-syn-primary-at-pause.psafe3`, observe the dirty indicator, release the
+  gate, wait for Save to finish, and inspect the snapshot, primary, and initial backup read-only.
+- Expected observation: The edited primary completes before the initial backup begins. While backup creation is
+  paused, the snapshot contains `fabricated note saved` and dirty remains set. After release, the initial backup also
+  contains `fabricated note saved`; only after both files succeed does dirty clear.
+- Preservation requirement: The control retains `fabricated note A`; snapshot, primary, and initial backup retain the
+  same UUIDs, standard fields, and unknown bytes, with only the exact note edit changed.
+- Cleanup: Close all views, remove the gate, and remove the control, snapshot, primary, and initial-backup files.
+- Required clients: Gorilla at the pinned revision performs Save; Password Safe reads the three completed outputs.
 
 ## Extension metadata gate
 
