@@ -12,18 +12,26 @@ workflow; its Windows, macOS, and Linux jobs remain to be observed after integra
 
 Official, read-only Git refs were observed directly on 2026-08-22:
 
-| Official repository | Ref | Immutable SHA |
+| Official repository | Ref and object kind | Observed SHA |
 |---|---|---|
-| `https://github.com/actions/checkout.git` | `refs/tags/v4` | `11d5960a326750d5838078e36cf38b85af677262` |
-| `https://github.com/actions/checkout.git` | `refs/tags/v4.4.0` | `11d5960a326750d5838078e36cf38b85af677262` |
-| `https://github.com/astral-sh/setup-uv.git` | `refs/tags/v6` | `d0d8abe699bfb85fec6de9f7adb5ae17292296ff` |
+| `actions/checkout` | `refs/tags/v4` | `11d5960a326750d5838078e36cf38b85af677262` |
+| `actions/checkout` | `refs/tags/v4.4.0` | `11d5960a326750d5838078e36cf38b85af677262` |
+| `astral-sh/setup-uv` | `refs/tags/v6`, annotated object | `d0d8abe699bfb85fec6de9f7adb5ae17292296ff` |
+| `astral-sh/setup-uv` | `refs/tags/v6^{}`, peeled commit | `d0cc045d04ccac9d8b7881df0226f9e82c39688e` |
+| `astral-sh/setup-uv` | `refs/tags/v6.8.0`, release commit | `d0cc045d04ccac9d8b7881df0226f9e82c39688e` |
 
-The workflow uses the immutable SHAs, not the mutable major refs.  Evidence command form:
+The workflow pins the full commit SHA `d0cc045d04ccac9d8b7881df0226f9e82c39688e`, not the annotated tag object's
+SHA or a floating ref.  This follows GitHub's official action-hardening guidance to pin third-party actions to a
+[full-length commit SHA][github-action-hardening].
+Evidence command form:
 
 ```powershell
 git ls-remote https://github.com/actions/checkout.git refs/tags/v4 refs/tags/v4.4.0
-git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6
+git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6 'refs/tags/v6^{}' refs/tags/v6.8.0
 ```
+
+[github-action-hardening]:
+  <https://docs.github.com/actions/security-guides/security-hardening-for-github-actions>
 
 ## Local executed gates
 
@@ -48,13 +56,13 @@ git diff --cached --check
 Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5.  Ruff and strict mypy reported no issues;
 pytest 9.1.1 passed 15 tests with 73% measured coverage; the Python-structure and NUL-delimited tracked-file audits
 reported no violations; Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; REUSE
-classified 50 of 50 files; both distributions built; and the staged diff check was clean.  The local package's expected
+classified 52 of 52 files; both distributions built; and the staged diff check was clean.  The local package's expected
 not-on-PyPI pip-audit skip is not a third-party dependency omission.
 
 ## Generated-document review
 
-Fourteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources.  A deterministic semantic
-comparison found 14 of 14 generated sources identical.  All documents stabilized after two XeLaTeX passes.  The final
+Fifteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources.  A deterministic semantic
+comparison found 15 of 15 generated sources identical.  All documents stabilized after two XeLaTeX passes.  The final
 page counts are:
 
 | Document | Pages |
@@ -65,13 +73,13 @@ page counts are:
 | Upstream baseline | 2 |
 | App Store exception plan | 1 |
 | Source-provenance policy | 2 |
-| Decisions, project, state, and verification memory | 2, 1, 1, 2 |
+| Canonical memory; decisions, project, state, and verification records | 1; 2, 1, 1, 2 |
 | Program design | 9 |
 | Repository-foundation specification | 6 |
 | URL-audit design | 13 |
 | Implementation plan | 24 |
 
-Result: 105 PDF pages and 105 rendered page images were visually inspected page by page.  The final logs have no
+Result: 106 PDF pages and 106 rendered page images were visually inspected page by page.  The final logs have no
 overflow, missing-glyph, undefined-reference, or rerun warnings.  Markdown and LaTeX have no lines over 120 characters
 or drafting tokens.  Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed.  There are
 no observed clipping, overlap, hierarchy, glyph, or page-transition defects.  Review PDFs, build files, and page images

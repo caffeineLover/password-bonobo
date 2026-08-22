@@ -9,6 +9,9 @@ project does not yet provide a usable vault.
 
 The approved program design is in `docs/specs/password-bonobo-python-reimplementation-design.md`.
 
+Future work starts with the durable [project memory](docs/PROJECT_MEMORY.md), which routes to the authoritative
+identity, state, decisions, and verification records.
+
 ## Source boundary
 
 Password Gorilla is studied only through an external, pinned, read-only research checkout.  Gorilla source and other

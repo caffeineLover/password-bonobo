@@ -160,6 +160,7 @@ Password Bonobo/
 |-- README.md                             # Product intent, status, and safe development entry points.
 |-- REUSE.toml                            # License annotations for non-source files.
 |-- SECURITY.md                           # Private reporting and sensitive-data rules.
+|-- docs/PROJECT_MEMORY.md / .tex         # Canonical durable-memory entry point and generated source.
 |-- pyproject.toml                        # Package metadata and all Python tool configuration.
 |-- uv.lock                               # Reproducible development dependency lock.
 |-- .github/workflows/foundation.yml      # Three-platform quality and package workflow.
@@ -1988,6 +1989,10 @@ verification}\label{task-9-add-continuous-integration-project-memory-and-final-v
 \item
   Create: \nolinkurl{.github/workflows/foundation.yml}
 \item
+  Create: \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!}
+\item
+  Create: \passthrough{\lstinline!docs/PROJECT\_MEMORY.tex!}
+\item
   Create: \passthrough{\lstinline!docs/project-memory/PROJECT.md!}
 \item
   Create: \passthrough{\lstinline!docs/project-memory/STATE.md!}
@@ -2048,7 +2053,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.14"
           enable-cache: true
@@ -2067,8 +2072,13 @@ jobs:
       - run: uv build
 \end{lstlisting}
 
-Verify the two pinned action commits against their documented major-version refs before committing. Record each
-tag-to-SHA resolution in \nolinkurl{docs/project-memory/VERIFICATION.md}; do not introduce floating tags.
+Verify the two pinned action commits against their official Git refs before committing. On 2026-08-22,
+\passthrough{\lstinline!refs/tags/v6!} resolved to annotated tag object
+\nolinkurl{d0d8abe699bfb85fec6de9f7adb5ae17292296ff}, while peeled \passthrough{\lstinline!refs/tags/v6\^\{\}!} and
+release \passthrough{\lstinline!refs/tags/v6.8.0!} resolved to commit
+\nolinkurl{d0cc045d04ccac9d8b7881df0226f9e82c39688e}. Pin the setup action to that full commit SHA, following
+GitHub\textquotesingle s official action-hardening guidance, and record both object types in
+\nolinkurl{docs/project-memory/VERIFICATION.md}. Do not introduce floating tags.
 
 \begin{itemize}
 \tightlist
@@ -2080,6 +2090,9 @@ Create memory files with these responsibilities:
 
 \begin{itemize}
 \tightlist
+\item
+  \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!}: canonical future-agent entry point, current durable summary, and
+  required read order for the four focused records.
 \item
   \passthrough{\lstinline!PROJECT.md!}: product purpose, supported platforms, local-file-first rule, no-loss rule,
   licensing intent, and links to approved specifications.
@@ -2120,7 +2133,8 @@ uv run reuse --no-multiprocessing lint
 uv build
 \end{lstlisting}
 
-State explicitly that these commands never require the Gorilla checkout.
+Link the canonical \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!} entry point and state explicitly that these
+commands never require the Gorilla checkout.
 
 \begin{itemize}
 \tightlist
@@ -2152,6 +2166,8 @@ copy the PDF beside its Markdown source for local review. At minimum this includ
 \item
   Both legal policies.
 \item
+  The canonical project-memory entry point.
+\item
   All four project-memory documents.
 \end{itemize}
 
@@ -2175,8 +2191,10 @@ Add every new Bonobo-authored tracked path from Tasks 6-9:
 \item
   \nolinkurl{docs/compatibility/gorilla/test-oracles.md} and its generated \passthrough{\lstinline!.tex!} companion.
 \item
-  \nolinkurl{.github/workflows/foundation.yml}, the four \passthrough{\lstinline!docs/project-memory!} Markdown/LaTeX
-  pairs, \passthrough{\lstinline!docs/pandoc/pdf-header.tex!}, and \passthrough{\lstinline!docs/pandoc/pdf-layout.lua!}.
+  \nolinkurl{.github/workflows/foundation.yml}, \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!},
+  \passthrough{\lstinline!docs/PROJECT\_MEMORY.tex!}, the four \passthrough{\lstinline!docs/project-memory!}
+  Markdown/LaTeX pairs, \passthrough{\lstinline!docs/pandoc/pdf-header.tex!}, and
+  \passthrough{\lstinline!docs/pandoc/pdf-layout.lua!}.
 \item
   Any additional generated source files created in scope.
 \end{itemize}
@@ -2187,8 +2205,8 @@ Stage every intended Task 9 file before the release gate so REUSE inspects the a
 or the external Gorilla checkout.
 
 \begin{lstlisting}
-git add REUSE.toml .github/workflows/foundation.yml README.md docs/project-memory docs/pandoc docs/compatibility `
-  docs/legal docs/specs docs/superpowers/plans
+git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMORY.md docs/PROJECT_MEMORY.tex `
+  docs/project-memory docs/pandoc docs/compatibility docs/legal docs/specs docs/superpowers/plans
 \end{lstlisting}
 
 \begin{itemize}

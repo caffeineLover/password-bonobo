@@ -113,25 +113,33 @@ Official, read-only Git refs were observed directly on 2026-08-22:
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}lll@{}}
 \toprule\noalign{}
-Official repository & Ref & Immutable SHA \\
+Official repository & Ref and object kind & Observed SHA \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-\nolinkurl{https://github.com/actions/checkout.git} & \passthrough{\lstinline!refs/tags/v4!} &
+\passthrough{\lstinline!actions/checkout!} & \passthrough{\lstinline!refs/tags/v4!} &
 \nolinkurl{11d5960a326750d5838078e36cf38b85af677262} \\
-\nolinkurl{https://github.com/actions/checkout.git} & \passthrough{\lstinline!refs/tags/v4.4.0!} &
+\passthrough{\lstinline!actions/checkout!} & \passthrough{\lstinline!refs/tags/v4.4.0!} &
 \nolinkurl{11d5960a326750d5838078e36cf38b85af677262} \\
-\nolinkurl{https://github.com/astral-sh/setup-uv.git} & \passthrough{\lstinline!refs/tags/v6!} &
+\passthrough{\lstinline!astral-sh/setup-uv!} & \passthrough{\lstinline!refs/tags/v6!}, annotated object &
 \nolinkurl{d0d8abe699bfb85fec6de9f7adb5ae17292296ff} \\
+\passthrough{\lstinline!astral-sh/setup-uv!} & \passthrough{\lstinline!refs/tags/v6\^\{\}!}, peeled commit &
+\nolinkurl{d0cc045d04ccac9d8b7881df0226f9e82c39688e} \\
+\passthrough{\lstinline!astral-sh/setup-uv!} & \passthrough{\lstinline!refs/tags/v6.8.0!}, release commit &
+\nolinkurl{d0cc045d04ccac9d8b7881df0226f9e82c39688e} \\
 \end{longtable}
 }
 
-The workflow uses the immutable SHAs, not the mutable major refs. Evidence command form:
+The workflow pins the full commit SHA \nolinkurl{d0cc045d04ccac9d8b7881df0226f9e82c39688e}, not the annotated tag
+object\textquotesingle s SHA or a floating ref. This follows GitHub\textquotesingle s official action-hardening guidance
+to pin third-party actions to a
+\href{https://docs.github.com/actions/security-guides/security-hardening-for-github-actions}{full-length commit SHA}.
+Evidence command form:
 
 \begin{lstlisting}
 git ls-remote https://github.com/actions/checkout.git refs/tags/v4 refs/tags/v4.4.0
-git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6
+git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6 'refs/tags/v6^{}' refs/tags/v6.8.0
 \end{lstlisting}
 
 \subsection{Local executed gates}\label{local-executed-gates}
@@ -157,13 +165,13 @@ git diff --cached --check
 Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5. Ruff and strict mypy reported no issues;
 pytest 9.1.1 passed 15 tests with 73\% measured coverage; the Python-structure and NUL-delimited tracked-file audits
 reported no violations; Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; REUSE
-classified 50 of 50 files; both distributions built; and the staged diff check was clean. The local
+classified 52 of 52 files; both distributions built; and the staged diff check was clean. The local
 package\textquotesingle s expected not-on-PyPI pip-audit skip is not a third-party dependency omission.
 
 \subsection{Generated-document review}\label{generated-document-review}
 
-Fourteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources. A deterministic semantic
-comparison found 14 of 14 generated sources identical. All documents stabilized after two XeLaTeX passes. The final page
+Fifteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources. A deterministic semantic
+comparison found 15 of 15 generated sources identical. All documents stabilized after two XeLaTeX passes. The final page
 counts are:
 
 {\def\LTcaptype{none} % do not increment counter
@@ -180,7 +188,7 @@ Test oracles & 17 \\
 Upstream baseline & 2 \\
 App Store exception plan & 1 \\
 Source-provenance policy & 2 \\
-Decisions, project, state, and verification memory & 2, 1, 1, 2 \\
+Canonical memory; decisions, project, state, and verification records & 1; 2, 1, 1, 2 \\
 Program design & 9 \\
 Repository-foundation specification & 6 \\
 URL-audit design & 13 \\
@@ -188,7 +196,7 @@ Implementation plan & 24 \\
 \end{longtable}
 }
 
-Result: 105 PDF pages and 105 rendered page images were visually inspected page by page. The final logs have no
+Result: 106 PDF pages and 106 rendered page images were visually inspected page by page. The final logs have no
 overflow, missing-glyph, undefined-reference, or rerun warnings. Markdown and LaTeX have no lines over 120 characters or
 drafting tokens. Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed. There are no
 observed clipping, overlap, hierarchy, glyph, or page-transition defects. Review PDFs, build files, and page images

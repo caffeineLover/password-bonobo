@@ -52,6 +52,7 @@ Password Bonobo/
 |-- README.md                             # Product intent, status, and safe development entry points.
 |-- REUSE.toml                            # License annotations for non-source files.
 |-- SECURITY.md                           # Private reporting and sensitive-data rules.
+|-- docs/PROJECT_MEMORY.md / .tex         # Canonical durable-memory entry point and generated source.
 |-- pyproject.toml                        # Package metadata and all Python tool configuration.
 |-- uv.lock                               # Reproducible development dependency lock.
 |-- .github/workflows/foundation.yml      # Three-platform quality and package workflow.
@@ -1465,6 +1466,8 @@ git commit -m "docs: define Gorilla parity and test oracles"
 **Files:**
 
 - Create: `.github/workflows/foundation.yml`
+- Create: `docs/PROJECT_MEMORY.md`
+- Create: `docs/PROJECT_MEMORY.tex`
 - Create: `docs/project-memory/PROJECT.md`
 - Create: `docs/project-memory/STATE.md`
 - Create: `docs/project-memory/DECISIONS.md`
@@ -1505,7 +1508,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.14"
           enable-cache: true
@@ -1524,13 +1527,19 @@ jobs:
       - run: uv build
 ```
 
-Verify the two pinned action commits against their documented major-version refs before committing.  Record each
-tag-to-SHA resolution in `docs/project-memory/VERIFICATION.md`; do not introduce floating tags.
+Verify the two pinned action commits against their official Git refs before committing.  On 2026-08-22,
+`refs/tags/v6` resolved to annotated tag object `d0d8abe699bfb85fec6de9f7adb5ae17292296ff`, while peeled
+`refs/tags/v6^{}` and release `refs/tags/v6.8.0` resolved to commit
+`d0cc045d04ccac9d8b7881df0226f9e82c39688e`.  Pin the setup action to that full commit SHA, following GitHub's
+official action-hardening guidance, and record both object types in `docs/project-memory/VERIFICATION.md`.  Do not
+introduce floating tags.
 
 - [ ] **Step 2: Write durable project identity and current state**
 
 Create memory files with these responsibilities:
 
+- `docs/PROJECT_MEMORY.md`: canonical future-agent entry point, current durable summary, and required read order for
+  the four focused records.
 - `PROJECT.md`: product purpose, supported platforms, local-file-first rule, no-loss rule, licensing intent, and links
   to approved specifications.
 - `STATE.md`: subproject 1 status, current branch, completed artifacts, active risks, and next approved subproject
@@ -1562,7 +1571,8 @@ uv run reuse --no-multiprocessing lint
 uv build
 ```
 
-State explicitly that these commands never require the Gorilla checkout.
+Link the canonical `docs/PROJECT_MEMORY.md` entry point and state explicitly that these commands never require the
+Gorilla checkout.
 
 - [ ] **Step 4: Generate LaTeX and PDFs for substantial new documents**
 
@@ -1578,6 +1588,7 @@ into `tmp/pdfs/`, and copy the PDF beside its Markdown source for local review. 
 - The feature-parity matrix.
 - The test-oracle catalog.
 - Both legal policies.
+- The canonical project-memory entry point.
 - All four project-memory documents.
 
 Run XeLaTeX until references stabilize.  Render every final PDF page with `pdftoppm`, inspect every page, and correct
@@ -1591,8 +1602,8 @@ Bonobo-authored tracked path from Tasks 6-9:
 - `docs/compatibility/gorilla/behavior-dossier.md` and its generated `.tex` companion.
 - `docs/compatibility/gorilla/feature-parity-matrix.md` and its generated `.tex` companion.
 - `docs/compatibility/gorilla/test-oracles.md` and its generated `.tex` companion.
-- `.github/workflows/foundation.yml`, the four `docs/project-memory` Markdown/LaTeX pairs,
-  `docs/pandoc/pdf-header.tex`, and `docs/pandoc/pdf-layout.lua`.
+- `.github/workflows/foundation.yml`, `docs/PROJECT_MEMORY.md`, `docs/PROJECT_MEMORY.tex`, the four
+  `docs/project-memory` Markdown/LaTeX pairs, `docs/pandoc/pdf-header.tex`, and `docs/pandoc/pdf-layout.lua`.
 - Any additional generated source files created in scope.
 
 Preserve this fail-closed rule: a new path must fail REUSE until deliberately classified.
@@ -1601,8 +1612,8 @@ Stage every intended Task 9 file before the release gate so REUSE inspects the a
 PDFs or the external Gorilla checkout.
 
 ```powershell
-git add REUSE.toml .github/workflows/foundation.yml README.md docs/project-memory docs/pandoc docs/compatibility `
-  docs/legal docs/specs docs/superpowers/plans
+git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMORY.md docs/PROJECT_MEMORY.tex `
+  docs/project-memory docs/pandoc docs/compatibility docs/legal docs/specs docs/superpowers/plans
 ```
 
 - [ ] **Step 5: Run the complete local release gate**

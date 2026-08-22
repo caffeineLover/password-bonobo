@@ -15,6 +15,7 @@ and cannot open, edit, save, or audit a vault.
 - A detached external Gorilla baseline record pinned at `6728e85c05ac25357b8f19f541487b9d26a97402`.
 - A neutral dossier with 66 behaviors, a 44-row feature matrix, and 53 synthetic black-box test oracles.
 - A three-platform CI definition and reproducible Markdown, LaTeX, and ignored review-PDF workflow.
+- A canonical `docs/PROJECT_MEMORY.md` future-agent entry point routing to the four focused durable records.
 
 ## Active risks
 
