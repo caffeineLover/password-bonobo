@@ -823,10 +823,9 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   establish exact-length, trailing-byte, or arbitrary two-byte Version validation.
 - Data effect: No decoded session becomes active, and opening does not change the source file.
 - Evidence:
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:728-730`; kind: `help`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:150-173`;
     kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:343-376`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:435-443`;
     kind: `source`.
 - Bonobo note: A constructible authenticated one-byte Version fixture is required for black-box confirmation.
 
