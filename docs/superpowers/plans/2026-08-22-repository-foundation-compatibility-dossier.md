@@ -1019,14 +1019,49 @@ SPDX-PackageSupplier = "NOASSERTION"
 SPDX-PackageDownloadLocation = "NOASSERTION"
 
 [[annotations]]
-path = "**"
+path = [
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".python-version",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "REUSE.toml",
+    "SECURITY.md",
+    "docs/legal/app-store-distribution-exception-plan.md",
+    "docs/legal/app-store-distribution-exception-plan.tex",
+    "docs/legal/source-provenance-policy.md",
+    "docs/legal/source-provenance-policy.tex",
+    "docs/specs/password-bonobo-python-reimplementation-design.md",
+    "docs/specs/password-bonobo-python-reimplementation-design.tex",
+    "docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md",
+    "docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.tex",
+    "docs/specs/password-bonobo-url-audit-design.md",
+    "docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.md",
+    "docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.tex",
+    "pyproject.toml",
+    "src/bonobo_core/__init__.py",
+    "src/bonobo_core/py.typed",
+    "tests/fixtures/python_structure/documented.py.txt",
+    "tests/fixtures/python_structure/undocumented.py.txt",
+    "tests/foundation/test_package_contract.py",
+    "tests/foundation/test_python_structure.py",
+    "tests/foundation/test_tracked_files.py",
+    "tools/__init__.py",
+    "tools/check_python_structure.py",
+    "tools/check_tracked_files.py",
+    "uv.lock",
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Password Bonobo contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 ```
 
-This annotation covers Bonobo-authored source, tests, tools, configuration, documentation, and the canonical license
-artifact.  Ignored `docs/prompts/`, generated PDFs, and the external Gorilla checkout are not repository content.
+This explicit annotation list covers only the currently known Bonobo-authored source, tests, tools, configuration, and
+documentation.  Add future Bonobo-authored paths deliberately; do not use a directory wildcard.  The canonical license
+artifact is handled solely by REUSE's `LICENSES` mechanism and is not annotated with Bonobo contributor copyright.
+Ignored `docs/prompts/`, generated PDFs, and the external Gorilla checkout are not repository content.
 
 - [ ] **Step 3: Create the source-provenance policy**
 
@@ -1093,6 +1128,7 @@ git commit -m "docs: establish licensing and provenance policy"
 **Files:**
 
 - Create: `docs/compatibility/gorilla/upstream-baseline.md`
+- Modify: `REUSE.toml`
 - External create: `../Password Bonobo Research/gorilla/`
 
 **Interfaces:**
@@ -1155,7 +1191,20 @@ Create `docs/compatibility/gorilla/upstream-baseline.md` with:
 - The reviewed source categories from the subproject specification.
 - The update procedure requiring a new pin and dossier delta.
 
-- [ ] **Step 5: Prove that upstream material is absent from Bonobo**
+- [ ] **Step 5: Update and verify REUSE metadata**
+
+Before committing, add `docs/compatibility/gorilla/upstream-baseline.md` to the explicit `REUSE.toml` annotation list.
+Do not use a directory wildcard or an annotation that could classify future third-party material.
+
+Run:
+
+```powershell
+uv run reuse lint
+```
+
+Expected: REUSE passes after the new Bonobo-authored path is deliberately classified.
+
+- [ ] **Step 6: Prove that upstream material is absent from Bonobo**
 
 Run:
 
@@ -1167,12 +1216,12 @@ git ls-files | Select-String -Pattern '(^|/)gorilla/(sources|unit-tests)/'
 
 Expected: only the new neutral baseline Markdown is untracked; the validators pass; no upstream source path is tracked.
 
-- [ ] **Step 6: Commit the baseline record**
+- [ ] **Step 7: Commit the baseline record**
 
 Run:
 
 ```powershell
-git add docs/compatibility/gorilla/upstream-baseline.md
+git add REUSE.toml docs/compatibility/gorilla/upstream-baseline.md
 git diff --cached --check
 git commit -m "docs: pin Gorilla research baseline"
 ```
@@ -1185,6 +1234,7 @@ git commit -m "docs: pin Gorilla research baseline"
 
 - Create: `docs/compatibility/gorilla/behavior-dossier.md`
 - Modify: `docs/compatibility/gorilla/upstream-baseline.md` only if the evidence convention needs clarification
+- Modify: `REUSE.toml`
 
 **Interfaces:**
 
@@ -1261,6 +1311,9 @@ test databases only as research evidence; do not copy them.
 
 - [ ] **Step 6: Run dossier quality and boundary checks**
 
+Before this check, add `docs/compatibility/gorilla/behavior-dossier.md` to the explicit `REUSE.toml` annotation list.
+Do not use a directory wildcard or an annotation that could classify future third-party material.
+
 Run:
 
 ```powershell
@@ -1270,6 +1323,7 @@ rg -n "example statements|Unassigned|INSERT" $dossier
 $line = 0; Get-Content -LiteralPath $dossier | ForEach-Object { $line++; if ($_.Length -gt 120) { "$line" } }
 git -C $gorillaRoot status --short
 git ls-files -z | uv run python -m tools.check_tracked_files
+uv run reuse lint
 ```
 
 Expected: the first command lists every behavior; the token scan prints nothing; the line-length scan prints nothing;
@@ -1280,7 +1334,7 @@ the Gorilla checkout remains clean; the tracked-file audit passes.
 Run:
 
 ```powershell
-git add docs/compatibility/gorilla/behavior-dossier.md docs/compatibility/gorilla/upstream-baseline.md
+git add REUSE.toml docs/compatibility/gorilla/behavior-dossier.md docs/compatibility/gorilla/upstream-baseline.md
 git diff --cached --check
 git commit -m "docs: record Gorilla behavior dossier"
 ```
@@ -1294,6 +1348,7 @@ git commit -m "docs: record Gorilla behavior dossier"
 - Create: `docs/compatibility/gorilla/feature-parity-matrix.md`
 - Create: `docs/compatibility/gorilla/test-oracles.md`
 - Modify: `docs/compatibility/gorilla/behavior-dossier.md` when a missing evidence link is discovered
+- Modify: `REUSE.toml`
 
 **Interfaces:**
 
@@ -1360,6 +1415,10 @@ Include explicit scenarios for:
 
 - [ ] **Step 5: Validate matrix closure**
 
+Before this check, add `docs/compatibility/gorilla/feature-parity-matrix.md` and
+`docs/compatibility/gorilla/test-oracles.md` to the explicit `REUSE.toml` annotation list.  Do not use a directory
+wildcard or an annotation that could classify future third-party material.
+
 Run:
 
 ```powershell
@@ -1370,6 +1429,7 @@ rg -n "GOR-FEAT-[0-9]{3}" $matrix
 rg -n "GOR-TEST-[0-9]{3}" $matrix $oracles
 rg -n "GOR-BEH-[0-9]{3}" $matrix $oracles $dossier
 rg -n "example statements|Unassigned|INSERT" $matrix $oracles
+uv run reuse lint
 ```
 
 Expected: every identifier class is present; the token scan prints nothing; every matrix row has evidence, owner,
@@ -1380,7 +1440,7 @@ platform, relevance, and test values.
 Run:
 
 ```powershell
-git add docs/compatibility/gorilla
+git add REUSE.toml docs/compatibility/gorilla
 git diff --cached --check
 git commit -m "docs: define Gorilla parity and test oracles"
 ```
@@ -1397,6 +1457,7 @@ git commit -m "docs: define Gorilla parity and test oracles"
 - Create: `docs/project-memory/DECISIONS.md`
 - Create: `docs/project-memory/VERIFICATION.md`
 - Modify: `README.md`
+- Modify: `REUSE.toml`
 
 **Interfaces:**
 
@@ -1497,6 +1558,18 @@ with XeLaTeX into `tmp/pdfs/`, and copy the PDF beside its Markdown source for l
 Run XeLaTeX until references stabilize.  Render every final PDF page with `pdftoppm`, inspect every page, and correct
 all clipping, overlap, glyph, hierarchy, and page-transition defects.  Add only Markdown and LaTeX sources to Git.
 
+Before Step 5, update the explicit `REUSE.toml` annotation list without a directory wildcard.  Add every new
+Bonobo-authored tracked path from Tasks 6-9:
+
+- `docs/compatibility/gorilla/upstream-baseline.md` and its generated `.tex` companion.
+- `docs/compatibility/gorilla/behavior-dossier.md` and its generated `.tex` companion.
+- `docs/compatibility/gorilla/feature-parity-matrix.md` and its generated `.tex` companion.
+- `docs/compatibility/gorilla/test-oracles.md` and its generated `.tex` companion.
+- `.github/workflows/foundation.yml` and the four `docs/project-memory` Markdown files.
+- Any additional generated source files created in scope.
+
+Preserve this fail-closed rule: a new path must fail REUSE until deliberately classified.
+
 - [ ] **Step 5: Run the complete local release gate**
 
 Run:
@@ -1525,7 +1598,7 @@ not appear.
 Run:
 
 ```powershell
-git add .github README.md docs/project-memory docs/compatibility docs/specs docs/superpowers/plans
+git add REUSE.toml .github README.md docs/project-memory docs/compatibility docs/specs docs/superpowers/plans
 git diff --cached --check
 git diff --cached --name-only
 git commit -m "ci: complete repository foundation and dossier gates"

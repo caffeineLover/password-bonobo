@@ -11,7 +11,6 @@ path = [
     ".python-version",
     "AGENTS.md",
     "CONTRIBUTING.md",
-    "LICENSES/GPL-3.0-or-later.txt",
     "README.md",
     "REUSE.toml",
     "SECURITY.md",
