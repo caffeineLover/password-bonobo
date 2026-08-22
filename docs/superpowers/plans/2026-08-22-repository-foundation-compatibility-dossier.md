@@ -1196,9 +1196,13 @@ Create `docs/compatibility/gorilla/upstream-baseline.md` with:
 Before committing, add `docs/compatibility/gorilla/upstream-baseline.md` to the explicit `REUSE.toml` annotation list.
 Do not use a directory wildcard or an annotation that could classify future third-party material.
 
+Stage the complete intended repository change before linting so REUSE inspects the actual index.  The external Gorilla
+checkout remains outside this command and must remain unstaged.
+
 Run:
 
 ```powershell
+git add REUSE.toml docs/compatibility/gorilla/upstream-baseline.md
 uv run reuse lint
 ```
 
@@ -1212,17 +1216,16 @@ Run:
 git status --short
 git ls-files -z | uv run python -m tools.check_tracked_files
 git ls-files | Select-String -Pattern '(^|/)gorilla/(sources|unit-tests)/'
+git diff --cached --check
 ```
 
-Expected: only the new neutral baseline Markdown is untracked; the validators pass; no upstream source path is tracked.
+Expected: the intended repository files are staged; the validators pass; no upstream source path is tracked.
 
 - [ ] **Step 7: Commit the baseline record**
 
 Run:
 
 ```powershell
-git add REUSE.toml docs/compatibility/gorilla/upstream-baseline.md
-git diff --cached --check
 git commit -m "docs: pin Gorilla research baseline"
 ```
 
@@ -1314,9 +1317,13 @@ test databases only as research evidence; do not copy them.
 Before this check, add `docs/compatibility/gorilla/behavior-dossier.md` to the explicit `REUSE.toml` annotation list.
 Do not use a directory wildcard or an annotation that could classify future third-party material.
 
+Stage every intended task file before linting so REUSE inspects the actual index.  The external Gorilla checkout remains
+outside this command and must remain unstaged.
+
 Run:
 
 ```powershell
+git add REUSE.toml docs/compatibility/gorilla/behavior-dossier.md docs/compatibility/gorilla/upstream-baseline.md
 $dossier = 'docs/compatibility/gorilla/behavior-dossier.md'
 rg -n "GOR-BEH-[0-9]{3}" $dossier
 rg -n "example statements|Unassigned|INSERT" $dossier
@@ -1324,6 +1331,7 @@ $line = 0; Get-Content -LiteralPath $dossier | ForEach-Object { $line++; if ($_.
 git -C $gorillaRoot status --short
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run reuse lint
+git diff --cached --check
 ```
 
 Expected: the first command lists every behavior; the token scan prints nothing; the line-length scan prints nothing;
@@ -1334,8 +1342,6 @@ the Gorilla checkout remains clean; the tracked-file audit passes.
 Run:
 
 ```powershell
-git add REUSE.toml docs/compatibility/gorilla/behavior-dossier.md docs/compatibility/gorilla/upstream-baseline.md
-git diff --cached --check
 git commit -m "docs: record Gorilla behavior dossier"
 ```
 
@@ -1419,9 +1425,14 @@ Before this check, add `docs/compatibility/gorilla/feature-parity-matrix.md` and
 `docs/compatibility/gorilla/test-oracles.md` to the explicit `REUSE.toml` annotation list.  Do not use a directory
 wildcard or an annotation that could classify future third-party material.
 
+Stage every intended task file before linting so REUSE inspects the actual index.  The external Gorilla checkout and
+generated PDFs remain outside this command and must remain unstaged.
+
 Run:
 
 ```powershell
+git add REUSE.toml docs/compatibility/gorilla/behavior-dossier.md `
+  docs/compatibility/gorilla/feature-parity-matrix.md docs/compatibility/gorilla/test-oracles.md
 $matrix = 'docs/compatibility/gorilla/feature-parity-matrix.md'
 $oracles = 'docs/compatibility/gorilla/test-oracles.md'
 $dossier = 'docs/compatibility/gorilla/behavior-dossier.md'
@@ -1430,6 +1441,7 @@ rg -n "GOR-TEST-[0-9]{3}" $matrix $oracles
 rg -n "GOR-BEH-[0-9]{3}" $matrix $oracles $dossier
 rg -n "example statements|Unassigned|INSERT" $matrix $oracles
 uv run reuse lint
+git diff --cached --check
 ```
 
 Expected: every identifier class is present; the token scan prints nothing; every matrix row has evidence, owner,
@@ -1440,8 +1452,6 @@ platform, relevance, and test values.
 Run:
 
 ```powershell
-git add REUSE.toml docs/compatibility/gorilla
-git diff --cached --check
 git commit -m "docs: define Gorilla parity and test oracles"
 ```
 
@@ -1570,6 +1580,14 @@ Bonobo-authored tracked path from Tasks 6-9:
 
 Preserve this fail-closed rule: a new path must fail REUSE until deliberately classified.
 
+Stage every intended Task 9 file before the release gate so REUSE inspects the actual index.  Do not stage generated
+PDFs or the external Gorilla checkout.
+
+```powershell
+git add REUSE.toml .github/workflows/foundation.yml README.md docs/project-memory docs/compatibility docs/specs `
+  docs/superpowers/plans
+```
+
 - [ ] **Step 5: Run the complete local release gate**
 
 Run:
@@ -1586,7 +1604,7 @@ uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse lint
 uv build
-git diff --check
+git diff --cached --check
 git status --short
 ```
 
@@ -1598,8 +1616,6 @@ not appear.
 Run:
 
 ```powershell
-git add REUSE.toml .github README.md docs/project-memory docs/compatibility docs/specs docs/superpowers/plans
-git diff --cached --check
 git diff --cached --name-only
 git commit -m "ci: complete repository foundation and dossier gates"
 ```
