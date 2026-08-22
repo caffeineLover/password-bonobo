@@ -1,0 +1,10 @@
+version = 1
+SPDX-PackageName = "Password Bonobo"
+SPDX-PackageSupplier = "NOASSERTION"
+SPDX-PackageDownloadLocation = "NOASSERTION"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Password Bonobo contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"

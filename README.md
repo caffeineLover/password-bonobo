@@ -16,9 +16,11 @@ copyrightable implementation material do not enter this repository or Bonobo pro
 ## Security
 
 Never add real credentials, personal PasswordSafe databases, tokens, or sensitive provider metadata.  Report security
-issues using `SECURITY.md` after that document is added by the foundation plan.
+issues through the [security policy](SECURITY.md).
 
 ## License
 
-Bonobo-authored code is intended for GPL-3.0-or-later licensing.  Formal license files and contribution terms are added
-by the repository-foundation plan before product implementation begins.
+Bonobo-authored code is licensed under [GPL-3.0-or-later](LICENSES/GPL-3.0-or-later.txt).  Machine-readable metadata
+is in [`REUSE.toml`](REUSE.toml).  External contributions remain closed while the iOS distribution-exception decision
+is unresolved; see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[App Store distribution exception plan](docs/legal/app-store-distribution-exception-plan.md).

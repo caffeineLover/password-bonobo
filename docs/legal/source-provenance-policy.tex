@@ -1,0 +1,185 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+% fallback for those not using the hyperref driver hyperxmp:
+\makeatletter
+\@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
+\makeatother
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\section{Source Provenance Policy}\label{source-provenance-policy}
+
+\subsection{1. Purpose and scope}\label{purpose-and-scope}
+
+This policy protects Password Bonobo's original implementation work and
+records how compatibility research becomes reviewable, neutral project
+knowledge. It applies to Bonobo-authored source, tests, fixtures,
+documentation, dependencies, assets, and research records. It does not
+grant permission to reuse material owned by another party.
+
+\subsection{2. Allowed authoritative
+inputs}\label{allowed-authoritative-inputs}
+
+Product implementation and tests may use these authoritative inputs:
+
+\begin{itemize}
+\tightlist
+\item
+  Approved Bonobo specifications and decisions.
+\item
+  Official PasswordSafe format documentation and other official format
+  documentation applicable to the work.
+\item
+  The approved neutral behavior dossier, which describes observable
+  behavior without reproducing implementation text.
+\item
+  Bonobo synthetic tests and fixtures that passed the intake process in
+  this policy.
+\end{itemize}
+
+These inputs are the handoff boundary for implementation. A developer
+must not translate external implementation material into Bonobo code,
+tests, comments, identifiers, or document structure.
+
+\subsection{3. External research boundary and read-only checkout
+rules}\label{external-research-boundary-and-read-only-checkout-rules}
+
+Password Gorilla may be studied only in an external, pinned, read-only
+research checkout outside this repository. Gorilla source is evidence
+about behavior, not implementation material for Bonobo. Researchers may
+inspect the pinned checkout for neutral observations, but must not
+modify it, add Bonobo annotations to it, copy it into this repository,
+or include it in a product build.
+
+Research findings enter Bonobo through cited, neutral observations in
+the compatibility dossier. Product development uses the approved Bonobo
+documents, official format documentation, and synthetic tests rather
+than the external source.
+
+\subsection{4. Prohibited copying
+categories}\label{prohibited-copying-categories}
+
+Do not copy or adapt external source, comments, identifiers, file
+organization, control flow, UI assets, translations, test fixtures,
+screenshots, or other copyrightable implementation expression. Do not
+quote external source fragments in product code or compatibility
+documents. Do not import upstream vault files unless they pass the
+fixture intake process and receive explicit approval.
+
+\subsection{5. Evidence citation format}\label{evidence-citation-format}
+
+Each compatibility evidence record must identify, in neutral prose:
+
+\begin{itemize}
+\tightlist
+\item
+  Revision: the pinned upstream revision.
+\item
+  Location: repository-relative path and either a line range or a test
+  name.
+\item
+  Evidence kind: for example, source inspection, test observation,
+  documentation, or change history.
+\item
+  Neutral observation: the observable behavior or unresolved question,
+  without copied source text.
+\end{itemize}
+
+Use the cited material only to support the observation. A citation is
+not permission to reproduce or implement the source expression it
+references.
+
+\subsection{6. Fixture intake}\label{fixture-intake}
+
+Before a fixture is accepted, record its origin and license, establish
+that its data is synthetic or otherwise approved for redistribution,
+scan it for sensitive data, and obtain the required approval. The intake
+record must state the reviewer or approving authority only when that
+role and decision have been formally defined; it must not invent one.
+Fixtures containing real credentials, personal vault data, tokens, or
+provider metadata are prohibited.
+
+\subsection{7. Dependency and asset
+ledger}\label{dependency-and-asset-ledger}
+
+Every dependency and nontrivial asset must have a ledger entry before
+use. The entry must identify its origin, version or immutable revision,
+license or terms, intended use, distribution implications, provenance
+evidence, and required review status. The ledger must flag dependencies
+and assets that are incompatible with an iOS distribution decision or
+with the project's no-copy boundary.
+
+\subsection{8. Upstream revision
+updates}\label{upstream-revision-updates}
+
+Updating an external research revision requires a separate review, a
+newly pinned immutable revision, a provenance entry, and a neutral
+dossier delta. Keep the checkout external and read-only throughout the
+update. Do not replace an existing observation merely because a later
+upstream revision differs; record the scope of the revised evidence and
+revisit affected compatibility claims.
+
+\subsection{9. Suspected copied-expression incident
+response}\label{suspected-copied-expression-incident-response}
+
+If copied expression is suspected, stop distributing and modifying the
+affected material, preserve the relevant provenance records, and
+restrict discussion to information safe to share. Escalate the concern
+to the repository owner for review. Do not resolve the incident by
+rewriting history, deleting evidence, or publishing the suspected
+material. Resume work only after the affected material, evidence, and
+required corrective action have been reviewed.
+
+\end{document}
