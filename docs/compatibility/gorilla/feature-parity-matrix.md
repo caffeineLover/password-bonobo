@@ -52,7 +52,7 @@ Test IDs resolve in
 
 | ID | Feature family | Disposition | Evidence | Owner | Platforms | Data-loss | Security | Tests |
 |---|---|---|---|---|---|---|---|---|
-|GOR-FEAT-001|Vault lifecycle|Required|GOR-BEH-001–006|O3|ALL|Critical|Critical|GOR-TEST-001,GOR-TEST-042,GOR-TEST-048|
+|GOR-FEAT-001|Vault lifecycle|Required|GOR-BEH-001–005|O3|ALL|Critical|Critical|GOR-TEST-001,GOR-TEST-003,GOR-TEST-042|
 | GOR-FEAT-002 | Master-password change | Required | GOR-BEH-007 | O2 | ALL | Critical | Critical | GOR-TEST-002 |
 |GOR-FEAT-003|Save path/write guards|Required|GOR-BEH-009–011|O2|ALL|Critical|Critical|GOR-TEST-043|
 | GOR-FEAT-004 | Close guards | Modernized | GOR-BEH-012–014 | O3 | ALL | Critical | Material | GOR-TEST-004 |
@@ -94,13 +94,18 @@ Test IDs resolve in
 |GOR-FEAT-040|iOS credential provider|Bonobo extension|Approved:S7|O7|I|Critical|Critical|GOR-TEST-040|
 |GOR-FEAT-041|Biometric unlock - iOS|Bonobo extension|Approved:S6|O7|I|Critical|Critical|GOR-TEST-041|
 |GOR-FEAT-042|Untitled-vault lock save|Modernized|GOR-BEH-064|O3|ALL|Critical|Critical|GOR-TEST-050|
-|GOR-FEAT-043|Permissive V3 open|Excluded|GOR-BEH-058; Approved:S8|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
-|GOR-FEAT-044|Semantic save|Required|GOR-BEH-008; Approved:S5+S8|O2|ALL|Critical|Critical|GOR-TEST-003,GOR-TEST-053|
+|GOR-FEAT-043|Fail-open|Excluded|GOR-BEH-006,GOR-BEH-066;Approved:S8|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
+|GOR-FEAT-044|Ordinary-edit persistence|Required|GOR-BEH-008; Approved:S5+S8|O2|ALL|Critical|Critical|GOR-TEST-053|
 
-`GOR-FEAT-043` deliberately excludes two Gorilla outcomes. The official V3 Version header field is mandatory and has
-two data bytes. The pin defaults an absent Version to V3.0 in memory and opens a stored-HMAC mismatch with a warning.
-Bonobo program design section 10 instead requires unsupported or malformed content to fail closed, retain the original
-encrypted bytes, and create no replacement. This row does not require Bonobo to reproduce either permissive outcome.
+`GOR-FEAT-043` deliberately excludes two atomic Gorilla outcomes: `GOR-BEH-006` warning-open for a stored-HMAC mismatch
+and `GOR-BEH-066` in-memory V3.0 defaulting when Version is absent. The official V3 Version header is mandatory and has
+two data bytes. Bonobo program design section 10 instead requires unsupported or malformed content to fail closed,
+retain the original encrypted bytes, and create no replacement. The row does not include `GOR-BEH-058` rejection.
+
+`GOR-FEAT-044` requires observable ordinary-edit persistence and no loss, not a shared Save gesture. Gorilla uses its
+explicit Save and backup path. Bonobo commits an ordinary edit when its complete form is confirmed; provider
+unavailability retains the encrypted local edit as `Sync pending`. Save/discard close prompts belong only to staged
+URL-audit cleanup.
 
 ## Evidence-gap register
 

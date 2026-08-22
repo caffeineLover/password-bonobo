@@ -660,7 +660,7 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 ### GOR-TEST-048 - Contrast stored-HMAC integrity-mismatch handling
 
 - Authority: `PasswordSafe` + `Gorilla` + `Bonobo`.
-- Evidence: `GOR-BEH-006` and `GOR-BEH-058`; program design section 10; official PasswordSafe `formatV3.txt`
+- Evidence: `GOR-BEH-006`; program design section 10; official PasswordSafe `formatV3.txt`
   sections 2.8, 2.9, and 3.
 - Synthetic setup: An official-format fixture authority copies `PB-SYN-BASE`, flips exactly one bit in its stored HMAC
   after the unencrypted end marker, and duplicates the result as two byte-identical stored-HMAC mismatch copies:
@@ -728,19 +728,22 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 ### GOR-TEST-052 - Contrast a missing mandatory Version field
 
 - Authority: `PasswordSafe` + `Gorilla` + `Bonobo`.
-- Evidence: `GOR-BEH-058`; program design section 10; official PasswordSafe `formatV3.txt` sections 2.9.1, 2.11,
+- Evidence: `GOR-BEH-066`; program design section 10; official PasswordSafe `formatV3.txt` sections 2.9.1, 2.11,
   and 3.2 note 1; pinned locations `sources/pwsafe/pwsafe-v3.tcl:176-183`, `sources/gorilla.tcl:4494-4520`, and
   `sources/gorilla.tcl:4584-4636`.
-- Synthetic setup: An official-format authority creates a fabricated authenticated missing-Version input and makes
-  two byte-identical copies, `pb-syn-missing-version-bonobo.psafe3` for Bonobo and
-  `pb-syn-missing-version-gorilla.psafe3` for Gorilla. It omits Version type `0x00`; database UUID type `0x01` is
+- Synthetic setup: An official-format authority creates authenticated `pb-syn-missing-version-control.psafe3` and two
+  byte-identical fabricated copies: `pb-syn-missing-version-bonobo.psafe3` for Bonobo and
+  `pb-syn-gorilla-052/pb-syn-missing-version-gorilla.psafe3` for Gorilla. It omits Version type `0x00`; database UUID is
   `11111111-1111-4111-8111-111111111111`, Preferences type `0x02` has an empty UTF-8 value, and header END is valid.
   Its Alpha record has UUID `22222222-2222-4222-8222-222222222222`, mandatory Title `Alpha`, mandatory Password
   `fabricated password 1`, record END, EOF, and a stored HMAC over every plaintext field present. Record both hashes;
-  `pb-syn-bonobo-rejected.psafe3` begins absent as the Bonobo output sentinel.
+  `pb-syn-bonobo-rejected.psafe3` begins absent. Create isolated disposable profile `pb-syn-gorilla-profile-052` and
+  output directory `pb-syn-gorilla-052`. Before action, set Gorilla Preferences `timeStampBackup=false` and
+  `backupPath` to that exact absolute output directory; the named output and `.bak` paths begin absent.
 - Action: Attempt Open on the Bonobo source with the fabricated master input and inspect the error and directory.
-  Separately open the Gorilla source, use Save As to create `pb-syn-defaulted-version.psafe3`, wait for success, close,
-  and inspect both sources, the named output, and mandatory initial `pb-syn-defaulted-version.bak` read-only.
+  Separately launch Gorilla with only the isolated profile, open its source, and use Save As to create
+  `pb-syn-gorilla-052/pb-syn-defaulted-version.psafe3`. Wait for success, close, and inspect both sources, that primary,
+  and initial `pb-syn-gorilla-052/pb-syn-defaulted-version.bak` read-only.
 - Expected observation: Bonobo fails closed, keeps its source bytes and hash unchanged, creates no output, and offers no
   editable session or Save. Gorilla opens through its evidenced in-memory V3.0 fallback. Its named output contains a
   Version field type `0x00`, length 2, and bytes `00 03`; database UUID, record UUID, and user-authored record values
@@ -749,38 +752,50 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
   comparison covers Version, database UUID, record UUID, and user-authored record semantics, not ciphertext, field
   order, padding, or writer-owned Preferences serialization and header normalization. The output-to-backup comparison
   covers every byte.
-- Cleanup: Dismiss Bonobo's error, close Gorilla, and remove the Bonobo source, Gorilla source, named output, initial
-  `.bak`, absent-output sentinel, controls, hashes, and non-sensitive manifests.
+- Cleanup: Dismiss Bonobo's error and close Gorilla. Remove `pb-syn-gorilla-profile-052`, all three named sources, the
+  named output, initial `.bak`, absent-output sentinel, hashes, manifests, and exact `pb-syn-gorilla-052` directory.
 - Required clients: Bonobo and Gorilla at the pinned revision; PasswordSafe supplies mandatory-field authority.
 
-### GOR-TEST-053 - Compare observable ordinary semantic-save transactions
+### GOR-TEST-053 - Compare ordinary-edit persistence transactions
 
 - Authority: `Gorilla` + `Bonobo`.
 - Evidence: `GOR-BEH-008`; program design sections 6.2, 10, and 11; pinned locations
   `sources/gorilla.tcl:4382-4407` and `sources/gorilla.tcl:4584-4636`.
-- Synthetic setup: Prepare four independent `PB-SYN-BASE` copies whose Alpha note is `fabricated note A`: Gorilla
-  success, Gorilla failure, Bonobo success, and Bonobo failure. Retain a read-only control for each. Disable Gorilla's
-  later backup; its initial `.bak` paths begin absent. External disposable filesystem gates can pause or deny only the
-  named backup or publication destination without changing any source or control.
-- Action: For Gorilla success, change the note to `fabricated Gorilla saved`, invoke Save once, pause initial `.bak`
-  creation, snapshot the completed primary and dirty indicator, then release the gate and close. For Gorilla failure,
-  change it to `fabricated Gorilla failed`, deny initial `.bak`, invoke Save, record the error, and request close.
-  For Bonobo success, change the note to `fabricated Bonobo saved`, invoke Save, wait until Save returns success, then
-  request close. For Bonobo failure, change it to `fabricated Bonobo pending`, allow a validated encrypted recovery copy
-  but deny primary publication, invoke Save, record the error, and request close. Reopen completed artifacts read-only.
+- Synthetic setup: Prepare four independent `PB-SYN-BASE` copies whose Alpha note is `fabricated note A`. The Gorilla
+  success paths are `pb-syn-gorilla-053/pb-syn-gorilla-save-success.psafe3` and
+  `pb-syn-gorilla-053/pb-syn-gorilla-save-success.bak`. The failure paths are
+  `pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.psafe3` and
+  `pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.bak`; both initial `.bak` paths begin absent.
+  Create isolated disposable profile `pb-syn-gorilla-profile-053`. Before action, set Gorilla Preferences
+  `timeStampBackup=false` and `backupPath` to the exact absolute `pb-syn-gorilla-053` directory. Retain pre-action
+  hashes and manifests; use an external filesystem gate that can pause or deny only either named `.bak`. The Bonobo
+  provider sources are
+  `pb-syn-bonobo-provider-success.psafe3` and `pb-syn-bonobo-provider-offline.psafe3`; their named encrypted local
+  documents are `pb-syn-bonobo-local-success.psafe3` and `pb-syn-bonobo-local-offline.psafe3`. Stage no audit cleanup.
+- Action: Gorilla client — on the success primary, confirm the note change to `fabricated Gorilla saved`, invoke
+  explicit Save once, pause exact initial-backup creation, capture the completed primary and dirty indicator, then
+  release the gate. On the backup-failure primary, confirm `fabricated Gorilla failed`, deny its exact `.bak`, invoke
+  explicit Save once, and record the error and dirty indicator. Bonobo client — while its success provider is available,
+  confirm a complete ordinary edit form changing the note to `fabricated Bonobo committed`, then close and reopen both
+  the encrypted local document and provider document.
+  On the offline copy, make the provider unavailable after opening, confirm the note change to
+  `fabricated Bonobo offline committed`, observe provider state, then close and reopen from the encrypted local
+  document.
 - Expected observation: Gorilla success publishes its edited primary before initial backup starts; dirty remains set at
-  the pause, its initial `.bak` then contains `fabricated Gorilla saved`, and dirty clears only after both succeed, so
-  close does not prompt. Gorilla failure leaves an edited primary containing `fabricated Gorilla failed`, no initial
-  `.bak`, dirty set, and a close prompt. Bonobo success returns only after its primary authenticates with
-  `fabricated Bonobo saved`; dirty is clear and close does not prompt. This contract prescribes no Bonobo write order.
-  Bonobo failure leaves the last validated primary unchanged with `fabricated note A`, retains an authenticating
-  encrypted recovery copy containing `fabricated Bonobo pending`, keeps dirty set, and presents a close prompt.
-- Preservation requirement: Every completed primary, Gorilla initial backup, and Bonobo recovery copy retains Alpha's
-  UUID, unrelated standard fields, field order where required, and unknown bytes. Bonobo and Gorilla each open the
-  other's successful primary and observe only its exact note edit; no client publishes plaintext recovery data.
-- Cleanup: Resolve each close prompt by discarding only the pending in-memory edit, restore destination access, and
-  remove all four sources, controls, snapshots, initial backups, encrypted recovery copies, and manifests.
-- Required clients: Bonobo and Gorilla at the pinned revision perform their named operations and cross-open successes.
+  the pause, and the exact initial `.bak` then contains `fabricated Gorilla saved`. Dirty clears only after both
+  succeed.
+  Gorilla backup failure reports an error, leaves the edited primary with `fabricated Gorilla failed`, leaves its exact
+  `.bak` absent, and keeps dirty state. Bonobo provider publication succeeds after confirmation: its encrypted local and
+  provider documents authenticate with `fabricated Bonobo committed`, and close and reopen retain the committed ordinary
+  edit. When the provider is unavailable, UI state is `Sync pending`; the encrypted local document authenticates with
+  `fabricated Bonobo offline committed`, while the provider bytes and `fabricated note A` remain unchanged. Close and
+  reopen retain the committed ordinary edit. With no staged audit cleanup, no audit-staging save/discard prompt appears.
+- Preservation requirement: Gorilla primaries and initial backup retain Alpha's UUID, unrelated standard fields, field
+  order where required, and unknown bytes. Each Bonobo local or published document changes only the exact note; the
+  unavailable-provider source remains byte-identical to its control. No client publishes plaintext recovery data.
+- Cleanup: Restore filesystem and provider availability. Remove `pb-syn-gorilla-profile-053`, exact directory
+  `pb-syn-gorilla-053` with both primaries and `.bak` paths, all four named Bonobo documents, hashes, and manifests.
+- Required clients: Bonobo and Gorilla at the pinned revision perform only their named client-specific operations.
 
 ## Extension metadata gate
 

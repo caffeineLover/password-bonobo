@@ -77,10 +77,10 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
 - Bonobo note: The visible retry behavior matters even though distinct internal failures share one presentation.
 
-### GOR-BEH-006 - Open with a nonfatal integrity warning
+### GOR-BEH-006 - Open a stored-HMAC mismatch with a nonfatal warning
 
 - Confidence: `Supported`.
-- Preconditions: A version 3 file decrypts but its stored integrity value does not match its contents.
+- Preconditions: A version 3 file decrypts, but its stored-HMAC integrity value does not match the computed value.
 - Action: The user opens the file with the correct master password.
 - Observable result: The file opens and a warning says its integrity could not be authenticated.
 - Data effect: Decoded data becomes active despite the warning; the file is not changed by opening.
@@ -813,35 +813,22 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
 - Bonobo note: A same-format save and a format-conversion observation are missing, so confidence remains one-kind.
 
-### GOR-BEH-058 - Handle malformed fields, undersized Version, missing Version, and HMAC mismatch
+### GOR-BEH-058 - Reject an undersized Version value
 
 - Confidence: `Supported`.
-- Preconditions: A version 3 file has a truncated outer header, incomplete field, invalid general field length, an
-  undersized Version type `0x00` value with fewer than two bytes, no Version field before header END, or a stored-HMAC
-  mismatch.
+- Preconditions: An authenticated version 3 envelope reaches header decoding, and its Version type `0x00` value has
+  fewer than two bytes from which to decode both version components.
 - Action: The user attempts to open it with the correct password.
-- Observable result: Truncation and invalid general field lengths reject opening. The undersized Version case rejects
-  because both decoded bytes are unavailable; the pin does not establish exact-length, trailing-byte, or arbitrary
-  two-byte Version validation. A missing Version field defaults in memory to V3.0 and opening continues. A stored-HMAC
-  mismatch also opens, with an integrity warning.
-- Data effect: Hard failure rejects decoded records. The missing-Version default and HMAC-warning paths activate
-  decoded data without changing the source file.
+- Observable result: Opening rejects because the decoder cannot obtain both version components. The pin does not
+  establish exact-length, trailing-byte, or arbitrary two-byte Version validation.
+- Data effect: No decoded session becomes active, and opening does not change the source file.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:728-730`; kind: `help`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:48-111`;
-    kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:150-173`;
-    kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:176-183`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:343-376`;
     kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:435-458`;
-    kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:1594-1609`;
-    kind: `source`.
-- Bonobo note: Absence of Version is not malformed in the pinned reader. Malformed data, defaulting, and integrity
-  warning are three distinct compatibility outcomes; the missing-Version default lacks an executable observation.
+- Bonobo note: A constructible authenticated one-byte Version fixture is required for black-box confirmation.
 
 ### GOR-BEH-059 - Coordinate concurrent access with a database lock file
 
@@ -948,3 +935,16 @@ observation. Source text, source identifiers, control flow, and UI expression ar
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe.tcl:150-190`;
     kind: `source`.
 - Bonobo note: Fault injection and process or system interruption evidence are missing for the replacement boundary.
+
+### GOR-BEH-066 - Default a missing Version field to V3.0 in memory
+
+- Confidence: `Supported`.
+- Preconditions: A version 3 envelope reaches header END without a Version type `0x00` field.
+- Action: The user opens it with the correct master password.
+- Observable result: Gorilla supplies V3.0 as the in-memory Version value and continues opening.
+- Data effect: The active in-memory header gains the default; opening alone leaves the source file unchanged.
+- Evidence:
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:176-183`;
+    kind: `source`.
+- Bonobo note: Static source establishes the fallback, but no executable observation raises confidence further. The
+  official mandatory-field rule and Bonobo failure policy remain separate authorities.
