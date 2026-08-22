@@ -887,8 +887,8 @@ The implementation rejects:
 - Any `.psafe`, `.psafe3`, or `.dat` path outside `tests/fixtures/synthetic/`.
 - Any filename matching `.env`, `*.key`, `*.pem`, `id_rsa`, or `id_ed25519`.
 
-The command reads newline-delimited paths from standard input when no path arguments are supplied, prints only path and
-non-sensitive reason, and returns one on a violation.
+When standard input is redirected, the command reads NUL-delimited Git paths from `git ls-files -z` to avoid Git's
+C-style quoting ambiguity.  It prints only a path and non-sensitive reason, and returns one on a violation.
 
 - [ ] **Step 4: Exercise the command entry point**
 
@@ -896,7 +896,7 @@ Run:
 
 ```powershell
 uv run pytest tests/foundation/test_tracked_files.py -v
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 uv run ruff check tools tests
 uv run mypy tools tests
 uv run python -m tools.check_python_structure tools tests
@@ -1005,7 +1005,7 @@ Run:
 
 ```powershell
 uv run reuse lint
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 rg -n "Gorilla source|GPL-3.0-or-later|not license text" README.md CONTRIBUTING.md SECURITY.md docs/legal REUSE.toml
 ```
 
@@ -1096,7 +1096,7 @@ Run:
 
 ```powershell
 git status --short
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 git ls-files | Select-String -Pattern '(^|/)gorilla/(sources|unit-tests)/'
 ```
 
@@ -1204,7 +1204,7 @@ rg -n "GOR-BEH-[0-9]{3}" $dossier
 rg -n "example statements|Unassigned|INSERT" $dossier
 $line = 0; Get-Content -LiteralPath $dossier | ForEach-Object { $line++; if ($_.Length -gt 120) { "$line" } }
 git -C $gorillaRoot status --short
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 ```
 
 Expected: the first command lists every behavior; the token scan prints nothing; the line-length scan prints nothing;
@@ -1369,10 +1369,10 @@ jobs:
       - run: uv run autopep8 --diff --recursive src tests tools
       - run: uv run ruff check src tests tools
       - run: uv run mypy src tests tools
-      - run: uv run pytest
+      - run: uv run python -m pytest
       - run: uv run python -m tools.check_python_structure src tests tools
       - shell: bash
-        run: git ls-files | uv run python -m tools.check_tracked_files
+        run: git ls-files -z | uv run python -m tools.check_tracked_files
       - run: uv run bandit -c pyproject.toml -r src tools
       - run: uv run pip-audit
       - run: uv run reuse lint
@@ -1407,9 +1407,9 @@ uv sync --locked --all-groups
 uv run autopep8 --diff --recursive src tests tools
 uv run ruff check src tests tools
 uv run mypy src tests tools
-uv run pytest
+uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse lint
@@ -1441,9 +1441,9 @@ uv sync --locked --all-groups
 uv run autopep8 --diff --recursive src tests tools
 uv run ruff check src tests tools
 uv run mypy src tests tools
-uv run pytest
+uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
-git ls-files | uv run python -m tools.check_tracked_files
+git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse lint
