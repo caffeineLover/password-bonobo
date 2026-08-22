@@ -63,11 +63,14 @@ Password Bonobo/
 |-- docs/legal/
 |   |-- app-store-distribution-exception-plan.md
 |   `-- source-provenance-policy.md
+|-- docs/pandoc/
+|   |-- pdf-header.tex                    # Shared code and table wrapping for generated review documents.
+|   `-- pdf-layout.lua                    # Breakable identifiers and bounded wide-table columns.
 |-- docs/project-memory/
-|   |-- DECISIONS.md
-|   |-- PROJECT.md
-|   |-- STATE.md
-|   `-- VERIFICATION.md
+|   |-- DECISIONS.md / DECISIONS.tex
+|   |-- PROJECT.md / PROJECT.tex
+|   |-- STATE.md / STATE.tex
+|   `-- VERIFICATION.md / VERIFICATION.tex
 |-- src/bonobo_core/
 |   |-- __init__.py                       # Typed package identity only.
 |   `-- py.typed                          # PEP 561 marker.
@@ -1466,8 +1469,13 @@ git commit -m "docs: define Gorilla parity and test oracles"
 - Create: `docs/project-memory/STATE.md`
 - Create: `docs/project-memory/DECISIONS.md`
 - Create: `docs/project-memory/VERIFICATION.md`
+- Create: same-basename LaTeX for each project-memory Markdown file
+- Create: `docs/pandoc/pdf-header.tex`
+- Create: `docs/pandoc/pdf-layout.lua`
+- Create: same-basename LaTeX for substantial compatibility and approved design documents that do not yet have it
 - Modify: `README.md`
 - Modify: `REUSE.toml`
+- Modify: this plan Markdown and LaTeX to synchronize the enforced Task 9 commands
 
 **Interfaces:**
 
@@ -1502,7 +1510,8 @@ jobs:
           python-version: "3.14"
           enable-cache: true
       - run: uv sync --locked --all-groups
-      - run: uv run autopep8 --diff --recursive src tests tools
+      - run: uv run autopep8 --in-place --recursive src tests tools
+      - run: git diff --exit-code -- src tests tools
       - run: uv run ruff check src tests tools
       - run: uv run mypy src tests tools
       - run: uv run python -m pytest
@@ -1511,7 +1520,7 @@ jobs:
         run: git ls-files -z | uv run python -m tools.check_tracked_files
       - run: uv run bandit -c pyproject.toml -r src tools
       - run: uv run pip-audit
-      - run: uv run reuse lint
+      - run: uv run reuse --no-multiprocessing lint
       - run: uv build
 ```
 
@@ -1540,7 +1549,8 @@ Add concise setup and validation commands:
 ```powershell
 uv python install 3.14
 uv sync --locked --all-groups
-uv run autopep8 --diff --recursive src tests tools
+uv run autopep8 --in-place --recursive src tests tools
+git diff --exit-code -- src tests tools
 uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
@@ -1548,7 +1558,7 @@ uv run python -m tools.check_python_structure src tests tools
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
-uv run reuse lint
+uv run reuse --no-multiprocessing lint
 uv build
 ```
 
@@ -1556,17 +1566,23 @@ State explicitly that these commands never require the Gorilla checkout.
 
 - [ ] **Step 4: Generate LaTeX and PDFs for substantial new documents**
 
-For each substantial Markdown document created by this plan, run Pandoc to create a same-basename `.tex`, compile it
-with XeLaTeX into `tmp/pdfs/`, and copy the PDF beside its Markdown source for local review.  At minimum this includes:
+For each substantial Markdown document created or changed by this plan, run Pandoc with
+`docs/pandoc/pdf-header.tex` and `docs/pandoc/pdf-layout.lua` to create a same-basename `.tex`, compile it with XeLaTeX
+into `tmp/pdfs/`, and copy the PDF beside its Markdown source for local review.  At minimum this includes:
 
 - The subproject specification.
+- The approved program and URL-audit designs.
 - This implementation plan.
+- The upstream baseline.
 - The behavior dossier.
 - The feature-parity matrix.
 - The test-oracle catalog.
+- Both legal policies.
+- All four project-memory documents.
 
 Run XeLaTeX until references stabilize.  Render every final PDF page with `pdftoppm`, inspect every page, and correct
-all clipping, overlap, glyph, hierarchy, and page-transition defects.  Add only Markdown and LaTeX sources to Git.
+all clipping, overlap, glyph, hierarchy, and page-transition defects.  Explicitly confirm that code and command
+listings wrap within the page.  Add only Markdown, LaTeX, and the shared render-source header to Git.
 
 Before Step 5, update the explicit `REUSE.toml` annotation list without a directory wildcard.  Add every new
 Bonobo-authored tracked path from Tasks 6-9:
@@ -1575,7 +1591,8 @@ Bonobo-authored tracked path from Tasks 6-9:
 - `docs/compatibility/gorilla/behavior-dossier.md` and its generated `.tex` companion.
 - `docs/compatibility/gorilla/feature-parity-matrix.md` and its generated `.tex` companion.
 - `docs/compatibility/gorilla/test-oracles.md` and its generated `.tex` companion.
-- `.github/workflows/foundation.yml` and the four `docs/project-memory` Markdown files.
+- `.github/workflows/foundation.yml`, the four `docs/project-memory` Markdown/LaTeX pairs,
+  `docs/pandoc/pdf-header.tex`, and `docs/pandoc/pdf-layout.lua`.
 - Any additional generated source files created in scope.
 
 Preserve this fail-closed rule: a new path must fail REUSE until deliberately classified.
@@ -1584,8 +1601,8 @@ Stage every intended Task 9 file before the release gate so REUSE inspects the a
 PDFs or the external Gorilla checkout.
 
 ```powershell
-git add REUSE.toml .github/workflows/foundation.yml README.md docs/project-memory docs/compatibility docs/specs `
-  docs/superpowers/plans
+git add REUSE.toml .github/workflows/foundation.yml README.md docs/project-memory docs/pandoc docs/compatibility `
+  docs/legal docs/specs docs/superpowers/plans
 ```
 
 - [ ] **Step 5: Run the complete local release gate**
@@ -1594,7 +1611,8 @@ Run:
 
 ```powershell
 uv sync --locked --all-groups
-uv run autopep8 --diff --recursive src tests tools
+uv run autopep8 --in-place --recursive src tests tools
+git diff --exit-code -- src tests tools
 uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
@@ -1602,7 +1620,7 @@ uv run python -m tools.check_python_structure src tests tools
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
-uv run reuse lint
+uv run reuse --no-multiprocessing lint
 uv build
 git diff --cached --check
 git status --short

@@ -259,11 +259,15 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Gorilla`.
 - Evidence: `GOR-BEH-050` and `GOR-BEH-051`.
-- Synthetic setup: Write `pb-syn-import.csv` as UTF-8 without BOM, using LF and this header and row order:
-  - `Group,Title,Username,Password,URL,Notes`
-  - `Research.Sample,Alpha Import,sample-user,fabricated-one,https://alpha.example.invalid/,fabricated A`
-  - `Research.Bad,Bad Import,bad-user,fabricated-bad,https://bad.example.invalid/,fabricated bad,EXTRA`
-  - `Research.Beta,Beta Import,sample-user-two,fabricated-two,https://beta.example.invalid/,fabricated B`
+- Synthetic setup: Write `pb-syn-import.csv` as UTF-8 without BOM, using LF and this exact header and row content:
+
+  ```text
+  Group,Title,Username,Password,URL,Notes
+  Research.Sample,Alpha Import,sample-user,fabricated-one,https://alpha.example.invalid/,fabricated A
+  Research.Bad,Bad Import,bad-user,fabricated-bad,https://bad.example.invalid/,fabricated bad,EXTRA
+  Research.Beta,Beta Import,sample-user-two,fabricated-two,https://beta.example.invalid/,fabricated B
+  ```
+
 - Action: Import once, inspect results, save, close, and reopen the vault.
 - Expected observation: The first and third data rows are imported; the middle row with an extra seventh column is
   reported and skipped; reopen shows exactly Alpha Import and Beta Import as the two additions.

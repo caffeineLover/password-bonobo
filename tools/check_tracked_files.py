@@ -58,7 +58,8 @@ def _forbidden_reason(path: Path) -> str | None:
     normalized_path, normalization_error = _normalize_repository_path(path)
     if normalization_error is not None:
         return normalization_error
-    assert normalized_path is not None
+    if normalized_path is None:
+        raise RuntimeError("path normalization returned neither a path nor an error")
 
     lowered = normalized_path.as_posix().lower()
     parts = tuple(component.lower() for component in normalized_path.parts)

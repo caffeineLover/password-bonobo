@@ -1,0 +1,86 @@
+# Password Bonobo Foundation Verification
+
+Last updated: 2026-08-22
+
+## Overview and current state
+
+This record distinguishes executed local checks from hosted service state.  The complete local release gate and
+document review passed against the staged Task 9 content.  Hosted CI has not yet run because this branch introduces the
+workflow; its Windows, macOS, and Linux jobs remain to be observed after integration or publication.
+
+## CI action pin evidence
+
+Official, read-only Git refs were observed directly on 2026-08-22:
+
+| Official repository | Ref | Immutable SHA |
+|---|---|---|
+| `https://github.com/actions/checkout.git` | `refs/tags/v4` | `11d5960a326750d5838078e36cf38b85af677262` |
+| `https://github.com/actions/checkout.git` | `refs/tags/v4.4.0` | `11d5960a326750d5838078e36cf38b85af677262` |
+| `https://github.com/astral-sh/setup-uv.git` | `refs/tags/v6` | `d0d8abe699bfb85fec6de9f7adb5ae17292296ff` |
+
+The workflow uses the immutable SHAs, not the mutable major refs.  Evidence command form:
+
+```powershell
+git ls-remote https://github.com/actions/checkout.git refs/tags/v4 refs/tags/v4.4.0
+git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6
+```
+
+## Local executed gates
+
+The staged-index gate consists of:
+
+```powershell
+uv sync --locked --all-groups
+uv run autopep8 --in-place --recursive src tests tools
+git diff --exit-code -- src tests tools
+uv run ruff check src tests tools
+uv run mypy src tests tools
+uv run python -m pytest
+uv run python -m tools.check_python_structure src tests tools
+git ls-files -z | uv run python -m tools.check_tracked_files
+uv run bandit -c pyproject.toml -r src tools
+uv run pip-audit
+uv run reuse --no-multiprocessing lint
+uv build
+git diff --cached --check
+```
+
+Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5.  Ruff and strict mypy reported no issues;
+pytest 9.1.1 passed 15 tests with 73% measured coverage; the Python-structure and NUL-delimited tracked-file audits
+reported no violations; Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; REUSE
+classified 50 of 50 files; both distributions built; and the staged diff check was clean.  The local package's expected
+not-on-PyPI pip-audit skip is not a third-party dependency omission.
+
+## Generated-document review
+
+Fourteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources.  A deterministic semantic
+comparison found 14 of 14 generated sources identical.  All documents stabilized after two XeLaTeX passes.  The final
+page counts are:
+
+| Document | Pages |
+|---|---:|
+| Behavior dossier | 20 |
+| Feature-parity matrix | 5 |
+| Test oracles | 17 |
+| Upstream baseline | 2 |
+| App Store exception plan | 1 |
+| Source-provenance policy | 2 |
+| Decisions, project, state, and verification memory | 2, 1, 1, 2 |
+| Program design | 9 |
+| Repository-foundation specification | 6 |
+| URL-audit design | 13 |
+| Implementation plan | 24 |
+
+Result: 105 PDF pages and 105 rendered page images were visually inspected page by page.  The final logs have no
+overflow, missing-glyph, undefined-reference, or rerun warnings.  Markdown and LaTeX have no lines over 120 characters
+or drafting tokens.  Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed.  There are
+no observed clipping, overlap, hierarchy, glyph, or page-transition defects.  Review PDFs, build files, and page images
+remain ignored and uncommitted.
+
+## Environment and external boundary
+
+The local validation environment uses Windows, PowerShell, uv, and CPython 3.14.  REUSE uses its supported
+single-process mode to avoid the observed Python 3.14 Windows multiprocessing startup crash while evaluating the same
+metadata.  No local gate requires or reads the external Gorilla checkout.  The separate boundary check verifies only
+its approved origin, exact detached commit `6728e85c05ac25357b8f19f541487b9d26a97402`, and clean status; no upstream
+test is run.

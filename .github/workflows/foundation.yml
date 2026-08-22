@@ -1,0 +1,35 @@
+name: foundation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-08-22
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6, verified 2026-08-22
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - run: uv run autopep8 --in-place --recursive src tests tools
+      - run: git diff --exit-code -- src tests tools
+      - run: uv run ruff check src tests tools
+      - run: uv run mypy src tests tools
+      - run: uv run python -m pytest
+      - run: uv run python -m tools.check_python_structure src tests tools
+      - shell: bash
+        run: git ls-files -z | uv run python -m tools.check_tracked_files
+      - run: uv run bandit -c pyproject.toml -r src tools
+      - run: uv run pip-audit
+      - run: uv run reuse --no-multiprocessing lint
+      - run: uv build

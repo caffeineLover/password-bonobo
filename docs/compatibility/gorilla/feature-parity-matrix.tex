@@ -1,0 +1,337 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  letterpaper,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{listings}
+\newcommand{\passthrough}[1]{#1}
+\lstset{defaultdialect=[5.3]Lua}
+\lstset{defaultdialect=[x86masm]Assembler}
+\usepackage{longtable,booktabs,array}
+\usepackage{caption}
+\captionsetup[table]{skip=6pt}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% Preserve readable code, command, and table layout in Pandoc-generated review PDFs.
+\usepackage{etoolbox}
+\usepackage{pdflscape}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  upquote=true
+}
+\AtBeginEnvironment{longtable}{\footnotesize}
+\renewcommand{\arraystretch}{1.08}
+\setlength{\emergencystretch}{3em}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+% fallback for those not using the hyperref driver hyperxmp:
+\makeatletter
+\@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
+\makeatother
+\hypersetup{
+  pdftitle={Password Bonobo Feature-Parity Matrix},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Password Bonobo Feature-Parity Matrix}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\section{Password Bonobo Feature-Parity Matrix}\label{password-bonobo-feature-parity-matrix}
+
+\subsection{Contract boundaries}\label{contract-boundaries}
+
+\begin{itemize}
+\tightlist
+\item
+  PasswordSafe format authority governs file syntax, standard fields, identifiers, and lossless preservation.
+\item
+  A Gorilla-compatible requirement is claimed only from \passthrough{\lstinline!Confirmed!} or
+  \passthrough{\lstinline!Supported!} dossier evidence.
+\item
+  A Bonobo product decision comes only from an approved Bonobo specification, not from Gorilla evidence.
+\item
+  An Unresolved evidence gap remains a research item and never establishes parity by inference.
+\item
+  No Bonobo metadata extension is approved for storage in a PasswordSafe file by this contract.
+\item
+  Deferred native capability boundary: native features are scheduled to their named owner and are not current parity.
+\end{itemize}
+
+The complete disposition vocabulary is \passthrough{\lstinline!Required!}, \passthrough{\lstinline!Modernized!},
+\passthrough{\lstinline!Deferred!}, \passthrough{\lstinline!Excluded!}, \passthrough{\lstinline!Bonobo extension!}, and
+\passthrough{\lstinline!Unverified!}. The \passthrough{\lstinline!Bonobo extension!} rows identify origin, not
+implementation status. Their native delivery is deferred to the owner shown below. Biometric unlock has separate
+Android/ChromeOS and iOS delivery rows so each row has one owner. Gorilla and Password Safe are asked only to preserve
+ordinary PasswordSafe data; this matrix does not assert that either client understands Bonobo-native behavior or Bonobo
+metadata.
+
+An \passthrough{\lstinline!Excluded!} row records an intentional Bonobo divergence and is not a Gorilla compatibility
+requirement. It remains in the matrix so that the rejected upstream behavior and the governing Bonobo product rule are
+both testable.
+
+\subsection{Keys}\label{keys}
+
+Owners are the eight exact subproject names from the approved program design:
+
+\begin{itemize}
+\tightlist
+\item
+  O1: Repository foundation and compatibility dossier.
+\item
+  O2: Lossless PasswordSafe core.
+\item
+  O3: Vault application core and desktop foundation.
+\item
+  O4: URL audit and cleanup.
+\item
+  O5: Provider-safe files and conflict resolution.
+\item
+  O6: Android and ChromeOS.
+\item
+  O7: iOS.
+\item
+  O8: Parity closure and stable release.
+\end{itemize}
+
+Platform keys are normative:
+
+\begin{itemize}
+\tightlist
+\item
+  D: Desktop (Windows, macOS, Linux).
+\item
+  A: Android.
+\item
+  C: ChromeOS.
+\item
+  I: iOS.
+\item
+  B: BSD.
+\item
+  ALL: D/A/C/I/B.
+\end{itemize}
+
+Evidence keys use the accepted behavior IDs in \href{./behavior-dossier.md}{the neutral dossier}. A range includes both
+endpoints. \passthrough{\lstinline!GAP!} keys resolve in the register below. Approved specification keys are
+\passthrough{\lstinline!S4!} for URL-audit design sections 5--14, \passthrough{\lstinline!S5!} for program design
+sections 6--7, \passthrough{\lstinline!S6!} for program design section 9.1, \passthrough{\lstinline!S7!} for program
+design section 9.2, and \passthrough{\lstinline!S8!} for program design section 10. A \passthrough{\lstinline!+!} joins
+approved keys when both independently govern the row. Test IDs resolve in \href{./test-oracles.md}{the black-box oracle
+catalog}.
+
+\subsection{Matrix}\label{matrix}
+
+\begin{landscape}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1100}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1400}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.0700}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.0800}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.0800}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 16\tabcolsep) * \real{0.1700}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+ID
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Feature family
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Disposition
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Evidence
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Owner
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Platforms
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Data-loss
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Security
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Tests
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+GOR-FEAT-001 & Vault lifecycle & Required & GOR-BEH-001--005 & O3 & ALL & Critical & Critical &
+GOR-TEST-001,GOR-TEST-003,GOR-TEST-042 \\
+GOR-FEAT-002 & Master-password change & Required & GOR-BEH-007 & O2 & ALL & Critical & Critical & GOR-TEST-002 \\
+GOR-FEAT-003 & Save path/write guards & Required & GOR-BEH-009--011 & O2 & ALL & Critical & Critical & GOR-TEST-043 \\
+GOR-FEAT-004 & Close guards & Modernized & GOR-BEH-012--014 & O3 & ALL & Critical & Material & GOR-TEST-004 \\
+GOR-FEAT-005 & Entry lifecycle & Modernized & GOR-BEH-022--025 & O3 & ALL & Critical & Critical & GOR-TEST-005,
+GOR-TEST-044 \\
+GOR-FEAT-006 & Groups & Modernized & GOR-BEH-030--035 & O3 & ALL & Critical & Material & GOR-TEST-006, GOR-TEST-045 \\
+GOR-FEAT-007 & Search & Modernized & GOR-BEH-036 & O3 & ALL & Routine & Material & GOR-TEST-007 \\
+GOR-FEAT-008 & Filter gap & Unverified & GOR-BEH-037; GAP-037 & O8 & D/B & Routine & Material & GOR-TEST-008 \\
+GOR-FEAT-009 & Generator and policies & Modernized & GOR-BEH-041 & O3 & ALL & Material & Critical & GOR-TEST-009 \\
+GOR-FEAT-010 & History gap & Unverified & GOR-BEH-027; GAP-027 & O8 & ALL & Critical & Critical & GOR-TEST-010 \\
+GOR-FEAT-011 & Aliases gap & Unverified & GOR-BEH-028; GAP-028 & O8 & ALL & Critical & Critical & GOR-TEST-011 \\
+GOR-FEAT-012 & Record shortcuts & Unverified & GOR-BEH-029; GAP-029 & O8 & ALL & Critical & Material & GOR-TEST-012 \\
+GOR-FEAT-013 & Protected entries & Unverified & GOR-BEH-026; GAP-026 & O8 & ALL & Critical & Critical & GOR-TEST-013 \\
+GOR-FEAT-014 & Clipboard & Modernized & GOR-BEH-044--045 & O3 & ALL & Routine & Critical & GOR-TEST-014, GOR-TEST-046 \\
+GOR-FEAT-015 & URL-copy key gap & Unverified & GOR-BEH-043; GAP-043 & O8 & D/B & Routine & Critical & GOR-TEST-015 \\
+GOR-FEAT-016 & Browser launch & Modernized & GOR-BEH-046 & O3 & ALL & Routine & Material & GOR-TEST-016 \\
+GOR-FEAT-017 & Browser error gap & Unverified & GOR-BEH-047; GAP-047 & O8 & D/B & Routine & Material & GOR-TEST-017 \\
+GOR-FEAT-018 & AutoType gap & Unverified & GOR-BEH-048; GAP-048 & O8 & D/B & Critical & Critical & GOR-TEST-018 \\
+GOR-FEAT-019 & CSV import & Required & GOR-BEH-050--051 & O3 & ALL & Critical & Material & GOR-TEST-019 \\
+GOR-FEAT-020 & CSV export & Required & GOR-BEH-049 & O3 & ALL & Critical & Critical & GOR-TEST-020 \\
+GOR-FEAT-021 & Merge & Modernized & GOR-BEH-052--054, GOR-BEH-063 & O3 & ALL & Critical & Critical & GOR-TEST-021 \\
+GOR-FEAT-022 & Interruption gap & Unverified & GOR-BEH-060; GAP-060 & O8 & ALL & Critical & Material & GOR-TEST-022 \\
+GOR-FEAT-023 & Backup/recovery & Modernized & GOR-BEH-019--021 & O3 & ALL & Critical & Critical &
+GOR-TEST-023,GOR-TEST-049 \\
+GOR-FEAT-024 & Backup gap & Unverified & GOR-BEH-018; GAP-018 & O8 & D/B & Critical & Material & GOR-TEST-024 \\
+GOR-FEAT-025 & Preferences & Modernized & GOR-BEH-039--040, GOR-BEH-061 & O3 & D/B & Material & Material &
+GOR-TEST-025 \\
+GOR-FEAT-026 & Recent files & Modernized & GOR-BEH-038 & O3 & ALL & Routine & Material & GOR-TEST-026 \\
+GOR-FEAT-027 & Locking/idle & Modernized & GOR-BEH-015--017 & O3 & ALL & Critical & Critical & GOR-TEST-027 \\
+GOR-FEAT-028 & PasswordSafe versions & Required & GOR-BEH-055--057 & O2 & ALL & Critical & Critical & GOR-TEST-028 \\
+GOR-FEAT-029 & Mandatory validation & Required & GOR-BEH-058; Approved:S8 & O2 & ALL & Critical & Critical &
+GOR-TEST-029,GOR-TEST-051 \\
+GOR-FEAT-030 & Lock-file gap & Unverified & GOR-BEH-059; GAP-059 & O8 & D/B & Critical & Critical & GOR-TEST-030 \\
+GOR-FEAT-031 & Errors & Modernized & GOR-BEH-062 & O3 & ALL & Critical & Material & GOR-TEST-031 \\
+GOR-FEAT-032 & Localization gap & Unverified & GOR-BEH-062; GAP-900 & O8 & ALL & Routine & Material & GOR-TEST-032 \\
+GOR-FEAT-033 & Help & Unverified & GAP-901 & O8 & ALL & Routine & Material & GOR-TEST-033 \\
+GOR-FEAT-034 & Accessibility-relevant keyboard & Modernized & GOR-BEH-042 & O3 & D/B & Routine & Routine &
+GOR-TEST-034 \\
+GOR-FEAT-035 & Replacement gap & Unverified & GOR-BEH-065; GAP-065 & O8 & ALL & Critical & Critical & GOR-TEST-035 \\
+GOR-FEAT-036 & URL audit and cleanup & Bonobo extension & Approved:S4 & O4 & ALL & Critical & Critical & GOR-TEST-036,
+GOR-TEST-047 \\
+GOR-FEAT-037 & Provider conflict safety & Bonobo extension & Approved:S5 & O5 & ALL & Critical & Critical &
+GOR-TEST-037 \\
+GOR-FEAT-038 & Android Autofill & Bonobo extension & Approved:S7 & O6 & A/C & Critical & Critical & GOR-TEST-038 \\
+GOR-FEAT-039 & Biometric unlock - Android/ChromeOS & Bonobo extension & Approved:S6 & O6 & A/C & Critical & Critical &
+GOR-TEST-039 \\
+GOR-FEAT-040 & iOS credential provider & Bonobo extension & Approved:S7 & O7 & I & Critical & Critical & GOR-TEST-040 \\
+GOR-FEAT-041 & Biometric unlock - iOS & Bonobo extension & Approved:S6 & O7 & I & Critical & Critical & GOR-TEST-041 \\
+GOR-FEAT-042 & Untitled-vault lock save & Modernized & GOR-BEH-064 & O3 & ALL & Critical & Critical & GOR-TEST-050 \\
+GOR-FEAT-043 & Fail-open & Excluded & GOR-BEH-006,GOR-BEH-066;Approved:S8 & O2 & ALL & Critical & Critical &
+GOR-TEST-048,GOR-TEST-052 \\
+GOR-FEAT-044 & Ordinary-edit persistence & Required & GOR-BEH-008; Approved:S5+S8 & O2 & ALL & Critical & Critical &
+GOR-TEST-053 \\
+\end{longtable}
+}
+
+\end{landscape}
+
+\passthrough{\lstinline!GOR-FEAT-043!} deliberately excludes two atomic Gorilla outcomes:
+\passthrough{\lstinline!GOR-BEH-006!} warning-open for a stored-HMAC mismatch and \passthrough{\lstinline!GOR-BEH-066!}
+in-memory V3.0 defaulting when Version is absent. The official V3 Version header is mandatory and has two data bytes.
+Bonobo program design section 10 instead requires unsupported or malformed content to fail closed, retain the original
+encrypted bytes, and create no replacement. The row does not include \passthrough{\lstinline!GOR-BEH-058!} rejection.
+
+\passthrough{\lstinline!GOR-FEAT-044!} requires observable ordinary-edit persistence and no loss, not a shared Save
+gesture. Gorilla uses its explicit Save and backup path. Bonobo commits an ordinary edit when its complete form is
+confirmed; provider unavailability retains the encrypted local edit as \passthrough{\lstinline!Sync pending!}.
+Save/discard close prompts belong only to staged URL-audit cleanup.
+
+\subsection{Evidence-gap register}\label{evidence-gap-register}
+
+\begin{itemize}
+\tightlist
+\item
+  GAP-018: backup enablement is contradictory; a disabled-preference black-box observation is missing.
+\item
+  GAP-026: protected-entry preservation and enforcement lack direct format evidence and a visible test.
+\item
+  GAP-027: password-history creation, retention, restoration, and deletion have no visible workflow evidence.
+\item
+  GAP-028: alias identity, target preservation, and target-deletion effects lack a format example and visible test.
+\item
+  GAP-029: record-shortcut identity and target behavior lack a format example and visible test.
+\item
+  GAP-037: Gorilla evidence establishes search but no distinct filter workflow or visible result.
+\item
+  GAP-043: help and active key binding conflict; per-platform observation is missing.
+\item
+  GAP-047: the browser failure distinctions lack an executable observation for the missing-URL result.
+\item
+  GAP-048: AutoType storage is recognized, but its user action, output, and platform behavior are not evidenced.
+\item
+  GAP-059: concurrent open/save, overwrite prevention, read-only fallback, and stale locks lack a two-process test.
+\item
+  GAP-060: interrupted import and merge outcomes with autosave enabled and disabled are not evidenced.
+\item
+  GAP-065: replacement failure and process or system interruption lack controlled fault observations.
+\item
+  GAP-900: message evidence exists, but locale selection, fallback, and live retranslation are not evidenced.
+\item
+  GAP-901: dossier citations use help for other behaviors, but establish no Help workflow or topic reachability.
+\end{itemize}
+
+\subsection{Closure rules}\label{closure-rules}
+
+\passthrough{\lstinline!Unverified!} rows are explicit gaps, not parity commitments. Their oracles collect missing
+black-box evidence; they do not prescribe a Bonobo result until the dossier and matrix are reviewed. All other Gorilla
+rows preserve only the neutral observable contract and allow a modern interaction design.
+
+PasswordSafe rows require semantic and unknown-field preservation independent of Gorilla\textquotesingle s current
+behavior. The Bonobo-extension rows persist no custom PasswordSafe metadata under this contract. Native state such as
+provider revisions, wrapped unlock material, and extension caches stays outside the vault. A future metadata field
+requires a new, field-specific Gorilla and Password Safe round trip before its matrix disposition can change.
+
+\end{document}

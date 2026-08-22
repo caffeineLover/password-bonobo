@@ -1,0 +1,15 @@
+% Preserve readable code, command, and table layout in Pandoc-generated review PDFs.
+\usepackage{etoolbox}
+\usepackage{pdflscape}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  upquote=true
+}
+\AtBeginEnvironment{longtable}{\footnotesize}
+\renewcommand{\arraystretch}{1.08}
+\setlength{\emergencystretch}{3em}

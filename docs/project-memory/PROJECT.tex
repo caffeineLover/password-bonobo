@@ -68,11 +68,11 @@
 \@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
 \makeatother
 \hypersetup{
-  pdftitle={App Store Distribution Exception Plan},
+  pdftitle={Password Bonobo Project Identity},
   hidelinks,
   pdfcreator={LaTeX via pandoc}}
 
-\title{App Store Distribution Exception Plan}
+\title{Password Bonobo Project Identity}
 \author{}
 \date{}
 
@@ -83,51 +83,51 @@
 \setcounter{tocdepth}{3}
 \tableofcontents
 }
-\section{App Store Distribution Exception Plan}\label{app-store-distribution-exception-plan}
+\section{Password Bonobo Project Identity}\label{password-bonobo-project-identity}
 
-\subsection{Purpose}\label{purpose}
+Last updated: 2026-08-22
 
-Apple platform distribution terms may create a distribution problem for a GPL-licensed application. This document plans
-the review needed to decide whether a narrowly scoped distribution exception is appropriate for Password Bonobo. It does
-not decide that question and does not publish exception language.
+\subsection{Overview and current state}\label{overview-and-current-state}
 
-\subsection{Proposed scope constraints}\label{proposed-scope-constraints}
+Password Bonobo is an original, local-file-first password manager intended to preserve meaningful Password Gorilla
+compatibility through a fully typed Python core and platform-appropriate clients. The repository currently contains
+foundation infrastructure and a neutral compatibility contract, not vault product behavior.
 
-Any future exception would be limited to Bonobo-authored code for which every relevant contributor granted the necessary
-permission. It would not apply to Gorilla-derived code, which is excluded from Bonobo product builds, or to dependencies
-whose licenses or terms are incompatible with the approved iOS distribution model.
-
-No contributor permission, license exception, or iOS distribution right is created by this planning document.
-
-\subsection{Required reviews}\label{required-reviews}
-
-Before any decision, the project must complete and record these reviews:
+\subsection{Product contract}\label{product-contract}
 
 \begin{itemize}
 \tightlist
 \item
-  A dependency review covering licenses, distribution terms, and iOS build inclusion.
+  Supported targets are Windows, macOS, Linux, Android, ChromeOS through Android, and iOS. BSD portability remains a
+  core goal whose official support depends on packaging, CI, and real-system qualification.
 \item
-  A contributor-rights review covering the permission needed for the final approved scope.
+  Vault storage is local-file-first. User-selected operating-system document providers may synchronize files, but Bonobo
+  will not operate an account system, cloud vault, or synchronization service.
 \item
-  An Apple-term review using the terms applicable at the time of the decision.
+  Loss of credentials or user-authored metadata is unacceptable. PasswordSafe files are lossless documents, including
+  stable identifiers, supported standard fields, and preservable unknown field bytes.
 \item
-  A legal review of the distribution model, proposed scope, and final wording.
+  Bonobo-authored material is licensed under GPL-3.0-or-later. The possible iOS distribution exception remains an
+  unresolved, separately reviewed decision and creates no current permission.
 \end{itemize}
 
-\subsection{Decision gates}\label{decision-gates}
+\subsection{Authoritative documents}\label{authoritative-documents}
 
-External contributions remain closed until the contribution terms can preserve GPL-3.0-or-later licensing and any
-approved distribution exception rights for Bonobo-authored iOS code. The repository owner must deliberately publish the
-contribution terms before accepting external contributions.
-
-Before the first iOS distribution build, the project must confirm the final exception decision, contributor permissions,
-dependency compatibility, Apple-term review, and legal review. The iOS build must exclude Gorilla-derived code and any
-incompatible dependency.
-
-\subsection{Status and limitations}\label{status-and-limitations}
-
-This is a planning document, not license text or legal advice. It must not be cited as final exception language,
-contributor permission, or approval to distribute an iOS build.
+\begin{itemize}
+\tightlist
+\item
+  \href{../specs/password-bonobo-python-reimplementation-design.md}{Program design}
+\item
+  \href{../specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md}{Repository-foundation
+  specification}
+\item
+  \href{../specs/password-bonobo-url-audit-design.md}{URL-audit design}
+\item
+  \href{../legal/source-provenance-policy.md}{Source-provenance policy}
+\item
+  \href{../compatibility/gorilla/feature-parity-matrix.md}{Compatibility matrix}
+\item
+  \href{../compatibility/gorilla/test-oracles.md}{Black-box test oracles}
+\end{itemize}
 
 \end{document}

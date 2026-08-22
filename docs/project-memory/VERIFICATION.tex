@@ -1,0 +1,205 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  letterpaper,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{listings}
+\newcommand{\passthrough}[1]{#1}
+\lstset{defaultdialect=[5.3]Lua}
+\lstset{defaultdialect=[x86masm]Assembler}
+\usepackage{longtable,booktabs,array}
+\usepackage{caption}
+\captionsetup[table]{skip=6pt}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% Preserve readable code, command, and table layout in Pandoc-generated review PDFs.
+\usepackage{etoolbox}
+\usepackage{pdflscape}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  upquote=true
+}
+\AtBeginEnvironment{longtable}{\footnotesize}
+\renewcommand{\arraystretch}{1.08}
+\setlength{\emergencystretch}{3em}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+% fallback for those not using the hyperref driver hyperxmp:
+\makeatletter
+\@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
+\makeatother
+\hypersetup{
+  pdftitle={Password Bonobo Foundation Verification},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Password Bonobo Foundation Verification}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+\section{Password Bonobo Foundation Verification}\label{password-bonobo-foundation-verification}
+
+Last updated: 2026-08-22
+
+\subsection{Overview and current state}\label{overview-and-current-state}
+
+This record distinguishes executed local checks from hosted service state. The complete local release gate and document
+review passed against the staged Task 9 content. Hosted CI has not yet run because this branch introduces the workflow;
+its Windows, macOS, and Linux jobs remain to be observed after integration or publication.
+
+\subsection{CI action pin evidence}\label{ci-action-pin-evidence}
+
+Official, read-only Git refs were observed directly on 2026-08-22:
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Official repository & Ref & Immutable SHA \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\nolinkurl{https://github.com/actions/checkout.git} & \passthrough{\lstinline!refs/tags/v4!} &
+\nolinkurl{11d5960a326750d5838078e36cf38b85af677262} \\
+\nolinkurl{https://github.com/actions/checkout.git} & \passthrough{\lstinline!refs/tags/v4.4.0!} &
+\nolinkurl{11d5960a326750d5838078e36cf38b85af677262} \\
+\nolinkurl{https://github.com/astral-sh/setup-uv.git} & \passthrough{\lstinline!refs/tags/v6!} &
+\nolinkurl{d0d8abe699bfb85fec6de9f7adb5ae17292296ff} \\
+\end{longtable}
+}
+
+The workflow uses the immutable SHAs, not the mutable major refs. Evidence command form:
+
+\begin{lstlisting}
+git ls-remote https://github.com/actions/checkout.git refs/tags/v4 refs/tags/v4.4.0
+git ls-remote https://github.com/astral-sh/setup-uv.git refs/tags/v6
+\end{lstlisting}
+
+\subsection{Local executed gates}\label{local-executed-gates}
+
+The staged-index gate consists of:
+
+\begin{lstlisting}
+uv sync --locked --all-groups
+uv run autopep8 --in-place --recursive src tests tools
+git diff --exit-code -- src tests tools
+uv run ruff check src tests tools
+uv run mypy src tests tools
+uv run python -m pytest
+uv run python -m tools.check_python_structure src tests tools
+git ls-files -z | uv run python -m tools.check_tracked_files
+uv run bandit -c pyproject.toml -r src tools
+uv run pip-audit
+uv run reuse --no-multiprocessing lint
+uv build
+git diff --cached --check
+\end{lstlisting}
+
+Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5. Ruff and strict mypy reported no issues;
+pytest 9.1.1 passed 15 tests with 73\% measured coverage; the Python-structure and NUL-delimited tracked-file audits
+reported no violations; Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; REUSE
+classified 50 of 50 files; both distributions built; and the staged diff check was clean. The local
+package\textquotesingle s expected not-on-PyPI pip-audit skip is not a third-party dependency omission.
+
+\subsection{Generated-document review}\label{generated-document-review}
+
+Fourteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources. A deterministic semantic
+comparison found 14 of 14 generated sources identical. All documents stabilized after two XeLaTeX passes. The final page
+counts are:
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lr@{}}
+\toprule\noalign{}
+Document & Pages \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Behavior dossier & 20 \\
+Feature-parity matrix & 5 \\
+Test oracles & 17 \\
+Upstream baseline & 2 \\
+App Store exception plan & 1 \\
+Source-provenance policy & 2 \\
+Decisions, project, state, and verification memory & 2, 1, 1, 2 \\
+Program design & 9 \\
+Repository-foundation specification & 6 \\
+URL-audit design & 13 \\
+Implementation plan & 24 \\
+\end{longtable}
+}
+
+Result: 105 PDF pages and 105 rendered page images were visually inspected page by page. The final logs have no
+overflow, missing-glyph, undefined-reference, or rerun warnings. Markdown and LaTeX have no lines over 120 characters or
+drafting tokens. Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed. There are no
+observed clipping, overlap, hierarchy, glyph, or page-transition defects. Review PDFs, build files, and page images
+remain ignored and uncommitted.
+
+\subsection{Environment and external boundary}\label{environment-and-external-boundary}
+
+The local validation environment uses Windows, PowerShell, uv, and CPython 3.14. REUSE uses its supported single-process
+mode to avoid the observed Python 3.14 Windows multiprocessing startup crash while evaluating the same metadata. No
+local gate requires or reads the external Gorilla checkout. The separate boundary check verifies only its approved
+origin, exact detached commit \nolinkurl{6728e85c05ac25357b8f19f541487b9d26a97402}, and clean status; no upstream test
+is run.
+
+\end{document}

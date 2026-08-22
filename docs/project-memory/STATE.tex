@@ -68,11 +68,11 @@
 \@ifundefined{xmpquote}{\newcommand{\xmpquote}[1]{#1}}{}
 \makeatother
 \hypersetup{
-  pdftitle={App Store Distribution Exception Plan},
+  pdftitle={Password Bonobo Current State},
   hidelinks,
   pdfcreator={LaTeX via pandoc}}
 
-\title{App Store Distribution Exception Plan}
+\title{Password Bonobo Current State}
 \author{}
 \date{}
 
@@ -83,51 +83,54 @@
 \setcounter{tocdepth}{3}
 \tableofcontents
 }
-\section{App Store Distribution Exception Plan}\label{app-store-distribution-exception-plan}
+\section{Password Bonobo Current State}\label{password-bonobo-current-state}
 
-\subsection{Purpose}\label{purpose}
+Last updated: 2026-08-22
 
-Apple platform distribution terms may create a distribution problem for a GPL-licensed application. This document plans
-the review needed to decide whether a narrowly scoped distribution exception is appropriate for Password Bonobo. It does
-not decide that question and does not publish exception language.
+\subsection{Overview and current state}\label{overview-and-current-state}
 
-\subsection{Proposed scope constraints}\label{proposed-scope-constraints}
+The repository is on branch \nolinkurl{foundation/compatibility-dossier}. The repository foundation and compatibility
+dossier are complete and locally verified. Product behavior remains unimplemented: the typed package exposes identity
+only and cannot open, edit, save, or audit a vault.
 
-Any future exception would be limited to Bonobo-authored code for which every relevant contributor granted the necessary
-permission. It would not apply to Gorilla-derived code, which is excluded from Bonobo product builds, or to dependencies
-whose licenses or terms are incompatible with the approved iOS distribution model.
-
-No contributor permission, license exception, or iOS distribution right is created by this planning document.
-
-\subsection{Required reviews}\label{required-reviews}
-
-Before any decision, the project must complete and record these reviews:
+\subsection{Completed foundation artifacts}\label{completed-foundation-artifacts}
 
 \begin{itemize}
 \tightlist
 \item
-  A dependency review covering licenses, distribution terms, and iOS build inclusion.
+  Git, packaging, Python 3.14, source-structure, tracked-file, security, dependency, and REUSE policy foundations.
 \item
-  A contributor-rights review covering the permission needed for the final approved scope.
+  GPL-3.0-or-later licensing, security reporting, clean-room provenance, contribution hold, and iOS-exception planning.
 \item
-  An Apple-term review using the terms applicable at the time of the decision.
+  A detached external Gorilla baseline record pinned at \nolinkurl{6728e85c05ac25357b8f19f541487b9d26a97402}.
 \item
-  A legal review of the distribution model, proposed scope, and final wording.
+  A neutral dossier with 66 behaviors, a 44-row feature matrix, and 53 synthetic black-box test oracles.
+\item
+  A three-platform CI definition and reproducible Markdown, LaTeX, and ignored review-PDF workflow.
 \end{itemize}
 
-\subsection{Decision gates}\label{decision-gates}
+\subsection{Active risks}\label{active-risks}
 
-External contributions remain closed until the contribution terms can preserve GPL-3.0-or-later licensing and any
-approved distribution exception rights for Bonobo-authored iOS code. The repository owner must deliberately publish the
-contribution terms before accepting external contributions.
+\begin{itemize}
+\tightlist
+\item
+  The App Store distribution exception, contributor permissions, dependency eligibility, and current Apple terms remain
+  unresolved and block external contributions and an iOS distribution build.
+\item
+  Some Gorilla behaviors remain explicitly Unverified; they do not establish parity until black-box evidence is reviewed
+  and the dossier and matrix are updated.
+\item
+  Python 3.14 support for future binary and mobile dependencies must be requalified in the owning subproject.
+\item
+  The introduced GitHub Actions workflow has not yet run on the hosted service; only its complete local equivalent has
+  passed.
+\item
+  Generated review PDFs are intentionally ignored and must be regenerated from committed Markdown and LaTeX sources.
+\end{itemize}
 
-Before the first iOS distribution build, the project must confirm the final exception decision, contributor permissions,
-dependency compatibility, Apple-term review, and legal review. The iOS build must exclude Gorilla-derived code and any
-incompatible dependency.
+\subsection{Next approved subproject}\label{next-approved-subproject}
 
-\subsection{Status and limitations}\label{status-and-limitations}
-
-This is a planning document, not license text or legal advice. It must not be cited as final exception language,
-contributor permission, or approval to distribute an iOS build.
+The next approved subproject is \textbf{Lossless PasswordSafe core}. It owns typed PasswordSafe parsing, writing,
+validation, unknown-field preservation, transactional local files, and conformance, fuzz, and round-trip suites.
 
 \end{document}
