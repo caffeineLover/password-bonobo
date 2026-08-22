@@ -15,6 +15,8 @@ path = [
     "REUSE.toml",
     "SECURITY.md",
     "docs/compatibility/gorilla/behavior-dossier.md",
+    "docs/compatibility/gorilla/feature-parity-matrix.md",
+    "docs/compatibility/gorilla/test-oracles.md",
     "docs/compatibility/gorilla/upstream-baseline.md",
     "docs/legal/app-store-distribution-exception-plan.md",
     "docs/legal/app-store-distribution-exception-plan.tex",
