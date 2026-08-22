@@ -15,6 +15,9 @@ deferred to the owner shown below. Biometric unlock has separate Android/ChromeO
 has one owner. Gorilla and Password Safe are asked only to preserve ordinary PasswordSafe data; this matrix does not
 assert that either client understands Bonobo-native behavior or Bonobo metadata.
 
+An `Excluded` row records an intentional Bonobo divergence and is not a Gorilla compatibility requirement. It remains
+in the matrix so that the rejected upstream behavior and the governing Bonobo product rule are both testable.
+
 ## Keys
 
 Owners are the eight exact subproject names from the approved program design:
@@ -40,7 +43,8 @@ Platform keys are normative:
 Evidence keys use the accepted behavior IDs in
 [the neutral dossier](./behavior-dossier.md). A range includes both endpoints. `GAP` keys resolve in the register
 below. Approved specification keys are `S4` for URL-audit design sections 5–14, `S5` for program design sections 6–7,
-`S6` for program design section 9.1, `S7` for program design section 9.2, and `S8` for program design section 10.
+`S6` for program design section 9.1, `S7` for program design section 9.2, and `S8` for program design section 10. A `+`
+joins approved keys when both independently govern the row.
 Test IDs resolve in
 [the black-box oracle catalog](./test-oracles.md).
 
@@ -90,8 +94,13 @@ Test IDs resolve in
 |GOR-FEAT-040|iOS credential provider|Bonobo extension|Approved:S7|O7|I|Critical|Critical|GOR-TEST-040|
 |GOR-FEAT-041|Biometric unlock - iOS|Bonobo extension|Approved:S6|O7|I|Critical|Critical|GOR-TEST-041|
 |GOR-FEAT-042|Untitled-vault lock save|Modernized|GOR-BEH-064|O3|ALL|Critical|Critical|GOR-TEST-050|
-|GOR-FEAT-043|V3 open edge cases|Required|GOR-BEH-058|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
-|GOR-FEAT-044|Ordinary semantic save|Required|GOR-BEH-008|O2|ALL|Critical|Critical|GOR-TEST-003,GOR-TEST-053|
+|GOR-FEAT-043|Permissive V3 open|Excluded|GOR-BEH-058; Approved:S8|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
+|GOR-FEAT-044|Semantic save|Required|GOR-BEH-008; Approved:S5+S8|O2|ALL|Critical|Critical|GOR-TEST-003,GOR-TEST-053|
+
+`GOR-FEAT-043` deliberately excludes two Gorilla outcomes. The official V3 Version header field is mandatory and has
+two data bytes. The pin defaults an absent Version to V3.0 in memory and opens a stored-HMAC mismatch with a warning.
+Bonobo program design section 10 instead requires unsupported or malformed content to fail closed, retain the original
+encrypted bytes, and create no replacement. This row does not require Bonobo to reproduce either permissive outcome.
 
 ## Evidence-gap register
 

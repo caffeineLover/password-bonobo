@@ -813,21 +813,26 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
 - Bonobo note: A same-format save and a format-conversion observation are missing, so confidence remains one-kind.
 
-### GOR-BEH-058 - Handle malformed fields, missing Version, and HMAC mismatch
+### GOR-BEH-058 - Handle malformed fields, undersized Version, missing Version, and HMAC mismatch
 
 - Confidence: `Supported`.
-- Preconditions: A version 3 file has a truncated outer header, incomplete field, invalid field length, malformed
-  Version value, no Version field before header END, or stored-HMAC mismatch.
+- Preconditions: A version 3 file has a truncated outer header, incomplete field, invalid general field length, an
+  undersized Version type `0x00` value with fewer than two bytes, no Version field before header END, or a stored-HMAC
+  mismatch.
 - Action: The user attempts to open it with the correct password.
-- Observable result: Truncation, invalid lengths, and malformed Version data reject opening. A missing Version field
-  defaults in memory to V3.0 and opening continues. A stored-HMAC mismatch also opens, with an integrity warning.
+- Observable result: Truncation and invalid general field lengths reject opening. The undersized Version case rejects
+  because both decoded bytes are unavailable; the pin does not establish exact-length, trailing-byte, or arbitrary
+  two-byte Version validation. A missing Version field defaults in memory to V3.0 and opening continues. A stored-HMAC
+  mismatch also opens, with an integrity warning.
 - Data effect: Hard failure rejects decoded records. The missing-Version default and HMAC-warning paths activate
   decoded data without changing the source file.
 - Evidence:
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/help.txt:728-730`; kind: `help`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:48-111`;
     kind: `source`.
-  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:132-183`;
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:150-173`;
+    kind: `source`.
+  - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:176-183`;
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/pwsafe/pwsafe-v3.tcl:343-376`;
     kind: `source`.
