@@ -6,9 +6,13 @@ Target: Password Bonobo (native Tcl/Tk implementation based on Password Gorilla)
 
 ## 1. Purpose
 
-Add a native Password Bonobo feature, based on Password Gorilla, that audits login entries with populated URL fields, identifies websites that are likely obsolete or require human review, and supports safe bulk cleanup of obsolete credentials.
+Add a native Password Bonobo feature, based on Password Gorilla, that audits login entries with populated URL fields,
+identifies websites that are likely obsolete or require human review, and supports safe bulk cleanup of obsolete
+credentials.
 
-The primary user goal is to reduce the size of a large Password Gorilla database by finding credentials for websites that are no longer useful and deleting them deliberately. The feature must prioritize reviewability and data safety over aggressive automatic classification.
+The primary user goal is to reduce the size of a large Password Gorilla database by finding credentials for websites
+that are no longer useful and deleting them deliberately. The feature must prioritize reviewability and data safety
+over aggressive automatic classification.
 
 ## 2. Core Principles
 
@@ -16,7 +20,8 @@ The primary user goal is to reduce the size of a large Password Gorilla database
 2. Network classification is advisory. The user makes the final decision.
 3. Ambiguous results are classified as `Needs Review`, not `Dead`.
 4. Deletion changes only the in-memory database until the user invokes Gorilla's normal Save command.
-5. Archiving is an explicit export to a separate encrypted PasswordSafe/Gorilla database file, not an “archived” flag on an entry.
+5. Archiving is an explicit export to a separate encrypted PasswordSafe/Gorilla database file, not an “archived” flag
+   on an entry.
 6. `Archive & Delete Selected` is the primary cleanup action; `Delete Selected` is secondary.
 7. Archive creation must succeed completely before any selected entry is deleted from memory.
 8. The scanner must not transmit usernames, passwords, notes, query strings, fragments, or other credential contents.
@@ -74,8 +79,10 @@ For each login entry:
 5. Remove the fragment (`#...`) from the audit URL.
 6. Remove the query string (`?...`) from the audit URL.
 7. If the URL has an explicit `https://` scheme, test it as written after sanitization.
-8. If the URL has an explicit `http://` scheme, test it as written after sanitization and permit a normal redirect to HTTPS.
-9. If no scheme is present, try `https://` first. Only if that fails in a way consistent with there being no usable HTTPS endpoint may the checker attempt `http://`.
+8. If the URL has an explicit `http://` scheme, test it as written after sanitization and permit a normal redirect to
+   HTTPS.
+9. If no scheme is present, try `https://` first. Only if that fails in a way consistent with there being no usable
+   HTTPS endpoint may the checker attempt `http://`.
 10. If an explicit non-HTTP(S) scheme is present, classify the entry `Not Checked`.
 11. Malformed values that cannot be safely normalized are `Not Checked`, never `Dead`.
 
@@ -108,19 +115,23 @@ Potentially sensitive query parameter names should be detected case-insensitivel
 - `username`
 - `account`
 
-Only parameter names are inspected for warning purposes. Parameter values must not be logged, transmitted, or copied into diagnostic output.
+Only parameter names are inspected for warning purposes. Parameter values must not be logged, transmitted, or copied
+into diagnostic output.
 
 ## 7. Network Checking Model
 
 ### 7.1 Native Tcl implementation
 
-Implement the checker inside Gorilla using Tcl's asynchronous HTTP facilities rather than invoking an external executable such as `curl`.
+Implement the checker inside Gorilla using Tcl's asynchronous HTTP facilities rather than invoking an external
+executable such as `curl`.
 
-The implementation should use a small bounded pool of concurrent requests. A default concurrency of 4 is recommended; the internal design may permit a small maximum such as 6 if testing shows that this remains responsive and polite.
+The implementation should use a small bounded pool of concurrent requests. A default concurrency of 4 is recommended;
+the internal design may permit a small maximum such as 6 if testing shows that this remains responsive and polite.
 
 ### 7.2 HTTPS requirement
 
-HTTPS checking requires a TLS-capable Tcl socket provider. Password Gorilla's source bundle includes Tcllib, but TclTLS is a separate extension. The implementation must therefore:
+HTTPS checking requires a TLS-capable Tcl socket provider. Password Gorilla's source bundle includes Tcllib, but TclTLS
+is a separate extension. The implementation must therefore:
 
 - require and configure TclTLS (or an equivalent native Tcl TLS provider);
 - preserve certificate validation;
@@ -128,16 +139,21 @@ HTTPS checking requires a TLS-capable Tcl socket provider. Password Gorilla's so
 - ship or otherwise reliably provide the appropriate CA trust material on supported platforms;
 - fail closed if HTTPS cannot be validated rather than silently disabling certificate verification.
 
-If TLS support is unavailable, the audit should display a clear prerequisite/error message rather than misclassifying HTTPS sites as dead.
+If TLS support is unavailable, the audit should display a clear prerequisite/error message rather than misclassifying
+HTTPS sites as dead.
 
 ### 7.3 Request behavior
 
 - Use ordinary unauthenticated HTTP(S) GET requests.
 - Do not send cookies, usernames, passwords, notes, or database metadata.
-- Use a neutral, non-identifying User-Agent that does not reveal the database name, entry title, username, or master-password-manager context.
-- Do not rely solely on HEAD because many servers handle HEAD differently from GET and parked-page detection requires examining a small response body.
-- Stop reading response bodies once enough data has been obtained for classification; do not download large pages unnecessarily.
-- Apply a bounded per-request timeout. The initial implementation should use a value around 10 seconds and make the constant easy to tune.
+- Use a neutral, non-identifying User-Agent that does not reveal the database name, entry title, username, or
+  master-password-manager context.
+- Do not rely solely on HEAD because many servers handle HEAD differently from GET and parked-page detection requires
+  examining a small response body.
+- Stop reading response bodies once enough data has been obtained for classification; do not download large pages
+  unnecessarily.
+- Apply a bounded per-request timeout. The initial implementation should use a value around 10 seconds and make the
+  constant easy to tune.
 - Follow at most 5 redirects.
 - Detect and terminate redirect loops.
 
@@ -155,7 +171,8 @@ Classify as `Working` when there is strong evidence that the saved site is still
 - redirect within the same hostname;
 - conservative canonical-host normalization such as adding or removing only a leading `www.`.
 
-A redirect to a meaningfully different hostname is not automatically considered working even if the final response is successful.
+A redirect to a meaningfully different hostname is not automatically considered working even if the final response is
+successful.
 
 ### 8.2 Needs Review
 
@@ -174,7 +191,8 @@ Use `Needs Review` whenever the evidence is ambiguous. Examples include:
 - page content suggests possible parking/retirement but does not meet the confidence threshold for `Dead`;
 - any result where the checker cannot distinguish a dead service from a temporary or automation-specific failure.
 
-A saved login page returning `404` or `410` does not by itself make the entry `Dead`. The checker must test the site root before deciding whether the site as a whole appears gone.
+A saved login page returning `404` or `410` does not by itself make the entry `Dead`. The checker must test the site
+root before deciding whether the site as a whole appears gone.
 
 ### 8.3 Dead
 
@@ -182,7 +200,8 @@ A saved login page returning `404` or `410` does not by itself make the entry `D
 
 - DNS resolution definitively reports that the hostname does not exist;
 - the target or redirect destination matches a confidently recognized domain-parking/domain-for-sale pattern;
-- both the saved target and the site root return evidence that the site has intentionally been retired, such as a conclusive `410 Gone`, with no contrary evidence.
+- both the saved target and the site root return evidence that the site has intentionally been retired, such as a
+  conclusive `410 Gone`, with no contrary evidence.
 
 Temporary network failures must not be promoted to `Dead` merely because retries failed.
 
@@ -199,11 +218,13 @@ Use `Not Checked` for:
 
 Parking detection should be conservative and heuristic-driven.
 
-The detector may inspect a bounded amount of returned HTML/text for recognizable patterns associated with registrar parking, domain-for-sale pages, or known parking providers.
+The detector may inspect a bounded amount of returned HTML/text for recognizable patterns associated with registrar
+parking, domain-for-sale pages, or known parking providers.
 
 Requirements:
 
-- Keep parking rules isolated from general HTTP classification so they can be expanded or corrected without changing the scanner core.
+- Keep parking rules isolated from general HTTP classification so they can be expanded or corrected without changing
+  the scanner core.
 - Prefer false negatives over false positives.
 - If confidence is not high, classify `Needs Review` rather than `Dead`.
 - Never make deletion automatic based on parking detection.
@@ -224,7 +245,8 @@ Results appear incrementally as checks complete.
 
 The user may begin reviewing completed results before the full scan finishes.
 
-Cancellation stops launching new checks and cancels outstanding checks where possible. Completed results remain available.
+Cancellation stops launching new checks and cancels outstanding checks where possible. Completed results remain
+available.
 
 ### 10.2 Result table
 
@@ -276,11 +298,13 @@ Provide filter controls for all four categories.
 
 Provide row-level actions:
 
-- `Open Website` — opens the original stored URL in the user's configured/default browser using Gorilla's existing browser-launch behavior;
+- `Open Website` — opens the original stored URL in the user's configured/default browser using Gorilla's existing
+  browser-launch behavior;
 - `Go to Login` — selects/reveals the corresponding entry in Gorilla's main tree;
 - `Recheck` — repeats the network classification for that record.
 
-Double-clicking a row should open the stored website in the browser unless platform/UI conventions strongly favor another existing Gorilla behavior.
+Double-clicking a row should open the stored website in the browser unless platform/UI conventions strongly favor
+another existing Gorilla behavior.
 
 ### 10.6 Bottom actions
 
@@ -296,7 +320,8 @@ Other action:
 
 `Close`
 
-After deletion, keep affected rows in the audit window and mark them `Deleted (unsaved)` rather than removing them immediately. This preserves a visible audit trail for the current session.
+After deletion, keep affected rows in the audit window and mark them `Deleted (unsaved)` rather than removing them
+immediately. This preserves a visible audit trail for the current session.
 
 ## 11. Deleting Selected Entries
 
@@ -316,7 +341,8 @@ If the user closes Gorilla without saving and chooses not to save changes, the o
 
 ## 12. Archive & Delete Selected
 
-Archiving is implemented as creation of a separate encrypted PasswordSafe/Gorilla database file containing the selected records.
+Archiving is implemented as creation of a separate encrypted PasswordSafe/Gorilla database file containing the
+selected records.
 
 ### 12.1 Archive file behavior
 
@@ -339,21 +365,30 @@ Alternative:
 
 `Use a different archive password`
 
-If a different password is selected, require it to be entered twice and validate that the two values match before writing.
+If a different password is selected, require it to be entered twice and validate that the two values match before
+writing.
 
-The URL-audit feature must not cause Gorilla to retain the current master password longer than it already does. If Gorilla does not retain the current master password in retrievable form after unlock, choosing `Use current database master password` should prompt the user to re-enter that password rather than introducing new long-lived password storage.
+The URL-audit feature must not cause Gorilla to retain the current master password longer than it already does. If
+Gorilla does not retain the current master password in retrievable form after unlock, choosing `Use current database
+master password` should prompt the user to re-enter that password rather than introducing new long-lived password
+storage.
 
 ### 12.3 Transactional sequence
 
 `Archive & Delete Selected` must perform these steps in order:
 
 1. Snapshot/copy the complete selected records required for archive creation.
-2. Re-resolve the selected records by stable identifier and validate protected-entry behavior before destructive changes. If protected or stale records are present, present an explicit summary of which records will be skipped before proceeding. Protected records are neither archived nor deleted unless the user first unprotects them through Gorilla's normal UI.
+2. Re-resolve the selected records by stable identifier and validate protected-entry behavior before destructive
+   changes. If protected or stale records are present, present an explicit summary of which records will be skipped
+   before proceeding. Protected records are neither archived nor deleted unless the user first unprotects them through
+   Gorilla's normal UI.
 3. Create a new PasswordSafe database object for the archive.
-4. Copy the complete selected records into it, preserving record fields and stable record identity where the existing PasswordSafe implementation permits this safely.
+4. Copy the complete selected records into it, preserving record fields and stable record identity where the existing
+   PasswordSafe implementation permits this safely.
 5. Write the archive to a temporary file in the destination directory.
 6. Close the archive successfully.
-7. Reopen/validate the archive using the selected archive password and verify that the expected record count and record identities are present.
+7. Reopen/validate the archive using the selected archive password and verify that the expected record count and
+   record identities are present.
 8. Atomically rename the temporary file to the requested archive filename.
 9. Only after steps 1–8 succeed, delete the selected unprotected entries from the current in-memory database.
 10. Mark the current database modified.
@@ -364,9 +399,12 @@ If any archive step fails, no selected entry is deleted.
 
 ### 12.4 Protected entries
 
-Entries protected by PasswordSafe/Gorilla protections may appear in audit results but must not be silently unprotected or deleted by the audit tool.
+Entries protected by PasswordSafe/Gorilla protections may appear in audit results but must not be silently unprotected
+or deleted by the audit tool.
 
-If selected, the operation should identify them and tell the user they must first be unprotected through Gorilla's normal entry-editing mechanism. A mixed selection may proceed only after Gorilla clearly reports the count of protected/stale records being skipped and the count that will actually be archived/deleted.
+If selected, the operation should identify them and tell the user they must first be unprotected through Gorilla's
+normal entry-editing mechanism. A mixed selection may proceed only after Gorilla clearly reports the count of
+protected/stale records being skipped and the count that will actually be archived/deleted.
 
 ## 13. Data Safety and Failure Handling
 
@@ -388,34 +426,45 @@ Examples include:
 
 Any such failure leaves the current database entries untouched.
 
-Temporary archive files should be removed when safe to do so after a failed operation. A failure to remove a temporary file should be reported without deleting original records.
+Temporary archive files should be removed when safe to do so after a failed operation. A failure to remove a temporary
+file should be reported without deleting original records.
 
 ### 13.3 Stale results
 
-Because the review window is modeless, a record may be edited or deleted in the main Gorilla window after scanning. Before any destructive action, re-resolve each selected record by stable identifier and validate that it still exists.
+Because the review window is modeless, a record may be edited or deleted in the main Gorilla window after scanning.
+Before any destructive action, re-resolve each selected record by stable identifier and validate that it still exists.
 
-If a record no longer exists, mark it stale/skipped rather than treating that as a fatal error for unrelated selected records.
+If a record no longer exists, mark it stale/skipped rather than treating that as a fatal error for unrelated selected
+records.
 
 ## 14. Security and Privacy
 
-The audit window is security-sensitive because it exposes entry titles, groups, and URLs. It is bound to the database session that created it. If the database is locked, closed, or replaced with another database, Gorilla must cancel outstanding audit requests and close the audit window (or equivalently remove all sensitive row data and disable actions). The preferred version-1 behavior is to close the audit window. Background scanning must not defeat Gorilla's normal idle-lock policy.
+The audit window is security-sensitive because it exposes entry titles, groups, and URLs. It is bound to the database
+session that created it. If the database is locked, closed, or replaced with another database, Gorilla must cancel
+outstanding audit requests and close the audit window (or equivalently remove all sensitive row data and disable
+actions). The preferred version-1 behavior is to close the audit window. Background scanning must not defeat
+Gorilla's normal idle-lock policy.
 
 
 - Never transmit passwords, usernames, notes, or other credential fields.
 - Strip query strings and fragments before network requests.
 - Do not log sensitive URL parameter values.
-- Avoid logging full URLs or URL paths in routine diagnostics. If diagnostic logging is needed, prefer hostname plus non-sensitive status/error metadata.
+- Avoid logging full URLs or URL paths in routine diagnostics. If diagnostic logging is needed, prefer hostname plus
+  non-sensitive status/error metadata.
 - Do not include the database filename, entry title, group, username, or UUID in HTTP headers.
 - Keep TLS certificate validation enabled.
 - Treat TLS validation failures as `Needs Review`.
 - Do not silently downgrade an explicitly `https://` stored URL to HTTP.
-- For a URL without a scheme, HTTPS is attempted first; HTTP fallback is only a discovery mechanism for scheme-less input.
+- For a URL without a scheme, HTTPS is attempted first; HTTP fallback is only a discovery mechanism for scheme-less
+  input.
 - Archive files are always encrypted PasswordSafe/Gorilla databases, never plaintext CSV/JSON/text exports.
-- Archive passwords must be handled with the same sensitivity as the current master password and cleared from temporary UI variables where Gorilla's conventions permit.
+- Archive passwords must be handled with the same sensitivity as the current master password and cleared from
+  temporary UI variables where Gorilla's conventions permit.
 
 ## 15. Proposed Internal Components
 
-Keep the implementation separated into small Tcl namespaces/modules rather than adding all logic directly to `gorilla.tcl`.
+Keep the implementation separated into small Tcl namespaces/modules rather than adding all logic directly to
+`gorilla.tcl`.
 
 Suggested responsibilities:
 
@@ -486,7 +535,8 @@ Archive transaction:
 - atomic rename;
 - only then request in-memory deletion.
 
-Where practical, the modules should reuse existing Gorilla record-selection, browser-launch, database-modified, PasswordSafe-write, and delete-entry functions rather than duplicating them.
+Where practical, the modules should reuse existing Gorilla record-selection, browser-launch, database-modified,
+PasswordSafe-write, and delete-entry functions rather than duplicating them.
 
 ## 16. Testing Strategy
 
@@ -581,7 +631,8 @@ Verify:
 
 ### 16.6 Large-database test
 
-Test against a synthetic database with enough URL-bearing records to expose UI freezes, runaway memory usage, or poor scheduling behavior.
+Test against a synthetic database with enough URL-bearing records to expose UI freezes, runaway memory usage, or poor
+scheduling behavior.
 
 Success criteria:
 
@@ -617,9 +668,13 @@ The design is aligned with the current public Password Gorilla source structure:
 
 - Gorilla is a Tcl/Tk application whose main UI and menus are in `sources/gorilla.tcl`.
 - The source bundle includes Tcllib and a PasswordSafe implementation under `sources/pwsafe`.
-- Gorilla's existing UI already uses `ttk::treeview` and has normal Login-menu delete behavior, browser-launch behavior, and File Save/Save As/Export commands that the feature should reuse rather than duplicate.
-- PasswordSafe V3 is an encrypted, extensible, platform-independent format with per-record fields including UUID and URL-related record data.
-- TclTLS supports Tcl 8.5+ but requires explicit TLS/certificate configuration; HTTPS support must therefore be treated as a packaging/security requirement rather than assumed. Because current Gorilla source includes Tcl 9 compatibility work, packaged TclTLS builds must also match the Tcl major version used by each distribution.
+- Gorilla's existing UI already uses `ttk::treeview` and has normal Login-menu delete behavior, browser-launch
+  behavior, and File Save/Save As/Export commands that the feature should reuse rather than duplicate.
+- PasswordSafe V3 is an encrypted, extensible, platform-independent format with per-record fields including UUID and
+  URL-related record data.
+- TclTLS supports Tcl 8.5+ but requires explicit TLS/certificate configuration; HTTPS support must therefore be
+  treated as a packaging/security requirement rather than assumed. Because current Gorilla source includes Tcl 9
+  compatibility work, packaged TclTLS builds must also match the Tcl major version used by each distribution.
 
 References:
 
