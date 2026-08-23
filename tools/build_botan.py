@@ -7,6 +7,7 @@ library into an explicitly selected build output.  It never accepts a runtime do
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import hmac
 import json
@@ -15,7 +16,9 @@ import shutil
 import subprocess  # nosec B404
 import sys
 import tarfile
-from collections.abc import Sequence
+import tempfile
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -107,7 +110,10 @@ def load_source_pin(path: Path) -> BotanSourcePin:
 #### same constant-time checksum comparison, so corruption cannot bypass verification on subsequent builds.
 ####
 def download_verified_archive(pin: BotanSourcePin, cache_directory: Path) -> Path:
-    cache_directory.mkdir(parents=True, exist_ok=True)
+    try:
+        cache_directory.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise BotanBuildError("Botan cache preparation failed") from error
     destination = cache_directory / pin.archive
     if not destination.exists():
         temporary = destination.with_suffix(destination.suffix + ".partial")
@@ -118,7 +124,10 @@ def download_verified_archive(pin: BotanSourcePin, cache_directory: Path) -> Pat
         except OSError as error:
             temporary.unlink(missing_ok=True)
             raise BotanBuildError("Botan archive download failed") from error
-    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    try:
+        digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    except OSError as error:
+        raise BotanBuildError("Botan archive read failed") from error
     if not hmac.compare_digest(digest, pin.sha256):
         raise BotanBuildError("Botan archive checksum mismatch")
     return destination
@@ -131,9 +140,9 @@ def download_verified_archive(pin: BotanSourcePin, cache_directory: Path) -> Pat
 #### parent-directory boundary visible in this build layer and supplies one stable error for malicious member names.
 ####
 def extract_verified_archive(archive_path: Path, destination: Path) -> Path:
-    destination.mkdir(parents=True, exist_ok=True)
-    resolved_destination = destination.resolve()
     try:
+        destination.mkdir(parents=True, exist_ok=True)
+        resolved_destination = destination.resolve()
         with tarfile.open(archive_path, "r:xz") as archive:
             for member in archive.getmembers():
                 member_path = (resolved_destination / member.name).resolve()
@@ -156,6 +165,67 @@ def extract_verified_archive(archive_path: Path, destination: Path) -> Path:
     except (OSError, tarfile.TarError) as error:
         raise BotanBuildError("Botan archive extraction failed") from error
     return resolved_destination
+
+
+
+#### Extract verified archive bytes into one fresh digest-bound directory owned by this build.
+####
+#### Extracted source trees are never reusable cache inputs because they can be partial, modified, or symlinked after a
+#### previous build.  The temporary directory is unique and resides below the ignored cache.  It is removed after the
+#### build.
+####
+@contextmanager
+def extract_fresh_verified_source(
+    archive_path: Path,
+    pin: BotanSourcePin,
+    cache_directory: Path,
+) -> Iterator[Path]:
+    try:
+        cache_directory.mkdir(parents=True, exist_ok=True)
+        temporary_source = tempfile.TemporaryDirectory(
+            prefix=f"source-{pin.sha256}-",
+            dir=cache_directory,
+        )
+    except OSError as error:
+        raise BotanBuildError("Botan cache preparation failed") from error
+    with temporary_source:
+        extraction_directory = Path(temporary_source.name)
+        extract_verified_archive(archive_path, extraction_directory)
+        source_directory = extraction_directory / f"Botan-{pin.version}"
+        try:
+            resolved_source = source_directory.resolve()
+        except OSError as error:
+            raise BotanBuildError("Botan verified source is unavailable") from error
+        if (
+            not source_directory.is_dir()
+            or source_directory.is_symlink()
+            or not resolved_source.is_relative_to(extraction_directory)
+        ):
+            raise BotanBuildError("Botan archive does not contain the pinned source directory")
+        yield source_directory
+
+
+
+#### Return a Windows short path when Botan's NMake generator cannot safely consume spaces.
+####
+#### The Windows build tools are invoked only after the operating system resolves this existing path.  Other platforms
+#### retain their original paths, and unavailable short names fail before Botan can emit a truncated dependency target.
+####
+def windows_toolchain_path(path: Path) -> Path:
+    if platform.system() != "Windows":
+        return path
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_short_path_name = kernel32.GetShortPathNameW
+    get_short_path_name.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32)
+    get_short_path_name.restype = ctypes.c_uint32
+    size = get_short_path_name(str(path), None, 0)
+    if size == 0:
+        raise BotanBuildError("Botan Windows toolchain path is unavailable")
+    buffer = ctypes.create_unicode_buffer(size)
+    result = get_short_path_name(str(path), buffer, size)
+    if result == 0 or result >= size:
+        raise BotanBuildError("Botan Windows toolchain path is unavailable")
+    return Path(buffer.value)
 
 
 
@@ -210,12 +280,15 @@ def build_command(target: str, build_directory: Path) -> tuple[str, ...]:
 #### output directory and rejects an absent or ambiguous result instead of returning an unrelated library.
 ####
 def find_shared_library(output_directory: Path) -> Path:
-    candidates = tuple(
-        path
-        for pattern in ("botan-3.dll", "libbotan-3.dll", "libbotan-3.dylib", "libbotan-3.so*")
-        for path in output_directory.rglob(pattern)
-        if path.is_file()
-    )
+    try:
+        candidates = tuple(
+            path
+            for pattern in ("botan-3.dll", "libbotan-3.dll", "libbotan-3.dylib", "libbotan-3.so*")
+            for path in output_directory.rglob(pattern)
+            if path.is_file()
+        )
+    except OSError as error:
+        raise BotanBuildError("Botan shared library discovery failed") from error
     if len(candidates) != 1:
         raise BotanBuildError("Botan shared library was not produced")
     return candidates[0]
@@ -230,40 +303,39 @@ def find_shared_library(output_directory: Path) -> Path:
 def build_botan(target: str, output_directory: Path, cache_directory: Path) -> Path:
     pin = load_source_pin(PIN_PATH)
     archive_path = download_verified_archive(pin, cache_directory)
-    source_parent = cache_directory / "source"
-    source_directory = source_parent / f"Botan-{pin.version}"
-    if not source_directory.is_dir():
-        extract_verified_archive(archive_path, source_parent)
-    if not source_directory.is_dir():
-        raise BotanBuildError("Botan archive does not contain the pinned source directory")
-
-    output_directory.mkdir(parents=True, exist_ok=True)
-    command = configure_command(target, source_directory, output_directory)
-    try:
-        configure_result = subprocess.run(  # nosec B603
-            command,
-            cwd=source_directory,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-    except OSError as error:
-        raise BotanBuildError("Botan configuration command is unavailable") from error
-    if configure_result.returncode != 0:
-        raise BotanBuildError("Botan configuration failed")
-    try:
-        compile_result = subprocess.run(  # nosec B603
-            build_command(target, output_directory / "work"),
-            cwd=source_directory,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-    except OSError as error:
-        raise BotanBuildError("Botan compilation command is unavailable") from error
-    if compile_result.returncode != 0:
-        raise BotanBuildError("Botan compilation failed")
-    return find_shared_library(output_directory)
+    with extract_fresh_verified_source(archive_path, pin, cache_directory) as source_directory:
+        try:
+            output_directory.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise BotanBuildError("Botan output directory preparation failed") from error
+        toolchain_source_directory = windows_toolchain_path(source_directory)
+        toolchain_output_directory = windows_toolchain_path(output_directory)
+        command = configure_command(target, toolchain_source_directory, toolchain_output_directory)
+        try:
+            configure_result = subprocess.run(  # nosec B603
+                command,
+            cwd=toolchain_source_directory,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        except OSError as error:
+            raise BotanBuildError("Botan configuration command is unavailable") from error
+        if configure_result.returncode != 0:
+            raise BotanBuildError("Botan configuration failed")
+        try:
+            compile_result = subprocess.run(  # nosec B603
+                build_command(target, toolchain_output_directory / "work"),
+                cwd=toolchain_source_directory,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        except OSError as error:
+            raise BotanBuildError("Botan compilation command is unavailable") from error
+        if compile_result.returncode != 0:
+            raise BotanBuildError("Botan compilation failed")
+        return find_shared_library(output_directory)
 
 
 
