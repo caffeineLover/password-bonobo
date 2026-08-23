@@ -1,7 +1,10 @@
 """Verify exact document coverage, commands, and non-mutating TeX verification."""
 
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 from tools.generate_documents import (
     MAXIMUM_XELATEX_PASSES,
     XELATEX_PASSES,
@@ -147,6 +150,49 @@ def test_output_directory_preparation_removes_stale_auxiliary_files(tmp_path: Pa
 
     assert output_directory.is_dir()
     assert tuple(output_directory.iterdir()) == ()
+
+
+
+#### Keep a wide table's heading and introduction inside the same landscape block.
+####
+@pytest.mark.skipif(shutil.which("pandoc") is None, reason="Pandoc is required for the layout integration check")
+def test_wide_table_layout_keeps_section_context_in_landscape(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "layout.md"
+    output_path = tmp_path / "layout.tex"
+    markdown_path.write_text(
+        """# Layout fixture
+
+## Fabricated assets
+
+This introduction belongs with the wide table.
+
+| One | Two | Three | Four | Five | Six | Seven | Eight |
+|---|---|---|---|---|---|---|---|
+| a | b | c | d | e | f | g | h |
+
+## Following section
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        (
+            "pandoc",
+            str(markdown_path),
+            "--from=gfm",
+            "--to=latex",
+            f"--lua-filter={Path.cwd() / 'docs' / 'pandoc' / 'pdf-layout.lua'}",
+            f"--output={output_path}",
+        ),
+        check=True,
+    )
+    generated = output_path.read_text(encoding="utf-8")
+
+    assert generated.index("\\begin{landscape}") < generated.index("\\subsection{Fabricated assets}")
+    assert generated.index("\\subsection{Fabricated assets}") < generated.index("This introduction belongs")
+    assert generated.index("This introduction belongs") < generated.index("\\begin{longtable}")
+    assert generated.index("\\end{longtable}") < generated.index("\\end{landscape}")
+    assert generated.index("\\end{landscape}") < generated.index("\\subsection{Following section}")
 
 
 

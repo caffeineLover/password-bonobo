@@ -44,21 +44,52 @@ function Header(block)
   return block
 end
 
--- Give wide feature and provenance tables explicit proportional widths so every cell can wrap.
-function Table(block)
+-- Give one wide feature or provenance table explicit proportional widths.
+local function configure_wide_table(block)
   local widths = PROVENANCE_WIDTHS[#block.colspecs]
   if #block.colspecs == #FEATURE_MATRIX_WIDTHS then
     widths = FEATURE_MATRIX_WIDTHS
   end
   if not widths then
-    return block
+    return false
   end
   for index, width in ipairs(widths) do
     block.colspecs[index] = {block.colspecs[index][1], width}
   end
-  return {
-    pandoc.RawBlock('latex', '\\begin{landscape}'),
-    block,
-    pandoc.RawBlock('latex', '\\end{landscape}'),
-  }
+  return true
+end
+
+-- Keep each wide table with its nearest section heading and introductory blocks in one landscape environment.
+function Pandoc(document)
+  local output = {}
+  for _, block in ipairs(document.blocks) do
+    if block.t == 'Table' and configure_wide_table(block) then
+      local section_start = #output + 1
+      for index = #output, 1, -1 do
+        if output[index].t == 'Header' then
+          section_start = index
+          break
+        end
+      end
+
+      local section = {}
+      for index = section_start, #output do
+        table.insert(section, output[index])
+      end
+      for index = #output, section_start, -1 do
+        table.remove(output, index)
+      end
+
+      table.insert(output, pandoc.RawBlock('latex', '\\begin{landscape}'))
+      for _, section_block in ipairs(section) do
+        table.insert(output, section_block)
+      end
+      table.insert(output, block)
+      table.insert(output, pandoc.RawBlock('latex', '\\end{landscape}'))
+    else
+      table.insert(output, block)
+    end
+  end
+  document.blocks = pandoc.Blocks(output)
+  return document
 end

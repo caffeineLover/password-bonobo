@@ -38,8 +38,8 @@ def _synthetic_ledger() -> str:
 
 | Path | Version | Origin | Terms | Use | Dist | Evidence | Review |
 |---|---|---|---|---|---|---|---|
-|`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE|GPL-3.0-or-later|LT|W|R|V|
-|`src/sample/py.typed`|Current|Bonobo|GPL-3.0-or-later|TM|W|R|V|
+|`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE|GPL-3.0-or-later|LT|S+W|R|V|
+|`src/sample/py.typed`|Current|Bonobo|GPL-3.0-or-later|TM|S+W|R|V|
 """
 
 
@@ -132,7 +132,7 @@ dev = ["pytest>=9,<10"]
     ledger = _synthetic_ledger()
     ledger = ledger.replace("|`github.com/actions/checkout`|N|", "||N|", 1)
     ledger = ledger.replace("|pandoc.org|N|", "|pandoc.org||", 1)
-    ledger = ledger.replace("|LT|W|R|V|", "|LT|W||V|", 1)
+    ledger = ledger.replace("|LT|S+W|R|V|", "|LT|S+W||V|", 1)
 
     messages = tuple(
         violation.message
@@ -148,6 +148,56 @@ dev = ["pytest>=9,<10"]
     assert "GitHub Action actions/checkout lacks Origin" in messages
     assert "documentation tool pandoc lacks Terms" in messages
     assert "repository asset LICENSES/GPL-3.0-or-later.txt lacks Evidence" in messages
+
+
+
+#### Reject a floating GitHub Action tag before comparing it with ledger facts.
+####
+def test_provenance_rejects_floating_action_tag() -> None:
+    messages = _messages_for_workflow("uses: actions/checkout@v7\n")
+
+    assert "GitHub Action revision must be exactly lowercase 40-hex: actions/checkout@v7" in messages
+
+
+
+#### Reject a floating GitHub Action branch before comparing it with ledger facts.
+####
+def test_provenance_rejects_floating_action_branch() -> None:
+    messages = _messages_for_workflow("uses: actions/checkout@stable\n")
+
+    assert "GitHub Action revision must be exactly lowercase 40-hex: actions/checkout@stable" in messages
+
+
+
+#### Reject an abbreviated GitHub Action commit before comparing it with ledger facts.
+####
+def test_provenance_rejects_abbreviated_action_revision() -> None:
+    messages = _messages_for_workflow("uses: actions/checkout@abcdef1\n")
+
+    assert "GitHub Action revision must be exactly lowercase 40-hex: actions/checkout@abcdef1" in messages
+
+
+
+#### Reject an uppercase GitHub Action commit before comparing it with ledger facts.
+####
+def test_provenance_rejects_uppercase_action_revision() -> None:
+    revision = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+    messages = _messages_for_workflow(f"uses: actions/checkout@{revision}\n")
+
+    assert f"GitHub Action revision must be exactly lowercase 40-hex: actions/checkout@{revision}" in messages
+
+
+
+#### Enforce combined sdist-and-wheel facts for packaged repository assets.
+####
+def test_provenance_rejects_inaccurate_packaged_asset_distribution() -> None:
+    ledger = _synthetic_ledger().replace("|LT|S+W|R|V|", "|LT|W|R|V|", 1)
+    messages = _messages_for_workflow(
+        "uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        ledger=ledger,
+    )
+
+    assert "repository asset LICENSES/GPL-3.0-or-later.txt distribution must be S+W" in messages
 
 
 
@@ -171,6 +221,27 @@ name = "sample"
 version = "0.0.0"
 source = {{ editable = "." }}
 '''
+
+
+
+#### Return provenance findings for one synthetic workflow and otherwise-complete authorities.
+####
+def _messages_for_workflow(workflow: str, *, ledger: str | None = None) -> tuple[str, ...]:
+    pyproject = """[build-system]
+requires = ["hatchling>=1.27,<2"]
+[project]
+dependencies = []
+[dependency-groups]
+dev = ["pytest>=9,<10"]
+"""
+    violations = check_provenance_sources(
+        pyproject,
+        _synthetic_ledger_lock_with_packaging_version("25.0"),
+        workflow,
+        _synthetic_ledger() if ledger is None else ledger,
+        (Path("LICENSES/GPL-3.0-or-later.txt"), Path("src/sample/py.typed")),
+    )
+    return tuple(violation.message for violation in violations)
 
 
 

@@ -20,17 +20,31 @@ COMPATIBILITY_MARKDOWN_PATHS = (
     Path("docs/compatibility/gorilla/test-oracles.md"),
     Path("docs/compatibility/gorilla/upstream-baseline.md"),
 )
-CAMEL_CASE_IDENTIFIER = re.compile(r"\b[a-z][a-z0-9]{1,20}(?:[A-Z][A-Za-z0-9]*)+\b")
+CAMEL_CASE_IDENTIFIER = re.compile(r"\b[a-z][a-z0-9]{0,20}(?:[A-Z][A-Za-z0-9]*)+\b")
 BEHAVIOR_HEADING = re.compile(r"(?m)^### (GOR-BEH-\d{3})\b")
 FEATURE_IDENTIFIER = re.compile(r"GOR-FEAT-(\d{3})")
 TEST_HEADING = re.compile(r"(?m)^### (GOR-TEST-\d{3})\b")
 BEHAVIOR_REFERENCE = re.compile(r"GOR-BEH-\d{3}")
 TEST_REFERENCE = re.compile(r"GOR-TEST-\d{3}")
+FEATURE_HEADER_SCHEMA = (
+    "ID",
+    "Feature family",
+    "Disposition",
+    "Evidence",
+    "Owner",
+    "Platforms",
+    "Data-loss",
+    "Security",
+    "Tests",
+)
 CLEAN_ROOM_ALLOWLIST = {
     # Official platform spelling is user-visible vocabulary, not an upstream implementation identifier.
     "macOS",
+    "iOS",
     # The official PasswordSafe format document uses this stable filename.
     "formatV3",
+    # This is Git's strict ISO-8601 author-date pretty-format placeholder in the baseline command.
+    "aI",
     # These variables belong to Bonobo's documented local checkout bootstrap command.
     "bonoboRoot",
     "researchRoot",
@@ -67,24 +81,59 @@ def _split_table_row(line: str) -> tuple[str, ...]:
 
 
 
-#### Return feature rows keyed by the table's authored column headings.
+#### Return feature rows and exact-schema violations without skipping feature-looking input.
 ####
-def _feature_rows(matrix_source: str) -> tuple[dict[str, str], ...]:
-    headings: tuple[str, ...] | None = None
+def _parse_feature_rows(
+    matrix_source: str,
+) -> tuple[tuple[dict[str, str], ...], tuple[CompatibilityViolation, ...]]:
+    matrix_path = COMPATIBILITY_MARKDOWN_PATHS[1]
+    found_header = False
     rows: list[dict[str, str]] = []
-    for line in matrix_source.splitlines():
+    violations: list[CompatibilityViolation] = []
+    for line_number, line in enumerate(matrix_source.splitlines(), start=1):
         if not line.lstrip().startswith("|"):
             continue
         cells = _split_table_row(line)
-        if "ID" in cells and "Disposition" in cells and "Evidence" in cells and "Tests" in cells:
-            headings = cells
+        if cells and cells[0] == "ID":
+            found_header = True
+            if cells != FEATURE_HEADER_SCHEMA:
+                violations.append(
+                    CompatibilityViolation(
+                        matrix_path,
+                        line_number,
+                        "feature table header does not match the required schema",
+                    )
+                )
             continue
-        if headings is None or not cells or FEATURE_IDENTIFIER.fullmatch(cells[0]) is None:
+        if not cells or FEATURE_IDENTIFIER.fullmatch(cells[0]) is None:
             continue
-        if len(cells) != len(headings):
+        if len(cells) != len(FEATURE_HEADER_SCHEMA):
+            violations.append(
+                CompatibilityViolation(
+                    matrix_path,
+                    line_number,
+                    f"feature row {cells[0]} has {len(cells)} cells; expected {len(FEATURE_HEADER_SCHEMA)}",
+                )
+            )
             continue
-        rows.append(dict(zip(headings, cells, strict=True)))
-    return tuple(rows)
+        rows.append(dict(zip(FEATURE_HEADER_SCHEMA, cells, strict=True)))
+    if not found_header:
+        violations.append(
+            CompatibilityViolation(
+                matrix_path,
+                1,
+                "feature table header does not match the required schema",
+            )
+        )
+    return tuple(rows), tuple(violations)
+
+
+
+#### Return valid feature rows keyed by the required schema.
+####
+def _feature_rows(matrix_source: str) -> tuple[dict[str, str], ...]:
+    rows, _ = _parse_feature_rows(matrix_source)
+    return rows
 
 
 
@@ -146,7 +195,8 @@ def check_traceability_sources(
     violations: list[CompatibilityViolation] = []
     behavior_ids = tuple(BEHAVIOR_HEADING.findall(dossier_source))
     oracle_ids = tuple(TEST_HEADING.findall(oracles_source))
-    rows = _feature_rows(matrix_source)
+    rows, feature_table_violations = _parse_feature_rows(matrix_source)
+    violations.extend(feature_table_violations)
     feature_ids = tuple(row["ID"] for row in rows)
     mapped_behaviors = {
         reference

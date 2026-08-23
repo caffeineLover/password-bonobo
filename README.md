@@ -86,4 +86,6 @@ git diff --cached --check
 ```
 
 Stage every intended file before the REUSE command so that it validates the exact release candidate.  These commands
-validate only the Bonobo repository and never require the external Gorilla research checkout.
+validate only the Bonobo repository and never require the external Gorilla research checkout.  The artifact checker
+requires the GPL text and typing marker in both source distribution and wheel, plus exact PEP 639 wheel metadata and
+license bytes.

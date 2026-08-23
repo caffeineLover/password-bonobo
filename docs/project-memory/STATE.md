@@ -4,21 +4,21 @@ Last updated: 2026-08-22
 
 ## Overview and current state
 
-The repository is on branch `foundation/compatibility-dossier`.  The repository foundation and compatibility dossier
-are complete and locally verified.  Product behavior remains unimplemented: the typed package exposes identity only
-and cannot open, edit, save, or audit a vault.
+Branch `foundation/compatibility-dossier` has a complete, locally verified repository foundation and compatibility
+dossier.  Product behavior remains unimplemented: the typed package exposes identity only and cannot open, edit,
+save, or audit a vault.
 
 ## Completed foundation artifacts
 
-- Git, packaging, Python 3.14, source-structure, tracked-file, security, dependency, and REUSE policy foundations.
-- GPL-3.0-or-later licensing, security reporting, clean-room provenance, contribution hold, and iOS-exception planning.
+- Git, Python 3.14 packaging, source-structure, tracked-file, security, dependency, REUSE, GPL-3.0-or-later, reporting,
+  clean-room provenance, contribution-hold, and iOS-exception foundations.
 - A detached external Gorilla baseline record pinned at `6728e85c05ac25357b8f19f541487b9d26a97402`.
 - A neutral dossier with 66 behaviors, a 45-row feature matrix, and 55 synthetic black-box test oracles.  Gorilla's
   post-save loss behavior is an Excluded characterization; Bonobo's transactional no-loss oracle remains authoritative.
-- Typed compatibility-contract and clean-room expression checks, including exact feature/evidence/oracle closure.
-- A checked dependency and asset provenance ledger, exact document generator/verifier, and GPL wheel assertion.
-- A three-platform CI definition and reproducible Markdown, LaTeX, ignored review-PDF, and page-render workflow.
-- A canonical `docs/PROJECT_MEMORY.md` future-agent entry point routing to the four focused durable records.
+- Typed clean-room and exact compatibility-closure checks, a checked dependency/asset provenance ledger, an exact
+  document generator/verifier, and wheel/source-distribution asset assertions.
+- Three-platform CI and reproducible Markdown, LaTeX, ignored review-PDF, and page-render workflows, with canonical
+  `docs/PROJECT_MEMORY.md` routing future agents to four focused records.
 
 ## Active risks
 
@@ -27,11 +27,10 @@ and cannot open, edit, save, or audit a vault.
 - Some Gorilla behaviors remain explicitly Unverified; they do not establish parity until black-box evidence is
   reviewed and the dossier and matrix are updated.
 - Python 3.14 support for future binary and mobile dependencies must be requalified in the owning subproject.
-- The introduced GitHub Actions workflow has not yet run on the hosted service; only its complete local equivalent has
-  passed.
-- Generated review PDFs are intentionally ignored and must be regenerated from committed Markdown and LaTeX sources.
+- Hosted CI has not run; only its complete local equivalent has passed.  Ignored review PDFs must be regenerated from
+  committed Markdown and LaTeX.
 
 ## Next approved subproject
 
-The next approved subproject is **Lossless PasswordSafe core**.  It owns typed PasswordSafe parsing, writing,
-validation, unknown-field preservation, transactional local files, and conformance, fuzz, and round-trip suites.
+The next approved subproject is **Lossless PasswordSafe core**: typed parsing/writing, validation, unknown-field
+preservation, transactional local files, and conformance, fuzz, and round-trip suites.

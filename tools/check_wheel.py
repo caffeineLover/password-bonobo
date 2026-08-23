@@ -1,12 +1,14 @@
-"""Verify PEP 639 GPL metadata and license bytes in a built Password Bonobo wheel.
+"""Verify required metadata and repository assets in built Password Bonobo distributions.
 
-The release gate opens only the local build artifact and compares its declared license file with the tracked canonical
-text.  It does not inspect or modify external research content.
+The release gate opens only local build artifacts.  It compares the declared license file with the tracked canonical
+text and checks the typing marker in both the wheel and source distribution.  It does not inspect or modify external
+research content.
 """
 
 from __future__ import annotations
 
 import argparse
+import tarfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +19,9 @@ from zipfile import BadZipFile, ZipFile
 LICENSE_EXPRESSION = "License-Expression: GPL-3.0-or-later"
 LICENSE_FILE_DECLARATION = "License-File: LICENSES/GPL-3.0-or-later.txt"
 LICENSE_MEMBER_SUFFIX = ".dist-info/licenses/LICENSES/GPL-3.0-or-later.txt"
+WHEEL_TYPING_MEMBER = "bonobo_core/py.typed"
+SDIST_LICENSE_SUFFIX = "/LICENSES/GPL-3.0-or-later.txt"
+SDIST_TYPING_SUFFIX = "/src/bonobo_core/py.typed"
 
 
 
@@ -56,8 +61,45 @@ def check_wheel(wheel_path: Path, license_path: Path) -> tuple[WheelViolation, .
                 violations.append(
                     WheelViolation("embedded GPL license bytes differ from the repository license artifact")
                 )
+
+            typing_members = tuple(name for name in names if name == WHEEL_TYPING_MEMBER)
+            if len(typing_members) != 1:
+                violations.append(WheelViolation("wheel must contain bonobo_core/py.typed exactly once"))
     except BadZipFile:
         violations.append(WheelViolation("wheel is not a readable ZIP archive"))
+    return tuple(violations)
+
+
+
+#### Return required repository-asset violations in one source distribution.
+####
+def check_sdist(sdist_path: Path, license_path: Path) -> tuple[WheelViolation, ...]:
+    violations: list[WheelViolation] = []
+    expected_license_bytes = license_path.read_bytes()
+    try:
+        with tarfile.open(sdist_path, "r:gz") as archive:
+            members = tuple(archive.getmembers())
+            license_members = tuple(member for member in members if member.name.endswith(SDIST_LICENSE_SUFFIX))
+            if len(license_members) != 1:
+                violations.append(
+                    WheelViolation("source distribution must contain the GPL license file exactly once")
+                )
+            else:
+                license_stream = archive.extractfile(license_members[0])
+                if license_stream is None or license_stream.read() != expected_license_bytes:
+                    violations.append(
+                        WheelViolation(
+                            "source-distribution GPL license bytes differ from the repository license artifact"
+                        )
+                    )
+
+            typing_members = tuple(member for member in members if member.name.endswith(SDIST_TYPING_SUFFIX))
+            if len(typing_members) != 1:
+                violations.append(
+                    WheelViolation("source distribution must contain src/bonobo_core/py.typed exactly once")
+                )
+    except (tarfile.ReadError, EOFError):
+        violations.append(WheelViolation("source distribution is not a readable gzip tar archive"))
     return tuple(violations)
 
 
@@ -74,6 +116,16 @@ def _resolve_wheel(path: Path) -> tuple[Path | None, tuple[WheelViolation, ...]]
 
 
 
+#### Resolve exactly one gzip source distribution from a distribution directory.
+####
+def _resolve_sdist(path: Path) -> tuple[Path | None, tuple[WheelViolation, ...]]:
+    sdists = tuple(sorted(path.glob("*.tar.gz"))) if path.is_dir() else ()
+    if len(sdists) != 1:
+        return None, (WheelViolation(f"expected exactly one source distribution below {path}, found {len(sdists)}"),)
+    return sdists[0], ()
+
+
+
 #### Parse build paths, report wheel findings, and return process status.
 ####
 def main(argv: Sequence[str] | None = None) -> int:
@@ -85,10 +137,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path("LICENSES/GPL-3.0-or-later.txt"),
     )
     arguments = parser.parse_args(argv)
-    wheel_path, resolution_violations = _resolve_wheel(arguments.wheel_or_directory)
-    violations = list(resolution_violations)
+    wheel_path, wheel_resolution_violations = _resolve_wheel(arguments.wheel_or_directory)
+    sdist_path, sdist_resolution_violations = _resolve_sdist(arguments.wheel_or_directory)
+    violations = [*wheel_resolution_violations, *sdist_resolution_violations]
     if wheel_path is not None:
         violations.extend(check_wheel(wheel_path, arguments.license))
+    if sdist_path is not None:
+        violations.extend(check_sdist(sdist_path, arguments.license))
     for violation in violations:
         print(violation.message)
     return 1 if violations else 0

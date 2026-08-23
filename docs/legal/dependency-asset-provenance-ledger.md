@@ -13,7 +13,8 @@ Compact keys keep this source reviewable within the 120-character line limit:
 - Constraint: `N` means not directly declared.  Other values reproduce the declaration in `pyproject.toml`.
 - Use: `BT` repository build/test/security tool, `TS` transitive tool support, `CI` hosted workflow, `DG` document
   generation or review, `LT` license text, `FX` structural test fixture, and `TM` typing marker.
-- Distribution: `N` not distributed with the package, `S` source repository or source distribution, and `W` wheel.
+- Distribution: `N` not distributed with the package, `S` source repository or source distribution, and `W` wheel;
+  `+` joins every applicable distribution location.
 - Evidence: `P` `pyproject.toml`, `L` `uv.lock`, `M` installed Core Metadata, `V` local version output, `R` tracked
   REUSE metadata or source, and `W` tracked workflow plus official Git-ref evidence.
 - Review: `V` verified repository-owned fact, `MP` metadata expression recorded with compatibility review pending,
@@ -112,19 +113,20 @@ every tracked `py.typed` marker.  No third-party UI asset, font, image, translat
 
 |Path|Version|Origin|Terms|Use|Dist|Evidence|Review|
 |---|---|---|---|---|---|---|---|
-|`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE download|GPL-3.0-or-later|LT|W|R|V|
+|`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE download|GPL-3.0-or-later|LT|S+W|R|V|
 |`docs/pandoc/pdf-header.tex`|Current revision|Bonobo|GPL-3.0-or-later|DG|S|R|V|
 |`docs/pandoc/pdf-layout.lua`|Current revision|Bonobo|GPL-3.0-or-later|DG|S|R|V|
-|`src/bonobo_core/py.typed`|Current revision|Bonobo|GPL-3.0-or-later|TM|W|R|V|
+|`src/bonobo_core/py.typed`|Current revision|Bonobo|GPL-3.0-or-later|TM|S+W|R|V|
 |`tests/fixtures/python_structure/documented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/python_structure/undocumented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 
 ## Distribution conclusions and review status
 
-The wheel declares no runtime dependency and must carry the exact GPL text as PEP 639 license content.  Development,
-build, CI, and document tools do not enter the wheel.  Source-distribution presence does not establish mobile or App
-Store eligibility.  Every `P` or `MP` row remains pending for the iOS distribution decision; no row grants an
-exception, contributor permission, or permission to copy third-party expression.
+The wheel declares no runtime dependency.  Both wheel and source distribution must carry the GPL text and typing
+marker; wheel metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and
+document tools do not enter either artifact.  Source-distribution presence does not establish mobile or App Store
+eligibility.  Every `P` or `MP` row remains pending for the iOS distribution decision; no row grants an exception,
+contributor permission, or permission to copy third-party expression.
 
 Run `uv run python -m tools.check_provenance` after dependency declarations, `uv.lock`, workflow action references,
 document-tool commands, or tracked assets change.  The command fails on missing, extra, or stale coverage.

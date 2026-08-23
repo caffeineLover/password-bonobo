@@ -49,11 +49,12 @@ conflict resolution or deletion transactionally before close; if publication can
 staged or conflicted work and block silent discard.  A typed compatibility check enforces closure, critical authority,
 and the clean-room expression boundary.
 
-## 2026-08-22 - Release provenance and GPL wheel content
+## 2026-08-22 - Release provenance and distribution content
 
 The paired dependency and asset ledger records direct and transitive Python packages, build tools, workflow actions,
 document tools, and repository assets.  Its checker prevents stale or incomplete coverage without converting pending
-review into approval.  Built wheels must declare GPL-3.0-or-later and contain the repository's exact GPL license text.
+review into approval.  Built wheels must declare GPL-3.0-or-later.  Both source distribution and wheel must contain the
+repository's GPL text and package typing marker, with exact license bytes.
 
 ## 2026-08-22 - External contribution hold
 

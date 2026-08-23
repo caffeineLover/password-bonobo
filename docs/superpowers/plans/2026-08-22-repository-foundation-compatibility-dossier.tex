@@ -2243,8 +2243,9 @@ git diff --cached --check
 git status --short
 \end{lstlisting}
 
-Expected: every validation command passes. \passthrough{\lstinline!git status!} lists only intended Markdown/LaTeX
-changes and ignored PDFs do not appear.
+Expected: every validation command passes. The artifact check requires the GPL text and typing marker in both source
+distribution and wheel, plus exact PEP 639 wheel metadata and license bytes. \passthrough{\lstinline!git status!} lists
+only intended Markdown/LaTeX changes and ignored PDFs do not appear.
 
 \begin{itemize}
 \tightlist

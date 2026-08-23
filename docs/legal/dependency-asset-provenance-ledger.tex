@@ -122,7 +122,8 @@ Compact keys keep this source reviewable within the 120-character line limit:
   \passthrough{\lstinline!TM!} typing marker.
 \item
   Distribution: \passthrough{\lstinline!N!} not distributed with the package, \passthrough{\lstinline!S!} source
-  repository or source distribution, and \passthrough{\lstinline!W!} wheel.
+  repository or source distribution, and \passthrough{\lstinline!W!} wheel; \passthrough{\lstinline!+!} joins every
+  applicable distribution location.
 \item
   Evidence: \passthrough{\lstinline!P!} \nolinkurl{pyproject.toml}, \passthrough{\lstinline!L!}
   \passthrough{\lstinline!uv.lock!}, \passthrough{\lstinline!M!} installed Core Metadata, \passthrough{\lstinline!V!}
@@ -134,13 +135,13 @@ Compact keys keep this source reviewable within the 120-character line limit:
   \nolinkurl{NOASSERTION} means the available evidence does not establish the fact.
 \end{itemize}
 
+\begin{landscape}
+
 \subsection{Python packages}\label{python-packages}
 
 The lock contains 55 resolved third-party packages. Hatchling is declared for isolated builds but is not resolved in
 \passthrough{\lstinline!uv.lock!}; its exact build version and artifact origin therefore remain \nolinkurl{NOASSERTION}
 pending a build-lock decision.
-
-\begin{landscape}
 
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}
@@ -246,12 +247,12 @@ urllib3 & T & N & 2.7.0 & \url{https://pypi.org/simple} & MIT & TS & N & L+M & M
 
 \end{landscape}
 
+\begin{landscape}
+
 \subsection{GitHub Actions}\label{github-actions}
 
 Both action revisions were verified against official Git refs on 2026-08-22. License terms remain pending an independent
 distribution review; the actions execute in hosted CI and are not copied into Bonobo distributions.
-
-\begin{landscape}
 
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}
@@ -297,12 +298,12 @@ Review
 
 \end{landscape}
 
+\begin{landscape}
+
 \subsection{Documentation tools}\label{documentation-tools}
 
 Versions are local observations from 2026-08-22, not repository pins. The tools generate ignored review artifacts; they
 are not copied into the Python wheel or source distribution. License and platform-package terms remain pending.
-
-\begin{landscape}
 
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}
@@ -345,13 +346,13 @@ pdftoppm & Poppler 24.04.0 & \url{https://poppler.freedesktop.org} & NOASSERTION
 
 \end{landscape}
 
+\begin{landscape}
+
 \subsection{Repository assets}\label{repository-assets}
 
 The checker derives this inventory from tracked paths below \passthrough{\lstinline!LICENSES/!},
 \nolinkurl{docs/pandoc/}, and \nolinkurl{tests/fixtures/}, plus every tracked \passthrough{\lstinline!py.typed!} marker.
 No third-party UI asset, font, image, translation, or Gorilla asset is tracked.
-
-\begin{landscape}
 
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}
@@ -385,10 +386,10 @@ Review
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-\nolinkurl{LICENSES/GPL-3.0-or-later.txt} & GPL-3.0-or-later & REUSE download & GPL-3.0-or-later & LT & W & R & V \\
+\nolinkurl{LICENSES/GPL-3.0-or-later.txt} & GPL-3.0-or-later & REUSE download & GPL-3.0-or-later & LT & S+W & R & V \\
 \nolinkurl{docs/pandoc/pdf-header.tex} & Current revision & Bonobo & GPL-3.0-or-later & DG & S & R & V \\
 \nolinkurl{docs/pandoc/pdf-layout.lua} & Current revision & Bonobo & GPL-3.0-or-later & DG & S & R & V \\
-\nolinkurl{src/bonobo_core/py.typed} & Current revision & Bonobo & GPL-3.0-or-later & TM & W & R & V \\
+\nolinkurl{src/bonobo_core/py.typed} & Current revision & Bonobo & GPL-3.0-or-later & TM & S+W & R & V \\
 \nolinkurl{tests/fixtures/python_structure/documented.py.txt} & Current revision & Bonobo & GPL-3.0-or-later & FX & S &
 R & V \\
 \nolinkurl{tests/fixtures/python_structure/undocumented.py.txt} & Current revision & Bonobo & GPL-3.0-or-later & FX & S
@@ -400,10 +401,11 @@ R & V \\
 
 \subsection{Distribution conclusions and review status}\label{distribution-conclusions-and-review-status}
 
-The wheel declares no runtime dependency and must carry the exact GPL text as PEP 639 license content. Development,
-build, CI, and document tools do not enter the wheel. Source-distribution presence does not establish mobile or App
-Store eligibility. Every \passthrough{\lstinline!P!} or \passthrough{\lstinline!MP!} row remains pending for the iOS
-distribution decision; no row grants an exception, contributor permission, or permission to copy third-party expression.
+The wheel declares no runtime dependency. Both wheel and source distribution must carry the GPL text and typing marker;
+wheel metadata must also declare the exact GPL text as PEP 639 license content. Development, build, CI, and document
+tools do not enter either artifact. Source-distribution presence does not establish mobile or App Store eligibility.
+Every \passthrough{\lstinline!P!} or \passthrough{\lstinline!MP!} row remains pending for the iOS distribution decision;
+no row grants an exception, contributor permission, or permission to copy third-party expression.
 
 Run \passthrough{\lstinline!uv run python -m tools.check\_provenance!} after dependency declarations,
 \passthrough{\lstinline!uv.lock!}, workflow action references, document-tool commands, or tracked assets change. The

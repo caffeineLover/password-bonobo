@@ -19,7 +19,8 @@ from typing import cast
 
 LEDGER_RELATIVE_PATH = Path("docs/legal/dependency-asset-provenance-ledger.md")
 DOCUMENTATION_TOOLS = frozenset({"pandoc", "xelatex", "pdfinfo", "pdftoppm"})
-ACTION_REFERENCE = re.compile(r"(?m)^\s*-?\s*uses:\s*([^@\s]+)@([0-9a-f]{40})\s*(?:#.*)?$")
+ACTION_USE_LINE = re.compile(r"(?m)^\s*-?\s*uses:\s*(.*?)\s*$")
+PINNED_ACTION_REVISION = re.compile(r"[0-9a-f]{40}")
 REQUIREMENT_NAME = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[^]]+\])?")
 
 
@@ -197,6 +198,30 @@ def _asset_paths(tracked_paths: Sequence[Path]) -> frozenset[str]:
 
 
 
+#### Parse every workflow action reference and reject any revision that is not an exact immutable pin.
+####
+def _workflow_action_references(
+    workflow_source: str,
+) -> tuple[tuple[tuple[str, str], ...], tuple[ProvenanceViolation, ...]]:
+    references: list[tuple[str, str]] = []
+    violations: list[ProvenanceViolation] = []
+    for raw_value in ACTION_USE_LINE.findall(workflow_source):
+        value = re.sub(r"\s+#.*$", "", raw_value).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        action, separator, revision = value.rpartition("@")
+        if not separator or not action or PINNED_ACTION_REVISION.fullmatch(revision) is None:
+            violations.append(
+                ProvenanceViolation(
+                    f"GitHub Action revision must be exactly lowercase 40-hex: {value}"
+                )
+            )
+            continue
+        references.append((action, revision))
+    return tuple(references), tuple(violations)
+
+
+
 #### Report duplicate row keys and blank required cells for one ledger table.
 ####
 def _check_complete_rows(
@@ -291,15 +316,18 @@ def check_provenance_sources(
             "GitHub Action",
         )
     )
-    workflow_actions = {name: revision for name, revision in ACTION_REFERENCE.findall(workflow_source)}
-    for name, revision in sorted(workflow_actions.items()):
-        row = actions_by_name.get(name)
-        if row is None:
-            violations.append(ProvenanceViolation(f"GitHub Action is missing from the ledger: {name}"))
-        elif row.get("Revision") != revision:
-            violations.append(ProvenanceViolation(f"GitHub Action pin is stale: {name}"))
-    for extra in sorted(set(actions_by_name) - set(workflow_actions)):
-        violations.append(ProvenanceViolation(f"GitHub Action ledger row is absent from the workflow: {extra}"))
+    workflow_actions, action_pin_violations = _workflow_action_references(workflow_source)
+    violations.extend(action_pin_violations)
+    if not action_pin_violations:
+        for name, revision in sorted(workflow_actions):
+            row = actions_by_name.get(name)
+            if row is None:
+                violations.append(ProvenanceViolation(f"GitHub Action is missing from the ledger: {name}"))
+            elif row.get("Revision") != revision:
+                violations.append(ProvenanceViolation(f"GitHub Action pin is stale: {name}"))
+        workflow_action_names = {name for name, _ in workflow_actions}
+        for extra in sorted(set(actions_by_name) - workflow_action_names):
+            violations.append(ProvenanceViolation(f"GitHub Action ledger row is absent from the workflow: {extra}"))
 
     tool_rows = _ledger_table(ledger_source, "Documentation tools", "Tool")
     violations.extend(
@@ -325,12 +353,20 @@ def check_provenance_sources(
             "repository asset",
         )
     )
-    documented_assets = {row.get("Path", "") for row in asset_rows}
+    assets_by_path = {row.get("Path", ""): row for row in asset_rows}
+    documented_assets = set(assets_by_path)
     tracked_assets = _asset_paths(tracked_paths)
     for missing in sorted(tracked_assets - documented_assets):
         violations.append(ProvenanceViolation(f"repository asset is missing from the ledger: {missing}"))
     for extra in sorted(documented_assets - tracked_assets):
         violations.append(ProvenanceViolation(f"repository asset ledger row is not tracked: {extra}"))
+    for path, row in sorted(assets_by_path.items()):
+        if (
+            path == "LICENSES/GPL-3.0-or-later.txt" or path.endswith("/py.typed")
+        ) and row.get("Dist") != "S+W":
+            violations.append(
+                ProvenanceViolation(f"repository asset {path} distribution must be S+W")
+            )
     return tuple(violations)
 
 
@@ -361,10 +397,13 @@ def check_repository_provenance(repository_root: Path) -> tuple[ProvenanceViolat
     ledger_path = repository_root / LEDGER_RELATIVE_PATH
     if not ledger_path.is_file():
         return (ProvenanceViolation(f"provenance ledger is missing: {LEDGER_RELATIVE_PATH.as_posix()}"),)
+    workflow_root = repository_root / ".github" / "workflows"
+    workflow_paths = tuple(sorted((*workflow_root.glob("*.yml"), *workflow_root.glob("*.yaml"))))
+    workflow_source = "\n".join(path.read_text(encoding="utf-8") for path in workflow_paths)
     return check_provenance_sources(
         (repository_root / "pyproject.toml").read_text(encoding="utf-8"),
         (repository_root / "uv.lock").read_text(encoding="utf-8"),
-        (repository_root / ".github/workflows/foundation.yml").read_text(encoding="utf-8"),
+        workflow_source,
         ledger_path.read_text(encoding="utf-8"),
         _tracked_paths(repository_root),
     )

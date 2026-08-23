@@ -1651,8 +1651,9 @@ git diff --cached --check
 git status --short
 ```
 
-Expected: every validation command passes.  `git status` lists only intended Markdown/LaTeX changes and ignored PDFs do
-not appear.
+Expected: every validation command passes.  The artifact check requires the GPL text and typing marker in both source
+distribution and wheel, plus exact PEP 639 wheel metadata and license bytes.  `git status` lists only intended
+Markdown/LaTeX changes and ignored PDFs do not appear.
 
 - [x] **Step 6: Commit CI, memory, and generated LaTeX sources**
 

@@ -187,7 +187,8 @@ The foundation workflow will run on Windows, macOS, and Linux with Python 3.14. 
 7. Verify provenance-ledger freshness.
 8. Run Bandit, pip-audit, and REUSE checks.
 9. Verify that forbidden file types and likely credential artifacts are absent from tracked files.
-10. Build the Python wheel and source distribution, then assert exact GPL metadata and license-file content.
+10. Build the Python wheel and source distribution, assert exact GPL wheel metadata and license bytes, and require the
+    GPL text and package typing marker in both archives.
 
 The workflow must not clone Gorilla, contact password providers, or require secrets.
 

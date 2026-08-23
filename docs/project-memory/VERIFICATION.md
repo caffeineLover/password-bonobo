@@ -58,11 +58,12 @@ git diff --cached --check
 ```
 
 Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5.  Ruff and strict mypy reported no issues;
-pytest 9.1.1 passed 39 tests with 70% measured coverage; the structure, compatibility, provenance, and NUL-delimited
+pytest 9.1.1 passed 55 tests with 74% measured coverage; the structure, compatibility, provenance, and NUL-delimited
 tracked-file audits reported no violations.  The compatibility contract has 66 behaviors, 45 features, and 55 oracles.
 Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; exact REUSE classified 62 of 62
-files; both distributions built; the wheel carried the declared exact GPL text; document verification passed; and the
-staged diff check was clean.  The local package's expected not-on-PyPI pip-audit skip is not a third-party omission.
+files; both distributions built; the wheel and source distribution each carried the exact GPL text and typing marker;
+document verification passed; and the staged diff check was clean.  The local package's expected not-on-PyPI
+pip-audit skip is not a third-party omission.
 
 ## Generated-document review
 
@@ -77,19 +78,21 @@ least two XeLaTeX passes; eight required the bounded third pass requested by the
 | Test oracles | 18 |
 | Upstream baseline | 2 |
 | App Store exception plan | 1 |
-| Dependency and asset provenance ledger | 11 |
+| Dependency and asset provenance ledger | 8 |
 | Source-provenance policy | 2 |
-| Canonical memory; decisions, project, state, and verification records | 2; 2, 1, 2, 2 |
+| Canonical memory; decisions, project, state, and verification records | 1; 2, 1, 1, 2 |
 | Program design | 9 |
 | Repository-foundation specification | 6 |
 | URL-audit design | 13 |
 | Implementation plan | 24 |
 
-Result: 120 PDF pages and 120 rendered page images were visually inspected page by page.  The final logs have no
-overflow, missing-glyph, undefined-reference, or rerun warnings.  Markdown and LaTeX have no lines over 120 characters
-or drafting tokens.  Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed.  There are
-no observed clipping, overlap, hierarchy, glyph, or page-transition defects.  Review PDFs, build files, and page images
-remain ignored and uncommitted.
+Result: 115 PDF pages and 115 rendered page images were generated.  The 49 pages affected by the whole-branch
+remediation were visually inspected page by page, with full-resolution inspection of all eight ledger pages and both
+one-page memory records.  The final logs have no overflow, missing-glyph, undefined-reference, or rerun warnings.
+Markdown and LaTeX have no lines over 120 characters or drafting tokens.  Listing wrapping and the landscape
+wide-table treatment were explicitly reconfirmed; section headings and introductions stay with their wide tables.
+There are no observed clipping, overlap, hierarchy, glyph, widow, or page-transition defects.  Review PDFs, build
+files, and page images remain ignored and uncommitted.
 
 ## Environment and external boundary
 
