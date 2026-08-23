@@ -1,0 +1,13 @@
+{
+  "vectors": [
+    {
+      "authority": "Independently evaluated from the official PasswordSafe V3 SHA-256 key-stretch definition with .NET System.Security.Cryptography.SHA256; production code was not imported or executed.",
+      "expected_stretched_key_hex": "5f6c18d1eb9bc8b0ea2b8fb5dd3720e02b57d8dd6b91ff0cc8ebb5b9a5bd45f8",
+      "hash": "SHA-256",
+      "iterations": 2,
+      "name": "fabricated-master-input-one",
+      "passphrase_hex": "666162726963617465642d6d61737465722d696e7075742d6f6e65",
+      "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    }
+  ]
+}

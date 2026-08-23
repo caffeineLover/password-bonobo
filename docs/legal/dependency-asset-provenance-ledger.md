@@ -129,6 +129,10 @@ does not.
 The checker derives this inventory from tracked paths below `LICENSES/`, `docs/pandoc/`, and `tests/fixtures/`, plus
 every tracked `py.typed` marker.  No third-party UI asset, font, image, translation, or Gorilla asset is tracked.
 
+The PasswordSafe cryptographic vector contains only fabricated inputs.  Its expected SHA-256 output was independently
+derived from the public PasswordSafe construction without product code and is used for deterministic cryptographic
+conformance testing.
+
 |Path|Version|Origin|Terms|Use|Dist|Evidence|Review|
 |---|---|---|---|---|---|---|---|
 |`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE download|GPL-3.0-or-later|LT|S+W|R|V|
@@ -137,6 +141,7 @@ every tracked `py.typed` marker.  No third-party UI asset, font, image, translat
 |`src/bonobo_core/py.typed`|Current revision|Bonobo|GPL-3.0-or-later|TM|S+W|R|V|
 |`tests/fixtures/python_structure/documented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/python_structure/undocumented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/crypto-vectors.json`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 
 ## Distribution conclusions and review status
 
