@@ -1,9 +1,11 @@
 """Verify compatibility traceability and the clean-room expression boundary."""
 
+import hashlib
 from pathlib import Path
 
 from tools.check_compatibility import (
     check_clean_room_source,
+    check_local_evidence_corpus,
     check_repository_contract,
     check_traceability_sources,
 )
@@ -45,6 +47,48 @@ def test_clean_room_audit_accepts_prose_acronyms_and_neutral_terms() -> None:
     source = "A visible control uses URL and JSON labels on macOS and iOS; consult formatV3.txt and Git %aI."
 
     assert check_clean_room_source(Path("oracles.md"), source) == ()
+
+
+
+#### Reject a runtime-supplied fabricated identifier in nested local SDD Markdown only.
+####
+def test_local_sdd_corpus_rejects_runtime_prohibited_identifier_digest(tmp_path: Path) -> None:
+    fabricated_token = "fabricatedLocalLeak"
+    digest = hashlib.sha256(fabricated_token.encode("utf-8")).hexdigest()
+    report_path = tmp_path / ".superpowers" / "sdd" / "fabricated-task" / "report.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(f"Observed {fabricated_token} in local evidence.\n", encoding="utf-8")
+    (report_path.with_suffix(".txt")).write_text(fabricated_token, encoding="utf-8")
+    (tmp_path / "outside.md").write_text(fabricated_token, encoding="utf-8")
+
+    violations = check_local_evidence_corpus(
+        tmp_path,
+        forbidden_identifier_digests=frozenset({digest}),
+    )
+
+    assert tuple(
+        (violation.path, violation.line, violation.message, violation.token)
+        for violation in violations
+    ) == (
+        (
+            Path(".superpowers/sdd/fabricated-task/report.md"),
+            1,
+            "prohibited upstream identifier is present in local SDD evidence",
+            None,
+        ),
+    )
+
+
+
+#### Treat an absent ignored SDD evidence directory as a clean local corpus.
+####
+def test_local_sdd_corpus_is_clean_clone_safe(tmp_path: Path) -> None:
+    fabricated_digest = hashlib.sha256(b"absentFabricatedLeak").hexdigest()
+
+    assert check_local_evidence_corpus(
+        tmp_path,
+        forbidden_identifier_digests=frozenset({fabricated_digest}),
+    ) == ()
 
 
 
@@ -214,6 +258,30 @@ def test_traceability_rejects_malformed_feature_header() -> None:
     )
 
     assert "feature table header does not match the required schema" in messages
+
+
+
+#### Reject a correctly sized authored feature row whose stable ID is not exactly three digits.
+####
+def test_traceability_rejects_malformed_feature_identifier() -> None:
+    dossier = "### GOR-BEH-001 - Fabricated behavior\n"
+    matrix = (
+        FEATURE_HEADER
+        + "A prose example may mention GOR-FEAT-9 without authoring a row.\n"
+        + "| Note | GOR-FEAT-9 | prose | only | outside | the | ID | position | here |\n"
+        + "|GOR-FEAT-99|Fabricated|Required|GOR-BEH-001|O3|ALL|Critical|Critical|GOR-TEST-001|\n"
+    )
+    oracles = "### GOR-TEST-001 - Fabricated oracle\n"
+
+    messages = tuple(
+        violation.message
+        for violation in check_traceability_sources(dossier, matrix, oracles)
+        if "malformed identifier" in violation.message
+    )
+
+    assert messages == (
+        "feature row GOR-FEAT-99 has malformed identifier; expected GOR-FEAT-NNN",
+    )
 
 
 

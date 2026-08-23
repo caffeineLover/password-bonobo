@@ -7,6 +7,7 @@ checkout, and its allowlist is limited to neutral platform, format-document, and
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ COMPATIBILITY_MARKDOWN_PATHS = (
     Path("docs/compatibility/gorilla/upstream-baseline.md"),
 )
 CAMEL_CASE_IDENTIFIER = re.compile(r"\b[a-z][a-z0-9]{0,20}(?:[A-Z][A-Za-z0-9]*)+\b")
+WORD_IDENTIFIER = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 BEHAVIOR_HEADING = re.compile(r"(?m)^### (GOR-BEH-\d{3})\b")
 FEATURE_IDENTIFIER = re.compile(r"GOR-FEAT-(\d{3})")
 TEST_HEADING = re.compile(r"(?m)^### (GOR-TEST-\d{3})\b")
@@ -36,6 +38,13 @@ FEATURE_HEADER_SCHEMA = (
     "Data-loss",
     "Security",
     "Tests",
+)
+LOCAL_SDD_EVIDENCE_ROOT = Path(".superpowers/sdd")
+PROHIBITED_LOCAL_EVIDENCE_IDENTIFIER_DIGESTS = frozenset(
+    {
+        "09602e9d9076d9b934d439545ef895fb792d3e684df987dbb37775239273e37c",
+        "ca2b5c9ce1579c2ab4ea3756422f6c8420fe4ad3d089943bc480951bdcec6395",
+    }
 )
 CLEAN_ROOM_ALLOWLIST = {
     # Official platform spelling is user-visible vocabulary, not an upstream implementation identifier.
@@ -105,7 +114,16 @@ def _parse_feature_rows(
                     )
                 )
             continue
-        if not cells or FEATURE_IDENTIFIER.fullmatch(cells[0]) is None:
+        if not cells or not cells[0].startswith("GOR-FEAT-"):
+            continue
+        if FEATURE_IDENTIFIER.fullmatch(cells[0]) is None:
+            violations.append(
+                CompatibilityViolation(
+                    matrix_path,
+                    line_number,
+                    f"feature row {cells[0]} has malformed identifier; expected GOR-FEAT-NNN",
+                )
+            )
             continue
         if len(cells) != len(FEATURE_HEADER_SCHEMA):
             violations.append(
@@ -181,6 +199,34 @@ def check_clean_room_source(path: Path, source: str) -> tuple[CompatibilityViola
                         token,
                     )
                 )
+    return tuple(violations)
+
+
+
+#### Check optional ignored SDD Markdown through non-reversible identifier fingerprints.
+####
+def check_local_evidence_corpus(
+    repository_root: Path,
+    *,
+    forbidden_identifier_digests: frozenset[str] = PROHIBITED_LOCAL_EVIDENCE_IDENTIFIER_DIGESTS,
+) -> tuple[CompatibilityViolation, ...]:
+    evidence_root = repository_root / LOCAL_SDD_EVIDENCE_ROOT
+    if not evidence_root.is_dir():
+        return ()
+    violations: list[CompatibilityViolation] = []
+    for path in sorted(evidence_root.rglob("*.md")):
+        source = path.read_text(encoding="utf-8")
+        for line_number, line in enumerate(source.splitlines(), start=1):
+            for match in WORD_IDENTIFIER.finditer(line):
+                digest = hashlib.sha256(match.group(0).encode("utf-8")).hexdigest()
+                if digest in forbidden_identifier_digests:
+                    violations.append(
+                        CompatibilityViolation(
+                            path.relative_to(repository_root),
+                            line_number,
+                            "prohibited upstream identifier is present in local SDD evidence",
+                        )
+                    )
     return tuple(violations)
 
 
@@ -351,6 +397,7 @@ def check_repository_contract(repository_root: Path) -> tuple[CompatibilityViola
     violations: list[CompatibilityViolation] = []
     for path, source in sources.items():
         violations.extend(check_clean_room_source(path, source))
+    violations.extend(check_local_evidence_corpus(repository_root))
     violations.extend(check_traceability_sources(dossier_source, matrix_source, oracles_source))
     violations.extend(
         _check_identifier_sequence(

@@ -165,12 +165,12 @@ git diff --cached --check
 \end{lstlisting}
 
 Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5. Ruff and strict mypy reported no issues;
-pytest 9.1.1 passed 55 tests with 74\% measured coverage; the structure, compatibility, provenance, and NUL-delimited
-tracked-file audits reported no violations. The compatibility contract has 66 behaviors, 45 features, and 55 oracles.
-Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; exact REUSE classified 62 of 62
-files; both distributions built; the wheel and source distribution each carried the exact GPL text and typing marker;
-document verification passed; and the staged diff check was clean. The local package\textquotesingle s expected
-not-on-PyPI pip-audit skip is not a third-party omission.
+pytest 9.1.1 passed 58 tests with 74\% measured coverage; the structure, compatibility, provenance, NUL-delimited
+tracked-file, and optional local SDD evidence audits reported no violations. The compatibility contract has 66
+behaviors, 45 features, and 55 oracles. Bandit reported zero issues; pip-audit found no known third-party
+vulnerabilities; exact REUSE classified 62 of 62 files; both distributions built; the wheel and source distribution each
+carried the exact GPL text and typing marker; document verification passed; and the staged diff check was clean. The
+local package\textquotesingle s expected not-on-PyPI pip-audit skip is not a third-party omission.
 
 \subsection{Generated-document review}\label{generated-document-review}
 
