@@ -5,14 +5,17 @@ independent standard-library or .NET calculations, never product reader or
 writer output.
 """
 
+import copy
 import hashlib
+import hmac
 import json
+import pickle
 import secrets
 from builtins import bytearray as builtin_bytearray
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
-from typing import Final, cast
+from typing import Final, SupportsIndex, cast, overload
 
 import pytest
 from helpers import DeterministicRandomSource, build_spec_vault
@@ -33,7 +36,7 @@ from bonobo_core.passwordsafe.crypto import (
     wrap_vault_keys,
 )
 from bonobo_core.passwordsafe.errors import ResourceLimitError, ResourceLimitReason
-from bonobo_core.passwordsafe.secrets import SecretBuffer
+from bonobo_core.passwordsafe.secrets import SecretBuffer, SecretClosedError
 
 
 
@@ -59,10 +62,12 @@ class _FakeTwofishKey:
         *,
         fail_on_call: int | None,
         short_on_call: int | None,
+        transform_error: BaseException | None,
     ) -> None:
         self._mask = mask[:16]
         self._fail_on_call = fail_on_call
         self._short_on_call = short_on_call
+        self._transform_error = transform_error
         self.closed = False
         self.inputs = []
 
@@ -88,7 +93,9 @@ class _FakeTwofishKey:
         self.inputs.append(block)
         call = len(self.inputs)
         if call == self._fail_on_call:
-            raise RuntimeError("synthetic block failure")
+            if self._transform_error is None:
+                raise RuntimeError("synthetic block failure")
+            raise self._transform_error
         if call == self._short_on_call:
             return bytes(15)
         return bytes(value ^ self._mask[index] for index, value in enumerate(block))
@@ -119,11 +126,15 @@ class _FakeTwofishBackend:
         short_on_call: int | None = None,
         fail_on_enter: bool = False,
         fail_on_exit: bool = False,
+        transform_error: BaseException | None = None,
+        exit_error: BaseException | None = None,
     ) -> None:
         self._fail_on_call = fail_on_call
         self._short_on_call = short_on_call
         self._fail_on_enter = fail_on_enter
         self._fail_on_exit = fail_on_exit
+        self._transform_error = transform_error
+        self._exit_error = exit_error
         self.keys = []
         self.key_materials = []
 
@@ -140,6 +151,7 @@ class _FakeTwofishBackend:
             bytes(key_material.borrow()),
             fail_on_call=self._fail_on_call,
             short_on_call=self._short_on_call,
+            transform_error=self._transform_error,
         )
         self.keys.append(key)
         try:
@@ -147,7 +159,9 @@ class _FakeTwofishBackend:
         finally:
             key.close()
             if self._fail_on_exit:
-                raise RuntimeError("synthetic key exit failure")
+                if self._exit_error is None:
+                    raise RuntimeError("synthetic key exit failure")
+                raise self._exit_error
 
 
 
@@ -247,6 +261,99 @@ class _FaultingBytearrayFactory:
         allocated = allocate(source)
         self.retained = allocated
         return allocated
+
+
+
+#### Count full-buffer zeroization assignments without changing bytearray behavior.
+####
+class _WipeCountingBytearray(bytearray):
+    wipe_count: int
+
+
+
+    #### Initialize fabricated key storage with no observed wipe operation.
+    ####
+    def __init__(self, source: bytes) -> None:
+        super().__init__(source)
+        self.wipe_count = 0
+
+
+
+    #### Describe indexed byte replacement for the bytearray overload contract.
+    ####
+    @overload
+    def __setitem__(self, key: SupportsIndex, value: SupportsIndex, /) -> None: ...
+
+
+
+    #### Describe slice replacement for the bytearray overload contract.
+    ####
+    @overload
+    def __setitem__(
+        self,
+        key: slice[SupportsIndex | None],
+        value: Iterable[SupportsIndex] | bytes,
+        /,
+    ) -> None: ...
+
+
+
+    #### Record only exact full-buffer zero fills before applying the real write.
+    ####
+    def __setitem__(
+        self,
+        key: SupportsIndex | slice[SupportsIndex | None],
+        value: SupportsIndex | Iterable[SupportsIndex] | bytes,
+        /,
+    ) -> None:
+        if isinstance(key, slice):
+            slice_value = cast(Iterable[SupportsIndex] | bytes, value)
+            if key == slice(None, None, None) and isinstance(slice_value, bytes) and slice_value == bytes(len(self)):
+                self.wipe_count += 1
+            super().__setitem__(key, slice_value)
+        else:
+            super().__setitem__(key, cast(SupportsIndex, value))
+
+
+
+#### Assert all generic duplication and serialization routes reject one owner safely.
+####
+def _assert_copy_and_serialization_rejected(owner: object) -> None:
+    diagnostic = "^cryptographic owner cannot be copied or serialized$"
+    with pytest.raises(TypeError, match=diagnostic):
+        copy.copy(owner)
+    with pytest.raises(TypeError, match=diagnostic):
+        copy.deepcopy(owner)
+    with pytest.raises(TypeError, match=diagnostic):
+        pickle.dumps(owner)
+
+
+
+#### Raise during terminal digest to verify authenticator cleanup on failure.
+####
+class _DigestFailureHmac:
+
+
+
+    #### Accept payload updates before the configured digest failure.
+    ####
+    def update(self, _payload: bytes) -> None:
+        return None
+
+
+
+    #### Fail the terminal digest operation with fabricated safe test text.
+    ####
+    def digest(self) -> bytes:
+        raise RuntimeError("synthetic HMAC digest failure")
+
+
+
+#### Return one controlled HMAC substitute for a terminal-failure regression.
+####
+def _new_digest_failure_hmac(_key: object, *, digestmod: object) -> hmac.HMAC:
+    del digestmod
+    return cast(hmac.HMAC, _DigestFailureHmac())
 
 
 
@@ -388,6 +495,19 @@ def test_derived_key_reinitialization_preserves_existing_owned_storage() -> None
 
 
 
+#### Reject one buffer transferred as both vault keys and wipe it exactly once.
+####
+def test_vault_keys_reject_shared_storage_before_any_owner_can_escape() -> None:
+    shared_storage = _WipeCountingBytearray(bytes(range(32)))
+
+    with pytest.raises(TypeError, match="vault keys require distinct storage"):
+        VaultKeys(shared_storage, shared_storage)
+
+    assert shared_storage == bytearray(32)
+    assert shared_storage.wipe_count == 1
+
+
+
 #### Wipe both transferred vault-key buffers when their joint lifetime closes.
 ####
 def test_vault_keys_close_wipes_both_owned_keys() -> None:
@@ -444,6 +564,25 @@ def test_vault_keys_reinitialization_wipes_candidates_and_preserves_existing_key
 
 
 
+#### Wipe one aliased replacement only once while preserving existing owners.
+####
+def test_vault_keys_reinitialization_wipes_shared_candidate_exactly_once() -> None:
+    original_content = bytearray(range(32))
+    original_hmac = bytearray(range(32, 64))
+    shared_replacement = _WipeCountingBytearray(bytes([0xA5] * 32))
+    keys = VaultKeys(original_content, original_hmac)
+
+    with pytest.raises(TypeError, match="vault keys cannot be reinitialized"):
+        VaultKeys.__init__(keys, shared_replacement, shared_replacement)
+
+    assert bytes(keys.content_key.borrow()) == bytes(range(32))
+    assert bytes(keys.hmac_key.borrow()) == bytes(range(32, 64))
+    assert shared_replacement == bytearray(32)
+    assert shared_replacement.wipe_count == 1
+    keys.close()
+
+
+
 #### Prevent callers from replacing either key owner outside joint lifecycle control.
 ####
 def test_vault_key_properties_are_read_only() -> None:
@@ -461,6 +600,41 @@ def test_vault_key_properties_are_read_only() -> None:
     assert keys.hmac_key is not replacement
     replacement.close()
     keys.close()
+
+
+
+#### Reject copying and serialization without invalidating any live crypto owner.
+####
+def test_crypto_owners_reject_copy_deepcopy_and_pickle_when_live_or_closed() -> None:
+    derived = DerivedKey(bytearray(range(32)))
+    vault_keys = VaultKeys(bytearray(range(32)), bytearray(range(32, 64)))
+    content_key = SecretBuffer.from_bytes(bytes(32))
+    hmac_key = SecretBuffer.from_bytes(b"k" * 32)
+    encryptor = CbcEncryptor(_FakeTwofishBackend(), content_key, bytes(16))
+    decryptor = CbcDecryptor(_FakeTwofishBackend(), content_key, bytes(16))
+    authenticator = FieldAuthenticator(hmac_key)
+    owners: tuple[object, ...] = (derived, vault_keys, encryptor, decryptor, authenticator)
+
+    for owner in owners:
+        _assert_copy_and_serialization_rejected(owner)
+
+    assert bytes(derived.borrow()) == bytes(range(32))
+    assert bytes(vault_keys.content_key.borrow()) == bytes(range(32))
+    assert encryptor.transform(bytes(range(16))) == bytes(range(16))
+    assert decryptor.transform(bytes(range(16))) == bytes(range(16))
+    authenticator.update(b"first")
+    authenticator.update(b"second")
+    assert authenticator.digest().hex() == "135c55ecf0b3052079eefadd5670cf5601d91084db46147a63ae900749423429"
+
+    derived.close()
+    vault_keys.close()
+    encryptor.close()
+    decryptor.close()
+    for owner in owners:
+        _assert_copy_and_serialization_rejected(owner)
+
+    content_key.close()
+    hmac_key.close()
 
 
 
@@ -699,17 +873,99 @@ def test_cbc_backend_failure_closes_owned_state(cbc_type: type[CbcEncryptor] | t
 
 
 
-#### Close a CBC owner even when its keyed context reports cleanup failure.
+#### Preserve the primary transform failure across independent cleanup failures.
 ####
-def test_cbc_close_remains_terminal_after_backend_exit_failure() -> None:
-    backend = _FakeTwofishBackend(fail_on_exit=True)
+@pytest.mark.parametrize("cbc_type", [CbcEncryptor, CbcDecryptor])
+@pytest.mark.parametrize("primary_type", [RuntimeError, KeyboardInterrupt])
+@pytest.mark.parametrize("cleanup_type", [RuntimeError, SystemExit])
+def test_cbc_transform_preserves_active_exception_across_cleanup(
+    cbc_type: type[CbcEncryptor] | type[CbcDecryptor],
+    primary_type: type[BaseException],
+    cleanup_type: type[BaseException],
+) -> None:
+    primary = primary_type("synthetic primary transform failure")
+    cleanup = cleanup_type("synthetic secondary cleanup failure")
+    backend = _FakeTwofishBackend(
+        fail_on_call=1,
+        fail_on_exit=True,
+        transform_error=primary,
+        exit_error=cleanup,
+    )
     content_key = SecretBuffer.from_bytes(bytes(32))
-    encryptor = CbcEncryptor(backend, content_key, bytes(16))
+    transformer = cbc_type(backend, content_key, bytes(16))
 
-    with pytest.raises(RuntimeError, match="synthetic key exit failure"):
-        encryptor.close()
+    with pytest.raises(primary_type) as caught:
+        transformer.transform(bytes(16))
 
-    assert encryptor.closed
+    assert caught.value is primary
+    assert transformer.closed
+    assert backend.keys[0].closed
+    content_key.close()
+
+
+
+#### Preserve an active process-control exception during context cleanup.
+####
+@pytest.mark.parametrize("cbc_type", [CbcEncryptor, CbcDecryptor])
+def test_cbc_context_exit_preserves_active_base_exception(
+    cbc_type: type[CbcEncryptor] | type[CbcDecryptor],
+) -> None:
+    cleanup = SystemExit("synthetic context cleanup failure")
+    backend = _FakeTwofishBackend(fail_on_exit=True, exit_error=cleanup)
+    content_key = SecretBuffer.from_bytes(bytes(32))
+    transformer = cbc_type(backend, content_key, bytes(16))
+    primary = KeyboardInterrupt("synthetic active process-control exception")
+
+    with pytest.raises(KeyboardInterrupt) as caught, transformer:
+        raise primary
+
+    assert caught.value is primary
+    assert transformer.closed
+    assert backend.keys[0].closed
+    content_key.close()
+
+
+
+#### Prevent defensive CBC finalization from surfacing cleanup BaseExceptions.
+####
+@pytest.mark.parametrize("cbc_type", [CbcEncryptor, CbcDecryptor])
+def test_cbc_finalizer_suppresses_cleanup_base_exception(
+    cbc_type: type[CbcEncryptor] | type[CbcDecryptor],
+) -> None:
+    backend = _FakeTwofishBackend(
+        fail_on_exit=True,
+        exit_error=KeyboardInterrupt("synthetic finalizer cleanup failure"),
+    )
+    content_key = SecretBuffer.from_bytes(bytes(32))
+    transformer = cbc_type(backend, content_key, bytes(16))
+
+    transformer.__del__()
+    transformer.__del__()
+
+    assert transformer.closed
+    assert backend.keys[0].closed
+    content_key.close()
+
+
+
+#### Close a CBC owner terminally while surfacing caller-initiated failures.
+####
+@pytest.mark.parametrize("cbc_type", [CbcEncryptor, CbcDecryptor])
+@pytest.mark.parametrize("cleanup_type", [RuntimeError, KeyboardInterrupt])
+def test_cbc_explicit_close_surfaces_backend_exit_failure(
+    cbc_type: type[CbcEncryptor] | type[CbcDecryptor],
+    cleanup_type: type[BaseException],
+) -> None:
+    cleanup = cleanup_type("synthetic explicit cleanup failure")
+    backend = _FakeTwofishBackend(fail_on_exit=True, exit_error=cleanup)
+    content_key = SecretBuffer.from_bytes(bytes(32))
+    transformer = cbc_type(backend, content_key, bytes(16))
+
+    with pytest.raises(cleanup_type) as caught:
+        transformer.close()
+
+    assert caught.value is cleanup
+    assert transformer.closed
     assert backend.keys[0].closed
     content_key.close()
 
@@ -725,6 +981,8 @@ def test_field_authenticator_matches_independent_ordered_payload_hmac() -> None:
     authenticator.update(b"second")
 
     assert authenticator.digest().hex() == "135c55ecf0b3052079eefadd5670cf5601d91084db46147a63ae900749423429"
+    assert authenticator.closed
+    assert authenticator._hmac is None
     assert not hmac_key.closed
     hmac_key.close()
 
@@ -743,6 +1001,119 @@ def test_field_authenticator_is_order_sensitive() -> None:
     reverse.update(b"alpha")
 
     assert forward.digest() != reverse.digest()
+    key.close()
+
+
+
+#### Retain an internal HMAC copy after source close, then terminate at digest.
+####
+def test_field_authenticator_digest_is_terminal_after_source_key_closes() -> None:
+    key = SecretBuffer.from_bytes(b"k" * 32)
+    authenticator = FieldAuthenticator(key)
+    key.close()
+
+    authenticator.update(b"first")
+    authenticator.update(b"second")
+    assert authenticator.digest().hex() == "135c55ecf0b3052079eefadd5670cf5601d91084db46147a63ae900749423429"
+    assert authenticator.closed
+    assert authenticator._hmac is None
+
+    with pytest.raises(SecretClosedError, match="secret buffer is closed"):
+        authenticator.digest()
+    with pytest.raises(SecretClosedError, match="secret buffer is closed"):
+        authenticator.update(b"third")
+    with pytest.raises(SecretClosedError, match="secret buffer is closed"):
+        authenticator.__enter__()
+    _assert_copy_and_serialization_rejected(authenticator)
+
+
+
+#### Make explicit authenticator close idempotent and terminal before digest.
+####
+def test_field_authenticator_explicit_close_is_idempotent() -> None:
+    key = SecretBuffer.from_bytes(bytes(32))
+    authenticator = FieldAuthenticator(key)
+
+    authenticator.close()
+    authenticator.close()
+
+    assert authenticator.closed
+    assert authenticator._hmac is None
+    with pytest.raises(SecretClosedError, match="secret buffer is closed"):
+        authenticator.update(b"payload")
+    with pytest.raises(SecretClosedError, match="secret buffer is closed"):
+        authenticator.digest()
+    assert not key.closed
+    key.close()
+
+
+
+#### Close the authenticator while preserving an active context-body exception.
+####
+def test_field_authenticator_exceptional_context_exit_is_terminal() -> None:
+    key = SecretBuffer.from_bytes(bytes(32))
+    authenticator = FieldAuthenticator(key)
+    primary = KeyboardInterrupt("synthetic process-control exit")
+
+    with pytest.raises(KeyboardInterrupt) as caught, authenticator as entered:
+        assert entered is authenticator
+        entered.update(b"payload")
+        raise primary
+
+    assert caught.value is primary
+    assert authenticator.closed
+    assert authenticator._hmac is None
+    key.close()
+
+
+
+#### Close terminal HMAC state even when the digest implementation raises.
+####
+def test_field_authenticator_digest_failure_still_closes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hmac, "new", _new_digest_failure_hmac)
+    key = SecretBuffer.from_bytes(bytes(32))
+    authenticator = FieldAuthenticator(key)
+
+    authenticator.update(b"payload")
+    with pytest.raises(RuntimeError, match="synthetic HMAC digest failure"):
+        authenticator.digest()
+
+    assert authenticator.closed
+    assert authenticator._hmac is None
+    key.close()
+
+
+
+#### Reject reinitialization without replacing a live authenticator's state.
+####
+def test_field_authenticator_reinitialization_preserves_original_state() -> None:
+    original_key = SecretBuffer.from_bytes(b"k" * 32)
+    replacement_key = SecretBuffer.from_bytes(b"r" * 32)
+    authenticator = FieldAuthenticator(original_key)
+
+    with pytest.raises(TypeError, match="field authenticator cannot be reinitialized"):
+        FieldAuthenticator.__init__(authenticator, replacement_key)
+
+    authenticator.update(b"first")
+    authenticator.update(b"second")
+    assert authenticator.digest().hex() == "135c55ecf0b3052079eefadd5670cf5601d91084db46147a63ae900749423429"
+    assert not replacement_key.closed
+    original_key.close()
+    replacement_key.close()
+
+
+
+#### Defensively finalize forgotten authenticator state without raising.
+####
+def test_field_authenticator_finalizer_is_idempotent_and_terminal() -> None:
+    key = SecretBuffer.from_bytes(bytes(32))
+    authenticator = FieldAuthenticator(key)
+
+    authenticator.__del__()
+    authenticator.__del__()
+
+    assert authenticator.closed
+    assert authenticator._hmac is None
     key.close()
 
 

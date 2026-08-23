@@ -3,6 +3,9 @@
 The module owns mutable derived and vault keys, PasswordSafe stretching and key
 wrapping, continuous CBC state, field-payload HMAC, and system randomness.  A
 separate backend remains responsible for the native Twofish implementation.
+CPython and OpenSSL expose no supported way to overwrite internal HMAC state;
+terminal authentication releases that state promptly but cannot promise physical
+zeroization of implementation-owned copies.
 """
 
 import hashlib
@@ -11,11 +14,11 @@ import secrets
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager, suppress
 from types import TracebackType
-from typing import Protocol, Self, runtime_checkable
+from typing import NoReturn, Protocol, Self, SupportsIndex, runtime_checkable
 
 from .constants import BLOCK_BYTES, HMAC_BYTES, SALT_BYTES, WRAPPED_KEY_BYTES, ResourceLimits
 from .errors import ResourceLimitError, ResourceLimitReason
-from .secrets import SecretBuffer
+from .secrets import SecretBuffer, SecretClosedError
 
 
 
@@ -79,12 +82,50 @@ class TwofishBackend(Protocol):
 
 
 
+#### Prevent secret-bearing owners from being duplicated or reconstructed.
+####
+#### Exclusive mutable ownership cannot survive generic copying or object
+#### serialization, so every supported protocol fails with one safe diagnostic.
+####
+class _ExclusiveCryptoOwner:
+    __slots__ = ()
+
+
+
+    #### Reject shallow copies that would alias exclusive secret-bearing state.
+    ####
+    def __copy__(self) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
+    #### Reject deep copies that would duplicate exclusive secret-bearing state.
+    ####
+    def __deepcopy__(self, _memo: dict[int, object]) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
+    #### Reject legacy reduction used by generic serialization protocols.
+    ####
+    def __reduce__(self) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
+    #### Reject protocol-specific reduction before any owner state is inspected.
+    ####
+    def __reduce_ex__(self, _protocol: SupportsIndex) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
 #### Own the mutable 256-bit passphrase-derived key used for envelope checks.
 ####
 #### Construction adopts caller storage only when its exact PasswordSafe size is
 #### valid.  A rejected transfer is wiped before the constructor raises.
 ####
-class DerivedKey(SecretBuffer):
+class DerivedKey(_ExclusiveCryptoOwner, SecretBuffer):
     __slots__ = ()
 
 
@@ -119,12 +160,21 @@ def _wipe_transferred_bytearray(candidate: object) -> None:
 
 
 
+#### Wipe two transfer candidates without wiping aliased storage more than once.
+####
+def _wipe_distinct_transferred_bytearrays(first: object, second: object) -> None:
+    _wipe_transferred_bytearray(first)
+    if second is not first:
+        _wipe_transferred_bytearray(second)
+
+
+
 #### Own independent content and HMAC keys under one session lifetime.
 ####
 #### Both 256-bit mutable buffers transfer together.  Failed or partial
 #### construction wipes every transferred bytearray so no orphan key remains.
 ####
-class VaultKeys:
+class VaultKeys(_ExclusiveCryptoOwner):
     __slots__ = ("_content_key", "_hmac_key")
 
     _content_key: SecretBuffer
@@ -138,9 +188,11 @@ class VaultKeys:
         content_candidate: object = content_key
         hmac_candidate: object = hmac_key
         if hasattr(self, "_content_key") or hasattr(self, "_hmac_key"):
-            _wipe_transferred_bytearray(content_candidate)
-            _wipe_transferred_bytearray(hmac_candidate)
+            _wipe_distinct_transferred_bytearrays(content_candidate, hmac_candidate)
             raise TypeError("vault keys cannot be reinitialized")
+        if content_candidate is hmac_candidate:
+            _wipe_transferred_bytearray(content_candidate)
+            raise TypeError("vault keys require distinct storage")
         if not isinstance(content_candidate, bytearray):
             _wipe_transferred_bytearray(hmac_candidate)
             raise TypeError("vault key ownership requires bytearrays")
@@ -330,7 +382,7 @@ def unwrap_vault_keys(backend: TwofishBackend, derived_key: DerivedKey, wrapped_
 #### The object owns only the keyed backend context and mutable chaining block.
 #### Invalid blocks leave state unchanged; backend faults close and wipe the owner.
 ####
-class CbcEncryptor:
+class CbcEncryptor(_ExclusiveCryptoOwner):
     __slots__ = ("_closed", "_context", "_key", "_previous")
 
 
@@ -386,7 +438,7 @@ class CbcEncryptor:
             self._previous[:] = encrypted
             return encrypted
         except BaseException:
-            with suppress(Exception):
+            with suppress(BaseException):
                 self.close()
             raise
         finally:
@@ -426,7 +478,7 @@ class CbcEncryptor:
         if exception is None:
             self.close()
         else:
-            with suppress(Exception):
+            with suppress(BaseException):
                 self.close()
 
 
@@ -434,7 +486,7 @@ class CbcEncryptor:
     #### Defensively release forgotten keyed state without raising at shutdown.
     ####
     def __del__(self) -> None:
-        with suppress(Exception):
+        with suppress(BaseException):
             self.close()
 
 
@@ -444,7 +496,7 @@ class CbcEncryptor:
 #### Each ciphertext block is saved before decryption so it becomes the next chain
 #### value.  The owner has the same terminal cleanup behavior as the encryptor.
 ####
-class CbcDecryptor:
+class CbcDecryptor(_ExclusiveCryptoOwner):
     __slots__ = ("_closed", "_context", "_key", "_previous")
 
 
@@ -501,7 +553,7 @@ class CbcDecryptor:
             self._previous[:] = current
             return bytes(plaintext)
         except BaseException:
-            with suppress(Exception):
+            with suppress(BaseException):
                 self.close()
             raise
         finally:
@@ -542,7 +594,7 @@ class CbcDecryptor:
         if exception is None:
             self.close()
         else:
-            with suppress(Exception):
+            with suppress(BaseException):
                 self.close()
 
 
@@ -550,7 +602,7 @@ class CbcDecryptor:
     #### Defensively release forgotten keyed state without raising at shutdown.
     ####
     def __del__(self) -> None:
-        with suppress(Exception):
+        with suppress(BaseException):
             self.close()
 
 
@@ -558,16 +610,21 @@ class CbcDecryptor:
 #### Calculate PasswordSafe HMAC-SHA-256 over ordered declared field payloads.
 ####
 #### Callers pass only payload bytes after parsing the length and type framing.
-#### Python's HMAC implementation owns its unavoidable internal key schedule copy.
+#### Digest is terminal and releases Python's unavoidable internal key-schedule
+#### reference.  CPython and OpenSSL do not expose physical zeroization for it.
 ####
-class FieldAuthenticator:
+class FieldAuthenticator(_ExclusiveCryptoOwner):
     __slots__ = ("_hmac",)
+
+    _hmac: hmac.HMAC | None
 
 
 
     #### Initialize ordered authentication from one borrowed exact 256-bit key.
     ####
     def __init__(self, hmac_key: SecretBuffer) -> None:
+        if hasattr(self, "_hmac"):
+            raise TypeError("field authenticator cannot be reinitialized")
         borrowed_key = hmac_key.borrow()
         if len(borrowed_key) != HMAC_BYTES:
             raise ValueError("HMAC key must be exactly 32 bytes")
@@ -578,17 +635,77 @@ class FieldAuthenticator:
 
 
 
+    #### Report whether terminal digest or explicit cleanup released HMAC state.
+    ####
+    @property
+    def closed(self) -> bool:
+        return getattr(self, "_hmac", None) is None
+
+
+
+    #### Return live HMAC state or raise the fixed closed-secret lifecycle error.
+    ####
+    def _require_hmac(self) -> hmac.HMAC:
+        try:
+            state = self._hmac
+        except AttributeError:
+            raise SecretClosedError() from None
+        if state is None:
+            raise SecretClosedError()
+        return state
+
+
+
     #### Append one declared field-payload chunk in document traversal order.
     ####
     def update(self, payload: bytes) -> None:
-        self._hmac.update(payload)
+        self._require_hmac().update(payload)
 
 
 
-    #### Return the current 256-bit authenticator without changing update state.
+    #### Return the final authenticator and release internal HMAC state on all exits.
     ####
     def digest(self) -> bytes:
-        return self._hmac.digest()
+        state = self._require_hmac()
+        try:
+            return state.digest()
+        finally:
+            self.close()
+
+
+
+    #### Release the internal HMAC reference once and make the owner terminal.
+    ####
+    def close(self) -> None:
+        self._hmac = None
+
+
+
+    #### Enter only a live one-pass authenticator without resetting its state.
+    ####
+    def __enter__(self) -> Self:
+        self._require_hmac()
+        return self
+
+
+
+    #### Release internal HMAC state after successful or exceptional traversal.
+    ####
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+
+
+    #### Defensively release forgotten HMAC state without raising at shutdown.
+    ####
+    def __del__(self) -> None:
+        with suppress(BaseException):
+            self.close()
 
 
 
