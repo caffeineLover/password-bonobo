@@ -136,6 +136,47 @@ class _RejectingSliceBuffer(bytearray):
 
 
 
+#### Lie through every Python-level bytearray hook while retaining real bytes.
+####
+class _HostileBytearray(_RejectingSliceBuffer):
+
+
+
+    #### Refuse truth testing so finalization cannot use Python dispatch.
+    ####
+    def __bool__(self) -> bool:
+        raise KeyboardInterrupt("overridable truth test was called")
+
+
+
+    #### Lie about size so cleanup cannot wipe out of bounds.
+    ####
+    def __len__(self) -> int:
+        return 0x7FFF_FFFF
+
+
+
+    #### Refuse immutable conversion through an overridable hook.
+    ####
+    def __bytes__(self) -> bytes:
+        raise KeyboardInterrupt("overridable bytes conversion was called")
+
+
+
+    #### Refuse item reads through Python iteration or indexing.
+    ####
+    def __iter__(self) -> Iterator[int]:
+        raise KeyboardInterrupt("overridable iteration was called")
+
+
+
+    #### Refuse Python-level item access while leaving the C buffer intact.
+    ####
+    def __getitem__(self, _key: int | slice) -> int | bytearray:  # type: ignore[override]
+        raise KeyboardInterrupt("overridable item access was called")
+
+
+
 #### Independently encrypt field plaintext under identity-block CBC.
 ####
 def _cbc_ciphertext(plaintext: bytes, initial: bytes) -> bytes:
@@ -386,6 +427,22 @@ def test_inline_payload_real_finalizer_wipes_subclass_once() -> None:
 
     assert payload_reference() is None
     assert storage == bytearray(17)
+
+
+
+#### Wipe exact hostile-subclass storage without trusting any Python hook.
+####
+def test_inline_payload_real_finalizer_bypasses_all_bytearray_overrides() -> None:
+    storage = _HostileBytearray(b"fabricated-secret")
+    payload = InlinePayload.take_ownership(storage)
+    payload_reference = weakref.ref(payload)
+
+    assert payload.length == 17
+    del payload
+    gc.collect()
+
+    assert payload_reference() is None
+    assert memoryview(storage).tobytes() == bytes(17)
 
 
 

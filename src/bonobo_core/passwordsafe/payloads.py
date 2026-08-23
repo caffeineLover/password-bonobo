@@ -20,15 +20,31 @@ from .secrets import SecretBuffer
 
 
 _MAX_FIELD_PAYLOAD_BYTES = 0xFFFF_FFFF
+_PY_BYTEARRAY_SIZE = ctypes.pythonapi.PyByteArray_Size
+_PY_BYTEARRAY_SIZE.argtypes = [ctypes.py_object]
+_PY_BYTEARRAY_SIZE.restype = ctypes.c_ssize_t
+_PY_BYTEARRAY_AS_STRING = ctypes.pythonapi.PyByteArray_AsString
+_PY_BYTEARRAY_AS_STRING.argtypes = [ctypes.py_object]
+_PY_BYTEARRAY_AS_STRING.restype = ctypes.c_void_p
+
+
+
+#### Return the CPython-owned size without invoking subclass Python methods.
+####
+def _mutable_buffer_size(buffer: bytearray) -> int:
+    return int(_PY_BYTEARRAY_SIZE(buffer))
 
 
 
 #### Wipe one adopted mutable buffer without dispatching to subclass methods.
 ####
 def _wipe_mutable_buffer(buffer: bytearray) -> None:
-    if buffer:
-        address = ctypes.addressof(ctypes.c_ubyte.from_buffer(buffer))
-        ctypes.memset(address, 0, len(buffer))
+    size = _mutable_buffer_size(buffer)
+    if size > 0:
+        address = _PY_BYTEARRAY_AS_STRING(buffer)
+        if address is None:
+            raise RuntimeError("mutable buffer address is unavailable")
+        ctypes.memset(address, 0, size)
 
 
 
@@ -168,7 +184,7 @@ class _InlineStorage:
     ####
     @property
     def length(self) -> int:
-        return len(self._data)
+        return _mutable_buffer_size(self._data)
 
 
 

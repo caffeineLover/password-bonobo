@@ -357,9 +357,48 @@ def test_posix_snapshot_has_no_directory_entry_while_live(tmp_path: Path) -> Non
 
 
 
-#### Immediately unlink a POSIX fallback child before returning its live fd.
+#### Fail closed on Linux when its only anonymous file primitive is unavailable.
 ####
-def test_posix_anchor_fallback_returns_only_an_unlinked_descriptor(
+def test_linux_anchor_never_falls_back_to_a_named_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import snapshots
+
+    created_names: list[str] = []
+
+
+
+    #### Supply only the already validated anchor identity.
+    ####
+    class Metadata:
+        st_dev = 5
+        st_ino = 6
+
+
+
+    #### Record any forbidden attempt to create a visible fallback name.
+    ####
+    def fake_open(name: str, *_arguments: object, **_keywords: object) -> int:
+        created_names.append(name)
+        return 99
+
+    monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "linux-o-tmpfile", raising=False)
+    monkeypatch.setattr(snapshots, "_O_TMPFILE", 0)
+    monkeypatch.setattr(os, "fstat", lambda _descriptor: Metadata())
+    monkeypatch.setattr(os, "open", fake_open)
+    monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", lambda _anchor: True)
+    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
+
+    created = anchor.create("snapshot-fixed")
+
+    assert created is None
+    assert created_names == []
+
+
+
+#### Immediately unlink a macOS child without a check-then-act pathname read.
+####
+def test_macos_anchor_returns_only_an_immediately_unlinked_descriptor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from bonobo_core.passwordsafe import snapshots
@@ -401,10 +440,14 @@ def test_posix_anchor_fallback_returns_only_an_unlinked_descriptor(
         assert name == "snapshot-fixed"
         unlinked = True
 
-    monkeypatch.setattr(snapshots, "_O_TMPFILE", 0, raising=False)
+    monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
     monkeypatch.setattr(os, "fstat", fake_fstat)
     monkeypatch.setattr(os, "open", lambda *_arguments, **_keywords: 99)
-    monkeypatch.setattr(os, "stat", lambda *_arguments, **_keywords: Metadata(file_identity, links=1))
+    monkeypatch.setattr(
+        os,
+        "stat",
+        lambda *_arguments, **_keywords: (_ for _ in ()).throw(AssertionError("check-then-act stat used")),
+    )
     monkeypatch.setattr(os, "unlink", fake_unlink)
     monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", lambda _anchor: True)
     anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
@@ -416,38 +459,64 @@ def test_posix_anchor_fallback_returns_only_an_unlinked_descriptor(
 
 
 
-#### Abort a POSIX fallback swap without deleting or writing either identity.
+#### Unlink a macOS child best-effort when post-create stability fails.
 ####
-@pytest.mark.skipif(os.name == "nt", reason="POSIX anchored fallback substitution")
-def test_posix_fallback_swap_preserves_replacement_and_owned_file(
-    tmp_path: Path,
+def test_macos_post_create_failure_leaves_no_directory_entry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from bonobo_core.passwordsafe import snapshots
 
-    directory = _private_directory(tmp_path)
-    moved = directory / "owned-created"
-    replacement = b"substituted"
+    anchor_identity = (5, 6)
+    file_identity = (7, 8)
+    entries = {"snapshot-fixed": file_identity}
+    stable_calls = 0
 
 
 
-    #### Replace the exclusive name immediately before its anchored unlink.
+    #### Supply the retained anchor or linked created-file metadata.
     ####
-    def swap_before_unlink() -> None:
-        artifact = next(directory.iterdir())
-        artifact.replace(moved)
-        artifact.write_bytes(replacement)
+    class Metadata:
 
-    monkeypatch.setattr(snapshots, "_O_TMPFILE", 0, raising=False)
-    monkeypatch.setattr(snapshots, "_before_posix_unlink", swap_before_unlink, raising=False)
 
-    with pytest.raises(StorageError):
-        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
 
-    remaining = tuple(directory.iterdir())
-    assert len(remaining) == 2
-    assert next(path for path in remaining if path != moved).read_bytes() == replacement
-    assert moved.read_bytes() == b""
+        #### Retain the selected identity and link count.
+        ####
+        def __init__(self, identity: tuple[int, int], *, links: int) -> None:
+            self.st_mode = stat.S_IFREG | 0o600
+            self.st_dev, self.st_ino = identity
+            self.st_nlink = links
+
+
+
+    #### Pass initial validation, then fail after exclusive creation.
+    ####
+    def fail_post_create(_anchor: snapshots._PosixDirectoryAnchor) -> bool:
+        nonlocal stable_calls
+        stable_calls += 1
+        return stable_calls == 1
+
+
+
+    #### Remove the exact exclusive child from the fake anchored namespace.
+    ####
+    def fake_unlink(name: str, **_arguments: object) -> None:
+        entries.pop(name)
+
+    monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
+    monkeypatch.setattr(
+        os,
+        "fstat",
+        lambda descriptor: Metadata(anchor_identity if descriptor == 10 else file_identity, links=1),
+    )
+    monkeypatch.setattr(os, "open", lambda *_arguments, **_keywords: 99)
+    monkeypatch.setattr(os, "unlink", fake_unlink)
+    monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", fail_post_create)
+    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
+
+    with pytest.raises(OSError):
+        anchor.create("snapshot-fixed")
+
+    assert entries == {}
 
 
 

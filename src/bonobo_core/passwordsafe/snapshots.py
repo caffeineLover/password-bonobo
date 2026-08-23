@@ -9,6 +9,7 @@ import hashlib
 import os
 import secrets
 import stat
+import sys
 from collections.abc import Iterator
 from contextlib import suppress
 from pathlib import Path
@@ -30,6 +31,12 @@ _SNAPSHOT_NAME_ATTEMPTS: Final[int] = 32
 _OWNER_FILE_MODE: Final[int] = 0o600
 _OWNER_DIRECTORY_MASK: Final[int] = 0o077
 _O_TMPFILE: Final[int] = getattr(os, "O_TMPFILE", 0)
+if sys.platform.startswith("linux"):
+    _POSIX_FILE_STRATEGY: Final[str] = "linux-o-tmpfile"
+elif sys.platform == "darwin":
+    _POSIX_FILE_STRATEGY = "macos-unlinked"
+else:
+    _POSIX_FILE_STRATEGY = "unsupported"
 
 
 
@@ -155,32 +162,39 @@ class _PosixDirectoryAnchor:
         if not self._stable():
             return None
         common_flags = os.O_RDWR | getattr(os, "O_BINARY", 0)
-        if _O_TMPFILE:
+        if _POSIX_FILE_STRATEGY == "linux-o-tmpfile":
+            if not _O_TMPFILE:
+                return None
             try:
                 descriptor = os.open(".", common_flags | _O_TMPFILE, _OWNER_FILE_MODE, dir_fd=self._fd)
             except OSError:
-                pass
-            else:
-                try:
-                    metadata = os.fstat(descriptor)
-                    identity = (metadata.st_dev, metadata.st_ino)
-                    if (
-                        not stat.S_ISREG(metadata.st_mode)
-                        or metadata.st_nlink != 0
-                        or stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE
-                        or not self._stable()
-                    ):
-                        raise OSError
-                    return descriptor, identity, None
-                except BaseException:
-                    with suppress(BaseException):
-                        os.close(descriptor)
-                    raise
+                return None
+            try:
+                metadata = os.fstat(descriptor)
+                identity = (metadata.st_dev, metadata.st_ino)
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_nlink != 0
+                    or stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE
+                    or not self._stable()
+                ):
+                    raise OSError
+                return descriptor, identity, None
+            except BaseException:
+                with suppress(BaseException):
+                    os.close(descriptor)
+                raise
+        if _POSIX_FILE_STRATEGY != "macos-unlinked":
+            return None
+
+        #### Ruling 5: same-UID namespace mutation is outside the threat scope;
+        #### unlink the exclusive name immediately without a check-then-act read.
         flags = common_flags | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(name, flags, _OWNER_FILE_MODE, dir_fd=self._fd)
         except Exception:
             return None
+        linked = True
         try:
             metadata = os.fstat(descriptor)
             identity = (metadata.st_dev, metadata.st_ino)
@@ -191,15 +205,16 @@ class _PosixDirectoryAnchor:
             if not self._stable():
                 raise OSError
             _before_posix_unlink()
-            named = os.stat(name, dir_fd=self._fd, follow_symlinks=False)
-            if not stat.S_ISREG(named.st_mode) or (named.st_dev, named.st_ino) != identity:
-                raise OSError
             os.unlink(name, dir_fd=self._fd)
+            linked = False
             anonymous = os.fstat(descriptor)
             if (anonymous.st_dev, anonymous.st_ino) != identity or anonymous.st_nlink != 0:
                 raise OSError
             return descriptor, identity, None
         except BaseException:
+            if linked:
+                with suppress(BaseException):
+                    os.unlink(name, dir_fd=self._fd)
             with suppress(BaseException):
                 os.close(descriptor)
             raise
