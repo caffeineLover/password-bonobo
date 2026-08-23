@@ -7,6 +7,7 @@ workflow, document tools from the tracked generator contract, and asset paths fr
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess  # nosec B404
 import tomllib
@@ -18,6 +19,7 @@ from typing import cast
 
 
 LEDGER_RELATIVE_PATH = Path("docs/legal/dependency-asset-provenance-ledger.md")
+BOTAN_PIN_RELATIVE_PATH = Path("tools/botan-source.json")
 DOCUMENTATION_TOOLS = frozenset({"pandoc", "xelatex", "pdfinfo", "pdftoppm"})
 ACTION_USE_LINE = re.compile(r"(?m)^\s*-?\s*uses:\s*(.*?)\s*$")
 PINNED_ACTION_REVISION = re.compile(r"[0-9a-f]{40}")
@@ -161,6 +163,83 @@ def _ledger_table(ledger_source: str, heading: str, key_column: str) -> tuple[di
         if len(cells) == len(headings):
             rows.append(dict(zip(headings, cells, strict=True)))
     return tuple(rows)
+
+
+
+#### Compare the Botan machine-readable pin with its native-dependency ledger row.
+####
+#### The binary build has no Python package declaration, so this explicit comparison
+#### keeps the reviewed release identity, archive digest, and minimized module set in
+#### one checked supply-chain boundary.
+####
+def check_botan_provenance_sources(pin_source: str, ledger_source: str) -> tuple[ProvenanceViolation, ...]:
+    violations: list[ProvenanceViolation] = []
+    try:
+        pin_document = json.loads(pin_source)
+    except json.JSONDecodeError:
+        return (ProvenanceViolation("Botan source pin is invalid JSON"),)
+    if not isinstance(pin_document, dict):
+        return (ProvenanceViolation("Botan source pin must be a JSON object"),)
+    pin = cast(dict[str, object], pin_document)
+    version = pin.get("version")
+    archive = pin.get("archive")
+    source = pin.get("source")
+    sha256 = pin.get("sha256")
+    modules = pin.get("modules")
+    if (
+        not all(isinstance(value, str) and value for value in (version, archive, source, sha256))
+        or not isinstance(modules, list)
+        or any(not isinstance(module, str) or not module for module in modules)
+    ):
+        return (ProvenanceViolation("Botan source pin fields are invalid"),)
+
+    rows = _ledger_table(ledger_source, "Native dependencies", "Fact")
+    violations.extend(
+        _check_complete_rows(
+            rows,
+            "Fact",
+            (
+                "Name",
+                "Fact",
+                "Value",
+                "Terms",
+                "Dist",
+                "Evidence",
+                "Review",
+            ),
+            "native dependency",
+        )
+    )
+    botan_rows = tuple(row for row in rows if row.get("Name") == "Botan")
+    rows_by_fact = {row.get("Fact", ""): row for row in botan_rows}
+    expected_values = {
+        "Relationship": "DNR",
+        "Version": version,
+        "Source": source,
+        "Archive": archive,
+        "SHA-256": sha256,
+        "Modules": ",".join(cast(list[str], modules)),
+    }
+    mismatch_messages = {
+        "Relationship": "Botan native dependency relationship must be DNR",
+        "Version": "Botan version does not match source pin",
+        "Source": "Botan source does not match source pin",
+        "Archive": "Botan archive does not match source pin",
+        "SHA-256": "Botan archive checksum does not match source pin",
+        "Modules": "Botan enabled modules do not match source pin",
+    }
+    for column, expected_value in expected_values.items():
+        row = rows_by_fact.get(column)
+        actual_value = "" if row is None else row.get("Value", "")
+        if column == "SHA-256":
+            actual_value = actual_value.replace(" ", "")
+        if actual_value != expected_value:
+            violations.append(ProvenanceViolation(mismatch_messages[column]))
+    for row in botan_rows:
+        for column, expected_value in {"Terms": "BSD-2-Clause", "Dist": "A"}.items():
+            if row.get(column) != expected_value:
+                violations.append(ProvenanceViolation(f"Botan native dependency {column} must be {expected_value}"))
+    return tuple(violations)
 
 
 
@@ -397,15 +476,22 @@ def check_repository_provenance(repository_root: Path) -> tuple[ProvenanceViolat
     ledger_path = repository_root / LEDGER_RELATIVE_PATH
     if not ledger_path.is_file():
         return (ProvenanceViolation(f"provenance ledger is missing: {LEDGER_RELATIVE_PATH.as_posix()}"),)
+    botan_pin_path = repository_root / BOTAN_PIN_RELATIVE_PATH
+    if not botan_pin_path.is_file():
+        return (ProvenanceViolation(f"Botan source pin is missing: {BOTAN_PIN_RELATIVE_PATH.as_posix()}"),)
     workflow_root = repository_root / ".github" / "workflows"
     workflow_paths = tuple(sorted((*workflow_root.glob("*.yml"), *workflow_root.glob("*.yaml"))))
     workflow_source = "\n".join(path.read_text(encoding="utf-8") for path in workflow_paths)
-    return check_provenance_sources(
-        (repository_root / "pyproject.toml").read_text(encoding="utf-8"),
-        (repository_root / "uv.lock").read_text(encoding="utf-8"),
-        workflow_source,
-        ledger_path.read_text(encoding="utf-8"),
-        _tracked_paths(repository_root),
+    ledger_source = ledger_path.read_text(encoding="utf-8")
+    return (
+        *check_provenance_sources(
+            (repository_root / "pyproject.toml").read_text(encoding="utf-8"),
+            (repository_root / "uv.lock").read_text(encoding="utf-8"),
+            workflow_source,
+            ledger_source,
+            _tracked_paths(repository_root),
+        ),
+        *check_botan_provenance_sources(botan_pin_path.read_text(encoding="utf-8"), ledger_source),
     )
 
 

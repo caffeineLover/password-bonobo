@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-from tools.check_provenance import check_provenance_sources, check_repository_provenance
+from tools.check_provenance import (
+    check_botan_provenance_sources,
+    check_provenance_sources,
+    check_repository_provenance,
+)
 
 
 
@@ -115,6 +119,39 @@ dev = ["pytest>=9,<10"]
     assert "Python package packaging ledger version 25.0 does not match uv.lock 26.0" in messages
     assert "GitHub Action is missing from the ledger: owner/new-action" in messages
     assert "repository asset is missing from the ledger: docs/pandoc/new-filter.lua" in messages
+
+
+
+#### Reject a native dependency row when its archive checksum no longer matches its source pin.
+####
+#### The provenance ledger is a release-review authority, so a stale copied digest
+#### must fail before a binary can be considered attributable to the approved archive.
+####
+def test_botan_provenance_rejects_stale_archive_checksum() -> None:
+    ledger = _synthetic_ledger() + """
+## Native dependencies
+
+|Name|Fact|Value|Terms|Dist|Evidence|Review|
+|---|---|---|---|---|---|---|
+|Botan|Relationship|DNR|BSD-2-Clause|A|P+R|P|
+|Botan|Version|3.13.0|BSD-2-Clause|A|P+R|P|
+|Botan|Source|https://botan.randombit.net/releases/Botan-3.13.0.tar.xz|BSD-2-Clause|A|P+R|P|
+|Botan|Archive|Botan-3.13.0.tar.xz|BSD-2-Clause|A|P+R|P|
+|Botan|SHA-256|stale|BSD-2-Clause|A|P+R|P|
+|Botan|Modules|ffi,twofish|BSD-2-Clause|A|P+R|P|
+"""
+    pin = """{
+  \"archive\": \"Botan-3.13.0.tar.xz\",
+  \"modules\": [\"ffi\", \"twofish\"],
+  \"sha256\": \"12f5a8358890bbee82edfe9d2e7769b0a610b6dd0e0698aea13d20a675d84620\",
+  \"signature\": \"https://botan.randombit.net/releases/Botan-3.13.0.tar.xz.asc\",
+  \"source\": \"https://botan.randombit.net/releases/Botan-3.13.0.tar.xz\",
+  \"version\": \"3.13.0\"
+}"""
+
+    messages = tuple(violation.message for violation in check_botan_provenance_sources(pin, ledger))
+
+    assert "Botan archive checksum does not match source pin" in messages
 
 
 

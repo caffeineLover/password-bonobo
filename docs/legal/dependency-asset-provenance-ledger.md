@@ -2,21 +2,22 @@
 
 ## Scope and review keys
 
-This ledger records the repository's current direct and transitive Python packages, isolated build dependency,
-GitHub Actions, documentation tools, and tracked repository assets.  It records observed facts without treating
-package metadata as a completed legal review.  The project declares no runtime Python dependencies, and none of the
-development or build packages below is bundled in the wheel.
+This ledger records the repository's current direct and transitive Python packages, isolated build dependency, native
+runtime dependencies, GitHub Actions, documentation tools, and tracked repository assets.  It records observed facts
+without treating package metadata as a completed legal review.  The project declares no runtime Python dependencies,
+and none of the development or build packages below is bundled in the wheel.
 
 Compact keys keep this source reviewable within the 120-character line limit:
 
-- Relationship: `DB` direct build, `DD` direct development, `DR` direct runtime, and `T` transitive.
+- Relationship: `DB` direct build, `DD` direct development, `DNR` direct native runtime, `DR` direct runtime, and
+  `T` transitive.
 - Constraint: `N` means not directly declared.  Other values reproduce the declaration in `pyproject.toml`.
 - Use: `BT` repository build/test/security tool, `TS` transitive tool support, `CI` hosted workflow, `DG` document
   generation or review, `LT` license text, `FX` structural test fixture, and `TM` typing marker.
 - Distribution: `N` not distributed with the package, `S` source repository or source distribution, and `W` wheel;
-  `+` joins every applicable distribution location.
-- Evidence: `P` `pyproject.toml`, `L` `uv.lock`, `M` installed Core Metadata, `V` local version output, `R` tracked
-  REUSE metadata or source, and `W` tracked workflow plus official Git-ref evidence.
+  `A` platform application artifact, and `+` joins every applicable distribution location.
+- Evidence: `P` `pyproject.toml` or a machine-readable source pin, `L` `uv.lock`, `M` installed Core Metadata, `V`
+  local version output, `R` tracked REUSE metadata or source, and `W` tracked workflow plus official Git-ref evidence.
 - Review: `V` verified repository-owned fact, `MP` metadata expression recorded with compatibility review pending,
   and `P` license or terms review pending.  `NOASSERTION` means the available evidence does not establish the fact.
 
@@ -106,6 +107,23 @@ they are not copied into the Python wheel or source distribution.  License and p
 |pdfinfo|Poppler 24.04.0|https://poppler.freedesktop.org|NOASSERTION|DG|N|V|P|
 |pdftoppm|Poppler 24.04.0|https://poppler.freedesktop.org|NOASSERTION|DG|N|V|P|
 
+## Native dependencies
+
+Botan is the direct native runtime dependency that provides the sole production Twofish implementation.  Its pinned
+source archive at `https://botan.randombit.net/releases/Botan-3.13.0.tar.xz` is SHA-256 verified before extraction.
+The provenance gate requires this row to match the version, archive filename, digest, and minimized modules in
+`tools/botan-source.json`.  Release application artifacts bundle an appropriate shared library; the pure Python wheel
+does not.
+
+|Name|Fact|Value|Terms|Dist|Evidence|Review|
+|---|---|---|---|---|---|---|
+|Botan|Relationship|DNR|BSD-2-Clause|A|P+R|P|
+|Botan|Version|3.13.0|BSD-2-Clause|A|P+R|P|
+|Botan|Source|https://botan.randombit.net/releases/Botan-3.13.0.tar.xz|BSD-2-Clause|A|P+R|P|
+|Botan|Archive|Botan-3.13.0.tar.xz|BSD-2-Clause|A|P+R|P|
+|Botan|SHA-256|12f5a835 8890bbee 82edfe9d 2e7769b0 a610b6dd 0e0698ae a13d20a6 75d84620|BSD-2-Clause|A|P+R|P|
+|Botan|Modules|ffi,twofish|BSD-2-Clause|A|P+R|P|
+
 ## Repository assets
 
 The checker derives this inventory from tracked paths below `LICENSES/`, `docs/pandoc/`, and `tests/fixtures/`, plus
@@ -122,11 +140,12 @@ every tracked `py.typed` marker.  No third-party UI asset, font, image, translat
 
 ## Distribution conclusions and review status
 
-The wheel declares no runtime dependency.  Both wheel and source distribution must carry the GPL text and typing
+The wheel declares no runtime Python dependency.  Both wheel and source distribution must carry the GPL text and typing
 marker; wheel metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and
-document tools do not enter either artifact.  Source-distribution presence does not establish mobile or App Store
-eligibility.  Every `P` or `MP` row remains pending for the iOS distribution decision; no row grants an exception,
-contributor permission, or permission to copy third-party expression.
+document tools do not enter either artifact.  Botan is bundled only with applicable platform application artifacts, not
+the pure Python wheel.  Source-distribution presence does not establish mobile or App Store eligibility.  Every `P` or
+`MP` row remains pending for the iOS distribution decision; no row grants an exception, contributor permission, or
+permission to copy third-party expression.
 
 Run `uv run python -m tools.check_provenance` after dependency declarations, `uv.lock`, workflow action references,
 document-tool commands, or tracked assets change.  The command fails on missing, extra, or stale coverage.

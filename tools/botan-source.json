@@ -1,0 +1,8 @@
+{
+  "archive": "Botan-3.13.0.tar.xz",
+  "modules": ["ffi", "twofish"],
+  "sha256": "12f5a8358890bbee82edfe9d2e7769b0a610b6dd0e0698aea13d20a675d84620",
+  "signature": "https://botan.randombit.net/releases/Botan-3.13.0.tar.xz.asc",
+  "source": "https://botan.randombit.net/releases/Botan-3.13.0.tar.xz",
+  "version": "3.13.0"
+}

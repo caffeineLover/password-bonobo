@@ -101,9 +101,9 @@
 \subsection{Scope and review keys}\label{scope-and-review-keys}
 
 This ledger records the repository\textquotesingle s current direct and transitive Python packages, isolated build
-dependency, GitHub Actions, documentation tools, and tracked repository assets. It records observed facts without
-treating package metadata as a completed legal review. The project declares no runtime Python dependencies, and none of
-the development or build packages below is bundled in the wheel.
+dependency, native runtime dependencies, GitHub Actions, documentation tools, and tracked repository assets. It records
+observed facts without treating package metadata as a completed legal review. The project declares no runtime Python
+dependencies, and none of the development or build packages below is bundled in the wheel.
 
 Compact keys keep this source reviewable within the 120-character line limit:
 
@@ -111,7 +111,8 @@ Compact keys keep this source reviewable within the 120-character line limit:
 \tightlist
 \item
   Relationship: \passthrough{\lstinline!DB!} direct build, \passthrough{\lstinline!DD!} direct development,
-  \passthrough{\lstinline!DR!} direct runtime, and \passthrough{\lstinline!T!} transitive.
+  \passthrough{\lstinline!DNR!} direct native runtime, \passthrough{\lstinline!DR!} direct runtime, and
+  \passthrough{\lstinline!T!} transitive.
 \item
   Constraint: \passthrough{\lstinline!N!} means not directly declared. Other values reproduce the declaration in
   \nolinkurl{pyproject.toml}.
@@ -122,13 +123,13 @@ Compact keys keep this source reviewable within the 120-character line limit:
   \passthrough{\lstinline!TM!} typing marker.
 \item
   Distribution: \passthrough{\lstinline!N!} not distributed with the package, \passthrough{\lstinline!S!} source
-  repository or source distribution, and \passthrough{\lstinline!W!} wheel; \passthrough{\lstinline!+!} joins every
-  applicable distribution location.
+  repository or source distribution, and \passthrough{\lstinline!W!} wheel; \passthrough{\lstinline!A!} platform
+  application artifact, and \passthrough{\lstinline!+!} joins every applicable distribution location.
 \item
-  Evidence: \passthrough{\lstinline!P!} \nolinkurl{pyproject.toml}, \passthrough{\lstinline!L!}
-  \passthrough{\lstinline!uv.lock!}, \passthrough{\lstinline!M!} installed Core Metadata, \passthrough{\lstinline!V!}
-  local version output, \passthrough{\lstinline!R!} tracked REUSE metadata or source, and \passthrough{\lstinline!W!}
-  tracked workflow plus official Git-ref evidence.
+  Evidence: \passthrough{\lstinline!P!} \nolinkurl{pyproject.toml} or a machine-readable source pin,
+  \passthrough{\lstinline!L!} \passthrough{\lstinline!uv.lock!}, \passthrough{\lstinline!M!} installed Core Metadata,
+  \passthrough{\lstinline!V!} local version output, \passthrough{\lstinline!R!} tracked REUSE metadata or source, and
+  \passthrough{\lstinline!W!} tracked workflow plus official Git-ref evidence.
 \item
   Review: \passthrough{\lstinline!V!} verified repository-owned fact, \passthrough{\lstinline!MP!} metadata expression
   recorded with compatibility review pending, and \passthrough{\lstinline!P!} license or terms review pending.
@@ -348,6 +349,57 @@ pdftoppm & Poppler 24.04.0 & \url{https://poppler.freedesktop.org} & NOASSERTION
 
 \begin{landscape}
 
+\subsection{Native dependencies}\label{native-dependencies}
+
+Botan is the direct native runtime dependency that provides the sole production Twofish implementation. Its pinned
+source archive at \nolinkurl{https://botan.randombit.net/releases/Botan-3.13.0.tar.xz} is SHA-256 verified before
+extraction. The provenance gate requires this row to match the version, archive filename, digest, and minimized modules
+in \nolinkurl{tools/botan-source.json}. Release application artifacts bundle an appropriate shared library; the pure
+Python wheel does not.
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1100}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.3400}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1400}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.0600}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Name
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Fact
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Value
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Terms
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Dist
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Evidence
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Review
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Botan & Relationship & DNR & BSD-2-Clause & A & P+R & P \\
+Botan & Version & 3.13.0 & BSD-2-Clause & A & P+R & P \\
+Botan & Source & \url{https://botan.randombit.net/releases/Botan-3.13.0.tar.xz} & BSD-2-Clause & A & P+R & P \\
+Botan & Archive & Botan-3.13.0.tar.xz & BSD-2-Clause & A & P+R & P \\
+Botan & SHA-256 & 12f5a835 8890bbee 82edfe9d 2e7769b0 a610b6dd 0e0698ae a13d20a6 75d84620 & BSD-2-Clause & A & P+R &
+P \\
+Botan & Modules & ffi,twofish & BSD-2-Clause & A & P+R & P \\
+\end{longtable}
+}
+
+\end{landscape}
+
+\begin{landscape}
+
 \subsection{Repository assets}\label{repository-assets}
 
 The checker derives this inventory from tracked paths below \passthrough{\lstinline!LICENSES/!},
@@ -401,11 +453,12 @@ R & V \\
 
 \subsection{Distribution conclusions and review status}\label{distribution-conclusions-and-review-status}
 
-The wheel declares no runtime dependency. Both wheel and source distribution must carry the GPL text and typing marker;
-wheel metadata must also declare the exact GPL text as PEP 639 license content. Development, build, CI, and document
-tools do not enter either artifact. Source-distribution presence does not establish mobile or App Store eligibility.
-Every \passthrough{\lstinline!P!} or \passthrough{\lstinline!MP!} row remains pending for the iOS distribution decision;
-no row grants an exception, contributor permission, or permission to copy third-party expression.
+The wheel declares no runtime Python dependency. Both wheel and source distribution must carry the GPL text and typing
+marker; wheel metadata must also declare the exact GPL text as PEP 639 license content. Development, build, CI, and
+document tools do not enter either artifact. Botan is bundled only with applicable platform application artifacts, not
+the pure Python wheel. Source-distribution presence does not establish mobile or App Store eligibility. Every
+\passthrough{\lstinline!P!} or \passthrough{\lstinline!MP!} row remains pending for the iOS distribution decision; no
+row grants an exception, contributor permission, or permission to copy third-party expression.
 
 Run \passthrough{\lstinline!uv run python -m tools.check\_provenance!} after dependency declarations,
 \passthrough{\lstinline!uv.lock!}, workflow action references, document-tool commands, or tracked assets change. The
