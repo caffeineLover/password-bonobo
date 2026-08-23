@@ -17,6 +17,7 @@ from threading import RLock
 from types import TracebackType
 from typing import Final, NoReturn, Protocol, Self, SupportsIndex
 
+from ._darwin_security import require_no_extended_acl as _require_no_extended_acl
 from .constants import MAX_IO_CHUNK_BYTES
 from .errors import StorageError, StorageReason
 
@@ -189,6 +190,7 @@ class _PosixDirectoryAnchor:
 
         #### Ruling 5: same-UID namespace mutation is outside the threat scope;
         #### unlink the exclusive name immediately without a check-then-act read.
+        _require_no_extended_acl(self._fd)
         flags = common_flags | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(name, flags, _OWNER_FILE_MODE, dir_fd=self._fd)
@@ -204,6 +206,7 @@ class _PosixDirectoryAnchor:
                 raise OSError
             if not self._stable():
                 raise OSError
+            _require_no_extended_acl(descriptor)
             _before_posix_unlink()
             os.unlink(name, dir_fd=self._fd)
             linked = False

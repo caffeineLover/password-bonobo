@@ -12,6 +12,7 @@ import os
 import pickle
 import stat
 import struct
+import sys
 import weakref
 from ctypes import wintypes
 from pathlib import Path
@@ -19,7 +20,7 @@ from typing import cast
 
 import pytest
 
-from bonobo_core.passwordsafe.errors import StorageError
+from bonobo_core.passwordsafe.errors import StorageError, StorageReason
 from bonobo_core.passwordsafe.snapshots import (
     EncryptedSnapshot,
     SnapshotClosedError,
@@ -396,6 +397,291 @@ def test_linux_anchor_never_falls_back_to_a_named_file(
 
 
 
+#### Emulate the three descriptor-only Darwin ACL calls and their errno state.
+####
+class _FakeDarwinAclApi:
+
+
+
+    #### Configure one ACL allocation, entry result, and optional injected failure.
+    ####
+    def __init__(
+        self,
+        *,
+        acl: int | None = 0x1234,
+        entry_result: int = -1,
+        entry_errno: int = 0,
+        entry_error: BaseException | None = None,
+        free_result: int = 0,
+    ) -> None:
+        self.acl = acl
+        self.entry_result = entry_result
+        self.entry_errno = entry_errno
+        self.entry_error = entry_error
+        self.free_result = free_result
+        self.get_calls: list[tuple[int, int]] = []
+        self.entry_calls: list[tuple[int, int]] = []
+        self.free_calls: list[int] = []
+
+
+
+    #### Return one fake allocated ACL or the native null failure sentinel.
+    ####
+    def get_fd(self, descriptor: int, acl_type: int) -> int | None:
+        self.get_calls.append((descriptor, acl_type))
+        return self.acl
+
+
+
+    #### Return one first-entry status after setting the captured native errno.
+    ####
+    def get_entry(self, acl: int, entry_id: int, _entry: object) -> int:
+        self.entry_calls.append((acl, entry_id))
+        if self.entry_error is not None:
+            raise self.entry_error
+        ctypes.set_errno(self.entry_errno)
+        return self.entry_result
+
+
+
+    #### Record release of the exact allocated ACL working object.
+    ####
+    def free(self, acl: int) -> int:
+        self.free_calls.append(acl)
+        return self.free_result
+
+
+
+#### Accept a descriptor only when its allocated extended ACL has no first entry.
+####
+def test_darwin_acl_helper_accepts_empty_acl_and_frees_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi()
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    _darwin_security.require_no_extended_acl(41)
+
+    assert api.get_calls == [(41, 0x100)]
+    assert api.entry_calls == [(0x1234, 0)]
+    assert api.free_calls == [0x1234]
+
+
+
+#### Reject an allocated ACL containing even one entry and still free it once.
+####
+def test_darwin_acl_helper_rejects_any_entry_and_frees_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi(entry_result=0)
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    with pytest.raises(StorageError) as caught:
+        _darwin_security.require_no_extended_acl(42)
+
+    assert caught.value.__context__ is None
+    assert api.free_calls == [0x1234]
+
+
+
+#### Fail closed when native ACL retrieval returns its null failure sentinel.
+####
+def test_darwin_acl_helper_rejects_acl_get_failure_without_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi(acl=None)
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    with pytest.raises(StorageError) as caught:
+        _darwin_security.require_no_extended_acl(43)
+
+    assert caught.value.__context__ is None
+    assert api.free_calls == []
+
+
+
+#### Exhaust ACL release after either ordinary or control-flow entry failure.
+####
+@pytest.mark.parametrize("error", [RuntimeError("entry failure"), KeyboardInterrupt("entry failure")])
+def test_darwin_acl_helper_frees_after_every_entry_exception(
+    error: BaseException,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi(entry_error=error)
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    with pytest.raises(StorageError) as caught:
+        _darwin_security.require_no_extended_acl(44)
+
+    assert caught.value.__context__ is None
+    assert api.free_calls == [0x1234]
+
+
+
+#### Fail closed on nonempty errno and anomalous ACL/free return statuses.
+####
+@pytest.mark.parametrize(
+    ("entry_result", "entry_errno", "free_result"),
+    [(-1, 5, 0), (1, 0, 0), (-1, 0, -1)],
+)
+def test_darwin_acl_helper_rejects_native_api_anomalies(
+    entry_result: int,
+    entry_errno: int,
+    free_result: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi(
+        entry_result=entry_result,
+        entry_errno=entry_errno,
+        free_result=free_result,
+    )
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    with pytest.raises(StorageError) as caught:
+        _darwin_security.require_no_extended_acl(45)
+
+    assert caught.value.__context__ is None
+    assert api.free_calls == [0x1234]
+
+
+
+#### Reject a private-directory ACL before attempting any named child creation.
+####
+def test_macos_anchor_rejects_directory_extended_acl_before_create(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import snapshots
+
+    created_names: list[str] = []
+
+
+
+    #### Reject only the retained directory descriptor with one safe category.
+    ####
+    def reject_directory(descriptor: int) -> None:
+        assert descriptor == 10
+        raise StorageError(StorageReason.PREPARATION_FAILED)
+
+
+
+    #### Record any forbidden named child creation attempt.
+    ####
+    def fake_open(name: str, *_arguments: object, **_keywords: object) -> int:
+        created_names.append(name)
+        return 99
+
+    monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
+    monkeypatch.setattr(snapshots, "_require_no_extended_acl", reject_directory, raising=False)
+    monkeypatch.setattr(os, "open", fake_open)
+    monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", lambda _anchor: True)
+    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
+
+    with pytest.raises(StorageError) as caught:
+        anchor.create("snapshot-fixed")
+
+    assert caught.value.__context__ is None
+    assert created_names == []
+
+
+
+#### Unlink and close an exclusive child whose inherited extended ACL is nonempty.
+####
+def test_macos_anchor_rejects_child_extended_acl_without_leaking_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import snapshots
+
+    entries = {"snapshot-fixed"}
+    checked: list[int] = []
+    closed: list[int] = []
+
+
+
+    #### Supply stable regular-file metadata for the retained anchor and child.
+    ####
+    class Metadata:
+        st_mode = stat.S_IFREG | 0o600
+        st_dev = 7
+        st_ino = 8
+        st_nlink = 1
+
+
+
+    #### Accept the directory ACL but reject the exclusively opened child ACL.
+    ####
+    def reject_child(descriptor: int) -> None:
+        checked.append(descriptor)
+        if descriptor == 99:
+            raise StorageError(StorageReason.PREPARATION_FAILED)
+
+
+
+    #### Remove only the still-exclusive child from the anchored namespace.
+    ####
+    def fake_unlink(name: str, **_arguments: object) -> None:
+        entries.remove(name)
+
+    monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
+    monkeypatch.setattr(snapshots, "_require_no_extended_acl", reject_child, raising=False)
+    monkeypatch.setattr(os, "fstat", lambda _descriptor: Metadata())
+    monkeypatch.setattr(os, "open", lambda *_arguments, **_keywords: 99)
+    monkeypatch.setattr(os, "unlink", fake_unlink)
+    monkeypatch.setattr(os, "close", closed.append)
+    monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", lambda _anchor: True)
+    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
+
+    with pytest.raises(StorageError) as caught:
+        anchor.create("snapshot-fixed")
+
+    assert caught.value.__context__ is None
+    assert checked == [10, 99]
+    assert entries == set()
+    assert closed == [99]
+
+
+
+#### Exercise the real Darwin directory-fd ACL API on an owner-only directory.
+####
+@pytest.mark.skipif(sys.platform != "darwin", reason="native Darwin extended ACL behavior")
+def test_darwin_native_private_directory_has_no_extended_acl(tmp_path: Path) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    directory = _private_directory(tmp_path)
+    descriptor = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        _darwin_security.require_no_extended_acl(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+
+#### Exercise the real Darwin child-fd ACL API before unlinking its name.
+####
+@pytest.mark.skipif(sys.platform != "darwin", reason="native Darwin extended ACL behavior")
+def test_darwin_native_private_child_has_no_extended_acl(tmp_path: Path) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    directory = _private_directory(tmp_path)
+    artifact = directory / "acl-check"
+    descriptor = os.open(artifact, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        _darwin_security.require_no_extended_acl(descriptor)
+    finally:
+        os.close(descriptor)
+        artifact.unlink()
+
+
+
 #### Immediately unlink a macOS child without a check-then-act pathname read.
 ####
 def test_macos_anchor_returns_only_an_immediately_unlinked_descriptor(
@@ -441,6 +727,7 @@ def test_macos_anchor_returns_only_an_immediately_unlinked_descriptor(
         unlinked = True
 
     monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
+    monkeypatch.setattr(snapshots, "_require_no_extended_acl", lambda _descriptor: None)
     monkeypatch.setattr(os, "fstat", fake_fstat)
     monkeypatch.setattr(os, "open", lambda *_arguments, **_keywords: 99)
     monkeypatch.setattr(
@@ -503,6 +790,7 @@ def test_macos_post_create_failure_leaves_no_directory_entry(
         entries.pop(name)
 
     monkeypatch.setattr(snapshots, "_POSIX_FILE_STRATEGY", "macos-unlinked", raising=False)
+    monkeypatch.setattr(snapshots, "_require_no_extended_acl", lambda _descriptor: None)
     monkeypatch.setattr(
         os,
         "fstat",
