@@ -15,7 +15,7 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-08-22
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, verified 2026-08-22
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0, verified 2026-08-22
         with:
           python-version: "3.14"
@@ -27,9 +27,12 @@ jobs:
       - run: uv run mypy src tests tools
       - run: uv run python -m pytest
       - run: uv run python -m tools.check_python_structure src tests tools
+      - run: uv run python -m tools.check_compatibility
+      - run: uv run python -m tools.check_provenance
       - shell: bash
         run: git ls-files -z | uv run python -m tools.check_tracked_files
       - run: uv run bandit -c pyproject.toml -r src tools
       - run: uv run pip-audit
       - run: uv run reuse --no-multiprocessing lint
       - run: uv build
+      - run: uv run python -m tools.check_wheel dist

@@ -85,6 +85,18 @@ def check_source(path: Path, source: str) -> tuple[Violation, ...]:
         elif block_start >= 4 and not lines[block_start - 4].strip():
             violations.append(Violation(path, start_line, "declaration has more than three preceding blank lines"))
 
+        if node.decorator_list:
+            decorator_end_lines = tuple(decorator.end_lineno or decorator.lineno for decorator in node.decorator_list)
+            following_lines = (*tuple(decorator.lineno for decorator in node.decorator_list[1:]), node.lineno)
+            if any(following_line != end_line + 1 for end_line, following_line in zip(
+                decorator_end_lines,
+                following_lines,
+                strict=True,
+            )):
+                violations.append(
+                    Violation(path, start_line, "decorator stack and declaration must be contiguous")
+                )
+
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             arguments = (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
             for argument in arguments:

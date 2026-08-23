@@ -73,6 +73,92 @@ def identity(value: str) -> str:
 
 
 
+#### Accept a multiline decorator whose own physical lines remain contiguous.
+####
+def test_multiline_decorator_with_adjacent_declaration_passes() -> None:
+    source = '''"""Provide a module with a multiline decorator."""
+
+
+
+#### Return the supplied value without transforming it.
+####
+@configured(
+    first="one",
+    second="two",
+)
+def identity(value: str) -> str:
+    return value
+'''
+
+    assert check_source(Path("multiline.py"), source) == ()
+
+
+
+#### Reject a blank line inside a decorator stack.
+####
+def test_blank_line_between_decorators_fails() -> None:
+    source = '''"""Provide a module with a separated decorator stack."""
+
+
+
+#### Return the supplied value without transforming it.
+####
+@decorator_one
+
+@decorator_two
+def identity(value: str) -> str:
+    return value
+'''
+
+    messages = tuple(violation.message for violation in check_source(Path("decorator-blank.py"), source))
+
+    assert messages == ("decorator stack and declaration must be contiguous",)
+
+
+
+#### Reject an intervening comment inside a decorator stack.
+####
+def test_comment_between_decorators_fails() -> None:
+    source = '''"""Provide a module with a commented decorator gap."""
+
+
+
+#### Return the supplied value without transforming it.
+####
+@decorator_one
+# This comment breaks the documented declaration unit.
+@decorator_two
+def identity(value: str) -> str:
+    return value
+'''
+
+    messages = tuple(violation.message for violation in check_source(Path("decorator-comment.py"), source))
+
+    assert messages == ("decorator stack and declaration must be contiguous",)
+
+
+
+#### Reject a gap between the final decorator and its declaration.
+####
+def test_gap_between_final_decorator_and_declaration_fails() -> None:
+    source = '''"""Provide a module with a final decorator gap."""
+
+
+
+#### Return the supplied value without transforming it.
+####
+@decorator
+
+def identity(value: str) -> str:
+    return value
+'''
+
+    messages = tuple(violation.message for violation in check_source(Path("decorator-final.py"), source))
+
+    assert messages == ("decorator stack and declaration must be contiguous",)
+
+
+
 #### Reject a declaration block separated from its decorator stack.
 ####
 def test_decorated_declaration_requires_an_adjacent_block() -> None:
