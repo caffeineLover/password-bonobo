@@ -63,136 +63,123 @@ class PreservationWarning:
 
 
 
-#### Identify one record by opaque session-local object identity.
+#### Seal one process-local identity token against mutation or reconstruction.
 ####
-#### The token is generated independently of UUID and field content.  Its rendering
-#### never includes process identity, token state, UUID data, or record ordinals.
+#### Subclasses add domain meaning without changing this token's fixed safe
+#### representation, identity-only equality, stable hash, or terminal sealing.
 ####
-class RecordHandle:
-    __slots__ = ("_token",)
+class _OpaqueIdentity:
+    __slots__ = ("_sealed", "_token")
+
+    _sealed: bool
+    _token: object
 
 
 
-    #### Create one fresh opaque identity token for a single record instance.
+    #### Create and seal one token independently of all vault and secret data.
     ####
     def __init__(self) -> None:
-        if hasattr(self, "_token"):
-            raise TypeError("record handle cannot be reinitialized")
-        self._token = object()
+        if getattr(self, "_sealed", False):
+            raise TypeError("opaque identity cannot be reinitialized")
+        object.__setattr__(self, "_token", object())
+        object.__setattr__(self, "_sealed", True)
 
 
 
-    #### Compare only opaque token identity and never user UUID data.
+    #### Reject assignment after construction so hashes and lookup identity persist.
+    ####
+    def __setattr__(self, _name: str, _value: object) -> NoReturn:
+        raise TypeError("opaque identity is immutable")
+
+
+
+    #### Reject deletion after construction so hashes and lookup identity persist.
+    ####
+    def __delattr__(self, _name: str) -> NoReturn:
+        raise TypeError("opaque identity is immutable")
+
+
+
+    #### Compare exact token type and identity without reading vault data.
     ####
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, RecordHandle) and self._token is other._token
+        return type(self) is type(other) and isinstance(other, _OpaqueIdentity) and self._token is other._token
 
 
 
-    #### Hash the opaque token for session-local lookup tables.
+    #### Hash the sealed token for stable process-local lookup tables.
     ####
     def __hash__(self) -> int:
         return hash(self._token)
 
 
 
-    #### Render a fixed label without exposing any identity-bearing value.
+    #### Render a fixed type label without exposing identity-bearing values.
     ####
     def __repr__(self) -> str:
-        return "RecordHandle(<opaque>)"
+        return f"{type(self).__name__}(<opaque>)"
 
 
 
-    #### Preserve immutable opaque identity across harmless shallow copies.
+    #### Reject shallow copies instead of creating another identity-bearing alias.
     ####
-    def __copy__(self) -> Self:
-        return self
+    def __copy__(self) -> NoReturn:
+        raise TypeError("opaque identity cannot be copied or serialized")
 
 
 
-    #### Preserve immutable opaque identity across harmless deep copies.
+    #### Reject deep copies instead of duplicating process-local identity state.
     ####
-    def __deepcopy__(self, _memo: dict[int, object]) -> Self:
-        return self
+    def __deepcopy__(self, _memo: dict[int, object]) -> NoReturn:
+        raise TypeError("opaque identity cannot be copied or serialized")
 
 
 
-    #### Prevent session-scoped identity from escaping through serialization.
+    #### Reject direct state extraction from sealed identity state.
+    ####
+    def __getstate__(self) -> NoReturn:
+        raise TypeError("opaque identity cannot be copied or serialized")
+
+
+
+    #### Reject fabricated state injection without mutating the sealed token.
+    ####
+    def __setstate__(self, _state: object) -> NoReturn:
+        raise TypeError("opaque identity cannot be copied or serialized")
+
+
+
+    #### Prevent process-local identity from escaping through serialization.
     ####
     def __reduce__(self) -> NoReturn:
-        raise TypeError("record handle cannot be serialized")
+        raise TypeError("opaque identity cannot be copied or serialized")
 
 
 
     #### Prevent protocol-specific serialization of session-scoped identity.
     ####
     def __reduce_ex__(self, _protocol: SupportsIndex) -> NoReturn:
-        raise TypeError("record handle cannot be serialized")
+        raise TypeError("opaque identity cannot be copied or serialized")
+
+
+
+#### Identify one record by opaque session-local object identity.
+####
+#### The sealed token is independent of UUID and field content, and cannot be
+#### copied, serialized, assigned, deleted, or rendered as an identifying value.
+####
+class RecordHandle(_OpaqueIdentity):
+    __slots__ = ()
 
 
 
 #### Identify one copy-on-write document revision independently of secret data.
 ####
-class RevisionToken:
-    __slots__ = ("_token",)
-
-
-
-    #### Create one opaque token that carries no sequential or content-derived data.
-    ####
-    def __init__(self) -> None:
-        if hasattr(self, "_token"):
-            raise TypeError("revision token cannot be reinitialized")
-        self._token = object()
-
-
-
-    #### Compare only token identity so stale revisions cannot be redirected.
-    ####
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, RevisionToken) and self._token is other._token
-
-
-
-    #### Hash one opaque revision for safe internal state lookups.
-    ####
-    def __hash__(self) -> int:
-        return hash(self._token)
-
-
-
-    #### Render a fixed safe label without token or document details.
-    ####
-    def __repr__(self) -> str:
-        return "RevisionToken(<opaque>)"
-
-
-
-    #### Preserve immutable revision identity across harmless shallow copies.
-    ####
-    def __copy__(self) -> Self:
-        return self
-
-
-
-    #### Preserve immutable revision identity across harmless deep copies.
-    ####
-    def __deepcopy__(self, _memo: dict[int, object]) -> Self:
-        return self
-
-
-
-    #### Prevent process-local revision identity from being serialized.
-    ####
-    def __reduce__(self) -> NoReturn:
-        raise TypeError("revision token cannot be serialized")
-
-
-
-    #### Prevent protocol-specific serialization of process-local revisions.
-    ####
-    def __reduce_ex__(self, _protocol: SupportsIndex) -> NoReturn:
-        raise TypeError("revision token cannot be serialized")
+#### Sealing makes stale-revision equality and hash lookup stable for the complete
+#### process-local lifetime while all generic reconstruction routes stay closed.
+####
+class RevisionToken(_OpaqueIdentity):
+    __slots__ = ()
 
 
 
@@ -397,6 +384,36 @@ class VaultDocument:
 
 
 
+    #### Fork every distinct payload lease for an independently closable revision.
+    ####
+    def retain(self, *, revision: RevisionToken | None = None) -> Self:
+        self._require_open()
+        retained_payloads: dict[int, FieldPayload] = {}
+        try:
+            header_fields = _retain_fields(self.header_fields, retained_payloads)
+            records = tuple(
+                RawRecord(
+                    fields=_retain_fields(record.fields, retained_payloads),
+                    ordinal=record.ordinal,
+                    handle=record.handle,
+                )
+                for record in self.records
+            )
+            return type(self)(
+                version=self.version,
+                header_fields=header_fields,
+                records=records,
+                revision=revision if revision is not None else RevisionToken(),
+                warnings=self.warnings,
+            )
+        except BaseException:
+            for payload in retained_payloads.values():
+                with suppress(BaseException):
+                    payload.close()
+            raise
+
+
+
     #### Close each distinct payload once and make model operations terminal.
     ####
     def close(self) -> None:
@@ -536,6 +553,31 @@ def _iter_fields(document: VaultDocument) -> Iterator[RawField]:
 
 
 
+#### Retain one ordered field sequence while sharing duplicate payload leases.
+####
+def _retain_fields(
+    fields: tuple[RawField, ...],
+    retained_payloads: dict[int, FieldPayload],
+) -> tuple[RawField, ...]:
+    retained_fields: list[RawField] = []
+    for raw_field in fields:
+        identity = id(raw_field.payload)
+        payload = retained_payloads.get(identity)
+        if payload is None:
+            payload = raw_field.payload.retain()
+            retained_payloads[identity] = payload
+        retained_fields.append(
+            RawField(
+                type_code=raw_field.type_code,
+                payload=payload,
+                ordinal=raw_field.ordinal,
+                classification=raw_field.classification,
+            )
+        )
+    return tuple(retained_fields)
+
+
+
 #### Hash one payload incrementally and retain only safe structural evidence.
 ####
 def _manifest_entry(
@@ -569,6 +611,8 @@ def _field_sequences_equal(
     second: tuple[RawField, ...],
     chunk_size: int,
 ) -> bool:
+    if len(first) != len(second):
+        return False
     for first_field, second_field in zip(first, second, strict=True):
         if (
             first_field.type_code != second_field.type_code
@@ -594,35 +638,67 @@ def _payloads_equal(first: FieldPayload, second: FieldPayload, chunk_size: int) 
     second_offset = 0
     first_done = False
     second_done = False
-    while True:
-        if first_offset == len(first_buffer) and not first_done:
-            try:
-                first_buffer = bytes(next(first_iterator))
-                first_offset = 0
-            except StopIteration:
-                first_done = True
-        if second_offset == len(second_buffer) and not second_done:
-            try:
-                second_buffer = bytes(next(second_iterator))
-                second_offset = 0
-            except StopIteration:
-                second_done = True
-        if first_done or second_done:
-            return (
-                first_done
-                and second_done
-                and first_offset == len(first_buffer)
-                and second_offset == len(second_buffer)
-            )
-        compared = min(len(first_buffer) - first_offset, len(second_buffer) - second_offset)
-        if compared <= 0:
-            return False
-        if first_buffer[first_offset:first_offset + compared] != second_buffer[
-            second_offset:second_offset + compared
-        ]:
-            return False
-        first_offset += compared
-        second_offset += compared
+    first_observed = 0
+    second_observed = 0
+    try:
+        while True:
+            if first_offset == len(first_buffer) and not first_done:
+                try:
+                    chunk = next(first_iterator)
+                except StopIteration:
+                    first_done = True
+                else:
+                    if not 0 < len(chunk) <= chunk_size:
+                        return False
+                    first_observed += len(chunk)
+                    if first_observed > first.length:
+                        return False
+                    first_buffer = bytes(chunk)
+                    first_offset = 0
+            if second_offset == len(second_buffer) and not second_done:
+                try:
+                    chunk = next(second_iterator)
+                except StopIteration:
+                    second_done = True
+                else:
+                    if not 0 < len(chunk) <= chunk_size:
+                        return False
+                    second_observed += len(chunk)
+                    if second_observed > second.length:
+                        return False
+                    second_buffer = bytes(chunk)
+                    second_offset = 0
+            if first_done or second_done:
+                return (
+                    first_done
+                    and second_done
+                    and first_offset == len(first_buffer)
+                    and second_offset == len(second_buffer)
+                    and first_observed == first.length
+                    and second_observed == second.length
+                )
+            compared = min(len(first_buffer) - first_offset, len(second_buffer) - second_offset)
+            if compared <= 0:
+                return False
+            if first_buffer[first_offset:first_offset + compared] != second_buffer[
+                second_offset:second_offset + compared
+            ]:
+                return False
+            first_offset += compared
+            second_offset += compared
+    finally:
+        _close_iterator(first_iterator)
+        _close_iterator(second_iterator)
+
+
+
+#### Release suspended generators after comparison success, mismatch, or failure.
+####
+def _close_iterator(iterator: Iterator[memoryview[int]]) -> None:
+    close = getattr(iterator, "close", None)
+    if callable(close):
+        with suppress(BaseException):
+            close()
 
 
 

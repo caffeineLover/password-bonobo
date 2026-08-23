@@ -5,16 +5,24 @@ sensitive-looking so failures and representations prove they do not retain it.
 """
 
 import copy
+import ctypes
 import io
 import os
 import pickle
 import stat
+import struct
+from ctypes import wintypes
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from bonobo_core.passwordsafe.snapshots import EncryptedSnapshot, SnapshotClosedError
+from bonobo_core.passwordsafe.errors import StorageError
+from bonobo_core.passwordsafe.snapshots import (
+    EncryptedSnapshot,
+    SnapshotClosedError,
+    _windows_path_is_private,
+)
 
 
 
@@ -28,6 +36,38 @@ def _private_directory(tmp_path: Path) -> Path:
 
 
 
+#### Reject a deliberately inherited broad Windows DACL without path disclosure.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows DACL behavior")
+def test_snapshot_rejects_permissive_windows_directory(tmp_path: Path) -> None:
+    directory = tmp_path / "shared-windows"
+    directory.mkdir(mode=0o777)
+
+    assert not _windows_path_is_private(directory)
+    with pytest.raises(StorageError) as caught:
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    assert caught.value.__context__ is None
+    assert "shared-windows" not in str(caught.value)
+    assert tuple(directory.iterdir()) == ()
+
+
+
+#### Create and verify an explicitly protected owner-only Windows artifact DACL.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows DACL behavior")
+def test_snapshot_file_has_protected_owner_only_windows_dacl(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+    assert _windows_path_is_private(directory)
+
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+    artifact = next(directory.iterdir())
+
+    assert _windows_path_is_private(artifact)
+    snapshot.close()
+
+
+
 #### Raise one path-bearing platform error after capture has created its artifact.
 ####
 class _FailingSource:
@@ -38,6 +78,67 @@ class _FailingSource:
     ####
     def readinto(self, _buffer: bytearray) -> int:
         raise OSError("C:/sensitive/vault-name.psafe3")
+
+
+
+#### Create a Windows directory junction without requiring symlink privilege.
+####
+def _create_windows_junction(link: Path, target: Path) -> None:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.DeviceIoControl.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        wintypes.LPVOID,
+    ]
+    kernel32.DeviceIoControl.restype = wintypes.BOOL
+    link.mkdir()
+    handle = kernel32.CreateFileW(str(link), 0x40000000, 0, None, 3, 0x02200000, None)
+    if ctypes.cast(handle, ctypes.c_void_p).value == ctypes.c_void_p(-1).value:
+        raise OSError
+    substitute = ("\\??\\" + str(target)).encode("utf-16le")
+    printable = str(target).encode("utf-16le")
+    path_buffer = substitute + b"\0\0" + printable + b"\0\0"
+    reparse = struct.pack(
+        "<LHHHHHH",
+        0xA0000003,
+        len(path_buffer) + 8,
+        0,
+        0,
+        len(substitute),
+        len(substitute) + 2,
+        len(printable),
+    ) + path_buffer
+    buffer = ctypes.create_string_buffer(reparse)
+    returned = wintypes.DWORD()
+    try:
+        if not kernel32.DeviceIoControl(
+            handle,
+            0x000900A4,
+            buffer,
+            len(reparse),
+            None,
+            0,
+            ctypes.byref(returned),
+            None,
+        ):
+            raise OSError
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 
@@ -131,7 +232,7 @@ def test_snapshot_rejects_nonprivate_directory(tmp_path: Path) -> None:
     directory.mkdir(mode=0o755)
     directory.chmod(0o755)
 
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(StorageError) as caught:
         EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
 
     assert "shared" not in str(caught.value)
@@ -162,11 +263,63 @@ def test_snapshot_rejects_symlink_directory_where_supported(tmp_path: Path) -> N
     except OSError:
         pytest.skip("directory symlinks are unavailable")
 
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(StorageError) as caught:
         EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), link)
 
     assert "linked-private" not in str(caught.value)
     assert tuple(target.iterdir()) == ()
+
+
+
+#### Reject a non-privileged Windows junction anywhere in directory ancestry.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction behavior")
+def test_snapshot_rejects_windows_junction_ancestor(tmp_path: Path) -> None:
+    target = tmp_path / "junction-target"
+    target.mkdir(mode=0o700)
+    private = target / "private"
+    private.mkdir(mode=0o700)
+    link = tmp_path / "junction-parent"
+    _create_windows_junction(link, target)
+
+    try:
+        with pytest.raises(StorageError):
+            EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), link / "private")
+    finally:
+        link.unlink()
+
+    assert tuple(private.iterdir()) == ()
+
+
+
+#### Reject a directory name swapped after anchor validation but before creation.
+####
+def test_snapshot_rejects_directory_swap_during_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = _private_directory(tmp_path)
+    moved = tmp_path / "moved-private"
+    from bonobo_core.passwordsafe import snapshots
+
+    original = snapshots._create_private_artifact
+
+
+
+    #### Replace the validated pathname once, then exercise its retained anchor.
+    ####
+    def swap_then_create(anchor: snapshots._DirectoryAnchor) -> tuple[int, str, tuple[int, int]] | None:
+        directory.replace(moved)
+        directory.mkdir(mode=0o700)
+        return original(anchor)
+
+    monkeypatch.setattr(snapshots, "_create_private_artifact", swap_then_create)
+
+    with pytest.raises(StorageError):
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    assert tuple(directory.iterdir()) == ()
+    assert tuple(moved.iterdir()) == ()
 
 
 
@@ -189,9 +342,66 @@ def test_snapshot_finalizer_is_idempotent(tmp_path: Path) -> None:
 def test_snapshot_capture_failure_cleans_up_without_retaining_source_error(tmp_path: Path) -> None:
     directory = _private_directory(tmp_path)
 
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(StorageError) as caught:
         EncryptedSnapshot.capture(_FailingSource(), directory)
 
     assert tuple(directory.iterdir()) == ()
     assert caught.value.__context__ is None
     assert "sensitive" not in repr(caught.value)
+
+
+
+#### Keep cleanup retryable after one transient unlink failure.
+####
+def test_snapshot_close_retries_transient_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = _private_directory(tmp_path)
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+    from bonobo_core.passwordsafe import snapshots
+
+    original = snapshots._unlink_if_same
+    calls = 0
+
+
+
+    #### Fail one anchored unlink before delegating every retry unchanged.
+    ####
+    def fail_once(anchor: snapshots._DirectoryAnchor, name: str, identity: tuple[int, int]) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("sensitive path diagnostic")
+        original(anchor, name, identity)
+
+    monkeypatch.setattr(snapshots, "_unlink_if_same", fail_once)
+
+    with pytest.raises(StorageError) as caught:
+        snapshot.close()
+    assert caught.value.__context__ is None
+    assert "sensitive" not in repr(caught.value)
+    closed_after_failure = snapshot.closed
+    assert not closed_after_failure
+
+    snapshot.close()
+    assert snapshot.closed
+    assert tuple(directory.iterdir()) == ()
+
+
+
+#### Never remove a different file substituted at the snapshot pathname.
+####
+def test_snapshot_close_preserves_substituted_target(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+    artifact = next(directory.iterdir())
+    moved = directory / "moved-artifact"
+    artifact.replace(moved)
+    artifact.write_bytes(b"substituted")
+
+    snapshot.close()
+
+    assert artifact.read_bytes() == b"substituted"
+    moved.unlink()
+    artifact.unlink()

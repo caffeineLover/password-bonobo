@@ -21,6 +21,11 @@ from .errors import StorageError, StorageReason
 
 
 
+if os.name == "nt":
+    from ._windows_security import WindowsDirectoryAnchor, path_is_private
+
+
+
 _SNAPSHOT_NAME_ATTEMPTS: Final[int] = 32
 _OWNER_FILE_MODE: Final[int] = 0o600
 _OWNER_DIRECTORY_MASK: Final[int] = 0o077
@@ -40,6 +45,33 @@ class ReadableBinary(Protocol):
 
 
 
+#### Define the stable anchored operations retained through artifact cleanup.
+####
+class _DirectoryAnchor(Protocol):
+
+
+
+    #### Create one exclusive child and return its descriptor and stable identity.
+    ####
+    def create(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        raise NotImplementedError
+
+
+
+    #### Remove only the child whose stable identity still matches.
+    ####
+    def remove_if_same(self, name: str, identity: tuple[int, int]) -> bool:
+        raise NotImplementedError
+
+
+
+    #### Release the retained validated directory handle.
+    ####
+    def close(self) -> None:
+        raise NotImplementedError
+
+
+
 #### Report attempted access after an encrypted snapshot becomes terminal.
 ####
 class SnapshotClosedError(RuntimeError):
@@ -55,54 +87,131 @@ class SnapshotClosedError(RuntimeError):
 
 #### Reject unsafe private-directory state without retaining platform diagnostics.
 ####
-def _validate_private_directory(directory: Path) -> Path | None:
+def _validate_private_directory(directory: Path) -> _DirectoryAnchor | None:
+    if os.name == "nt":
+        try:
+            return WindowsDirectoryAnchor.open(directory)
+        except Exception:
+            return None
+    descriptor = -1
     try:
         absolute = directory.absolute()
+        current = Path(absolute.anchor)
+        for component in absolute.parts[1:]:
+            current /= component
+            if stat.S_ISLNK(current.lstat().st_mode):
+                raise OSError
         metadata = absolute.lstat()
-        is_junction = getattr(os.path, "isjunction", None)
-        if stat.S_ISLNK(metadata.st_mode) or (is_junction is not None and is_junction(absolute)):
-            raise OSError
         if not stat.S_ISDIR(metadata.st_mode):
             raise OSError
-        if os.name != "nt":
-            if stat.S_IMODE(metadata.st_mode) & _OWNER_DIRECTORY_MASK:
-                raise OSError
-            get_effective_user = getattr(os, "geteuid", None)
-            if get_effective_user is not None and metadata.st_uid != get_effective_user():
-                raise OSError
-        return absolute
+        if stat.S_IMODE(metadata.st_mode) & _OWNER_DIRECTORY_MASK:
+            raise OSError
+        get_effective_user = getattr(os, "geteuid", None)
+        if get_effective_user is not None and metadata.st_uid != get_effective_user():
+            raise OSError
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(absolute, flags)
+        anchored = os.fstat(descriptor)
+        if (anchored.st_dev, anchored.st_ino) != (metadata.st_dev, metadata.st_ino):
+            os.close(descriptor)
+            raise OSError
+        return _PosixDirectoryAnchor(absolute, descriptor)
     except Exception:
+        if descriptor >= 0:
+            with suppress(BaseException):
+                os.close(descriptor)
         return None
 
 
 
-#### Create one unpredictable regular file exclusively inside a validated directory.
+#### Hold a POSIX directory descriptor for relative create, verify, and unlink.
 ####
-def _create_private_artifact(directory: Path) -> tuple[int, Path, tuple[int, int]] | None:
-    flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
-    flags |= getattr(os, "O_BINARY", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0)
-    for _attempt in range(_SNAPSHOT_NAME_ATTEMPTS):
-        path = directory / f"snapshot-{secrets.token_hex(16)}"
+class _PosixDirectoryAnchor:
+    __slots__ = ("_fd", "_identity", "_path")
+
+
+
+    #### Retain one validated open directory descriptor and safe display-free path.
+    ####
+    def __init__(self, path: Path, descriptor: int) -> None:
+        self._path = path
+        self._fd = descriptor
+        metadata = os.fstat(descriptor)
+        self._identity = (metadata.st_dev, metadata.st_ino)
+
+
+
+    #### Create one regular owner-only child relative to the held directory.
+    ####
+    def create(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        if not self._stable():
+            return None
+        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        flags |= getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
         try:
-            descriptor = os.open(path, flags, _OWNER_FILE_MODE)
-        except FileExistsError:
-            continue
+            descriptor = os.open(name, flags, _OWNER_FILE_MODE, dir_fd=self._fd)
         except Exception:
             return None
         try:
             metadata = os.fstat(descriptor)
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
                 raise OSError
-            if os.name != "nt" and stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE:
+            if stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE:
                 raise OSError
-            return descriptor, path, (metadata.st_dev, metadata.st_ino)
+            if not self._stable():
+                raise OSError
+            return descriptor, (metadata.st_dev, metadata.st_ino)
         except Exception:
             with suppress(BaseException):
                 os.close(descriptor)
             with suppress(BaseException):
-                path.unlink()
+                os.unlink(name, dir_fd=self._fd)
             return None
+
+
+
+    #### Unlink only the same non-link regular child through the held directory.
+    ####
+    def remove_if_same(self, name: str, identity: tuple[int, int]) -> bool:
+        metadata = os.stat(name, dir_fd=self._fd, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != identity:
+            return True
+        os.unlink(name, dir_fd=self._fd)
+        return True
+
+
+
+    #### Compare the directory name with the identity retained by the open fd.
+    ####
+    def _stable(self) -> bool:
+        metadata = self._path.lstat()
+        return not stat.S_ISLNK(metadata.st_mode) and (metadata.st_dev, metadata.st_ino) == self._identity
+
+
+
+    #### Close the anchored descriptor exactly once.
+    ####
+    def close(self) -> None:
+        descriptor = self._fd
+        if descriptor >= 0:
+            self._fd = -1
+            os.close(descriptor)
+
+
+
+#### Create one unpredictable regular file exclusively under a held anchor.
+####
+def _create_private_artifact(anchor: _DirectoryAnchor) -> tuple[int, str, tuple[int, int]] | None:
+    for _attempt in range(_SNAPSHOT_NAME_ATTEMPTS):
+        name = f"snapshot-{secrets.token_hex(16)}"
+        try:
+            created = anchor.create(name)
+        except Exception:
+            return None
+        if created is not None:
+            descriptor, identity = created
+            return descriptor, name, identity
     return None
 
 
@@ -155,10 +264,17 @@ def _copy_and_synchronize(
 
 #### Remove only the exact regular artifact originally created by this owner.
 ####
-def _unlink_if_same(path: Path, identity: tuple[int, int]) -> None:
-    metadata = path.lstat()
-    if stat.S_ISREG(metadata.st_mode) and (metadata.st_dev, metadata.st_ino) == identity:
-        path.unlink()
+def _unlink_if_same(anchor: _DirectoryAnchor, name: str, identity: tuple[int, int]) -> None:
+    anchor.remove_if_same(name, identity)
+
+
+
+#### Expose the native verifier solely for platform-specific security tests.
+####
+def _windows_path_is_private(path: Path) -> bool:
+    if os.name != "nt":
+        return False
+    return path_is_private(path)
 
 
 
@@ -168,7 +284,7 @@ def _unlink_if_same(path: Path, identity: tuple[int, int]) -> None:
 #### removes only the unchanged encrypted artifact created during capture.
 ####
 class EncryptedSnapshot:
-    __slots__ = ("_fd", "_identity", "_lock", "_path", "_sha256", "_size")
+    __slots__ = ("_anchor", "_cleanup_pending", "_fd", "_identity", "_lock", "_name", "_sha256", "_size")
 
     _sha256: str
     _size: int
@@ -177,13 +293,23 @@ class EncryptedSnapshot:
 
     #### Publish already synchronized snapshot state after successful capture.
     ####
-    def __init__(self, descriptor: int, path: Path, identity: tuple[int, int], size: int, digest: str) -> None:
+    def __init__(
+        self,
+        descriptor: int,
+        anchor: _DirectoryAnchor,
+        name: str,
+        identity: tuple[int, int],
+        size: int,
+        digest: str,
+    ) -> None:
         if hasattr(self, "_fd"):
             raise TypeError("encrypted snapshot cannot be reinitialized")
         self._fd = descriptor
-        self._path = path
+        self._anchor = anchor
+        self._name = name
         self._identity = identity
         self._lock = RLock()
+        self._cleanup_pending = True
         self._size = size
         self._sha256 = digest
 
@@ -219,25 +345,25 @@ class EncryptedSnapshot:
         chunk_size: int = MAX_IO_CHUNK_BYTES,
     ) -> Self:
         _validate_chunk_size(chunk_size)
-        directory = _validate_private_directory(private_directory)
-        if directory is None:
+        anchor = _validate_private_directory(private_directory)
+        if anchor is None:
             raise StorageError(StorageReason.PREPARATION_FAILED)
         descriptor = -1
-        path: Path | None = None
+        name: str | None = None
         identity: tuple[int, int] | None = None
         published = False
         buffer = bytearray(chunk_size)
         view = memoryview(buffer)
         try:
-            created = _create_private_artifact(directory)
+            created = _create_private_artifact(anchor)
             if created is None:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
-            descriptor, path, identity = created
+            descriptor, name, identity = created
             copied = _copy_and_synchronize(source, descriptor, buffer, view, chunk_size)
             if copied is None:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
             size, digest = copied
-            snapshot = cls(descriptor, path, identity, size, digest)
+            snapshot = cls(descriptor, anchor, name, identity, size, digest)
             published = True
             return snapshot
         finally:
@@ -247,9 +373,11 @@ class EncryptedSnapshot:
                 if descriptor >= 0:
                     with suppress(BaseException):
                         os.close(descriptor)
-                if path is not None and identity is not None:
+                if name is not None and identity is not None:
                     with suppress(BaseException):
-                        _unlink_if_same(path, identity)
+                        _unlink_if_same(anchor, name, identity)
+                with suppress(BaseException):
+                    anchor.close()
 
 
 
@@ -257,7 +385,7 @@ class EncryptedSnapshot:
     ####
     @property
     def closed(self) -> bool:
-        return self._fd < 0
+        return self._fd < 0 and not self._cleanup_pending
 
 
 
@@ -320,18 +448,24 @@ class EncryptedSnapshot:
     def close(self) -> None:
         with self._lock:
             descriptor = self._fd
-            if descriptor < 0:
+            if descriptor < 0 and not self._cleanup_pending:
                 return
-            self._fd = -1
+            failed = False
             try:
-                os.close(descriptor)
-                _unlink_if_same(self._path, self._identity)
+                if descriptor >= 0:
+                    os.close(descriptor)
+                    self._fd = -1
+                _unlink_if_same(self._anchor, self._name, self._identity)
+                self._anchor.close()
             except FileNotFoundError:
-                return
+                pass
             except BaseException as error:
                 if not isinstance(error, Exception):
                     raise
-                raise StorageError(StorageReason.PREPARATION_FAILED) from None
+                failed = True
+            if failed:
+                raise StorageError(StorageReason.PREPARATION_FAILED)
+            self._cleanup_pending = False
 
 
 

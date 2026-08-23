@@ -8,6 +8,7 @@ metadata, and materialize no plaintext larger than a caller-approved chunk.
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
+from threading import RLock
 from types import TracebackType
 from typing import NoReturn, Protocol, Self, SupportsIndex, runtime_checkable
 
@@ -52,6 +53,13 @@ class FieldPayload(Protocol):
     #### Yield ordered read-only views no larger than the caller's approved bound.
     ####
     def iter_chunks(self, chunk_size: int) -> Iterator[memoryview[int]]:
+        raise NotImplementedError
+
+
+
+    #### Acquire one independently closable lifetime without unbounded copying.
+    ####
+    def retain(self) -> FieldPayload:
         raise NotImplementedError
 
 
@@ -126,16 +134,75 @@ class _ExclusivePayloadOwner:
 
 
 
+#### Share one mutable inline buffer across explicitly retained payload leases.
+####
+#### The final lease release wipes the adopted bytearray under one lock.  Retain
+#### operations never copy plaintext and cannot race the final deterministic wipe.
+####
+class _InlineStorage:
+    __slots__ = ("_data", "_leases", "_lock")
+
+
+
+    #### Adopt one mutable buffer as the first live lease's shared storage.
+    ####
+    def __init__(self, data: bytearray) -> None:
+        self._data = data
+        self._leases = 1
+        self._lock = RLock()
+
+
+
+    #### Return the stable byte count without copying the shared buffer.
+    ####
+    @property
+    def length(self) -> int:
+        return len(self._data)
+
+
+
+    #### Add one lease only while at least one current lease keeps storage live.
+    ####
+    def retain(self) -> None:
+        with self._lock:
+            if self._leases == 0:
+                raise PayloadClosedError()
+            self._leases += 1
+
+
+
+    #### Borrow one read-only view while the requesting lease remains live.
+    ####
+    def borrow(self) -> memoryview[int]:
+        with self._lock:
+            if self._leases == 0:
+                raise PayloadClosedError()
+            return memoryview(self._data).toreadonly()
+
+
+
+    #### Release one lease and wipe the adopted storage after the final release.
+    ####
+    def release(self) -> None:
+        with self._lock:
+            if self._leases <= 0:
+                return
+            self._leases -= 1
+            if self._leases == 0:
+                self._data[:] = bytes(len(self._data))
+
+
+
 #### Own one controlled mutable plaintext payload buffer.
 ####
 #### Construction either adopts a caller bytearray or creates one explicit copy.
 #### All yielded views borrow this storage and become unusable after close wipes it.
 ####
 class InlinePayload(_ExclusivePayloadOwner):
-    __slots__ = ("_closed", "_data")
+    __slots__ = ("_closed", "_lock", "_storage")
 
     _closed: bool
-    _data: bytearray
+    _storage: _InlineStorage
 
 
 
@@ -144,12 +211,25 @@ class InlinePayload(_ExclusivePayloadOwner):
     def __init__(self, data: bytearray) -> None:
         if not isinstance(data, bytearray):
             raise TypeError("inline payload ownership requires a bytearray")
-        if hasattr(self, "_data"):
-            if data is not self._data:
+        if hasattr(self, "_storage"):
+            if data is not self._storage._data:
                 data[:] = bytes(len(data))
             raise TypeError("inline payload cannot be reinitialized")
-        self._data = data
+        self._storage = _InlineStorage(data)
+        self._lock = RLock()
         self._closed = False
+
+
+
+    #### Construct one new lease after its shared storage count is retained.
+    ####
+    @classmethod
+    def _from_retained_storage(cls, storage: _InlineStorage) -> Self:
+        instance = cls.__new__(cls)
+        instance._storage = storage
+        instance._lock = RLock()
+        instance._closed = False
+        return instance
 
 
 
@@ -175,7 +255,7 @@ class InlinePayload(_ExclusivePayloadOwner):
     ####
     @property
     def length(self) -> int:
-        return len(self._data)
+        return self._storage.length
 
 
 
@@ -191,14 +271,25 @@ class InlinePayload(_ExclusivePayloadOwner):
     ####
     def iter_chunks(self, chunk_size: int) -> Iterator[memoryview[int]]:
         _validate_chunk_size(chunk_size)
-        self._require_open()
-        view = memoryview(self._data).toreadonly()
+        with self._lock:
+            self._require_open()
+            view = self._storage.borrow()
         try:
             for offset in range(0, len(view), chunk_size):
                 self._require_open()
                 yield view[offset:offset + chunk_size]
         finally:
             view.release()
+
+
+
+    #### Acquire one new lease over the same bounded mutable plaintext storage.
+    ####
+    def retain(self) -> InlinePayload:
+        with self._lock:
+            self._require_open()
+            self._storage.retain()
+            return type(self)._from_retained_storage(self._storage)
 
 
 
@@ -213,9 +304,10 @@ class InlinePayload(_ExclusivePayloadOwner):
     #### Wipe the exact adopted storage once and make iteration terminal.
     ####
     def close(self) -> None:
-        if not self._closed:
-            self._data[:] = bytes(len(self._data))
-            self._closed = True
+        with self._lock:
+            if not self._closed:
+                self._closed = True
+                self._storage.release()
 
 
 
@@ -352,7 +444,9 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
         "_closed",
         "_content_key",
         "_frame_offset",
+        "_iterators",
         "_length",
+        "_lock",
         "_previous",
         "_snapshot",
     )
@@ -374,6 +468,8 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
         self._ciphertext_length = span.ciphertext_length
         self._frame_offset = span.frame_offset
         self._length = span.payload_length
+        self._lock = RLock()
+        self._iterators: set[_EncryptedSpanIterator] = set()
         self._closed = False
 
 
@@ -402,7 +498,17 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
     ####
     def iter_chunks(self, chunk_size: int) -> Iterator[memoryview[int]]:
         _validate_chunk_size(chunk_size)
-        self._require_open()
+        with self._lock:
+            self._require_open()
+            iterator = _EncryptedSpanIterator(self, chunk_size)
+            self._iterators.add(iterator)
+            return iterator
+
+
+
+    #### Decrypt sequential blocks for one registered managed iterator.
+    ####
+    def _stream_chunks(self, chunk_size: int) -> Iterator[memoryview[int]]:
         remaining = self._length
         frame_position = 0
         ciphertext_position = self._ciphertext_offset
@@ -426,6 +532,7 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
                             remaining -= copied
                             if len(output) == chunk_size:
                                 yield from _yield_and_wipe(output)
+                                self._require_open()
                                 output = bytearray()
                     finally:
                         plaintext[:] = bytes(len(plaintext))
@@ -433,9 +540,36 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
                     ciphertext_position += BLOCK_BYTES
             if output:
                 yield from _yield_and_wipe(output)
+                self._require_open()
                 output = bytearray()
         finally:
             output[:] = bytes(len(output))
+
+
+
+    #### Remove one exhausted or explicitly closed iterator from active ownership.
+    ####
+    def _release_iterator(self, iterator: _EncryptedSpanIterator) -> None:
+        with self._lock:
+            self._iterators.discard(iterator)
+
+
+
+    #### Fork only copied CBC metadata while retaining borrowed upstream owners.
+    ####
+    def retain(self) -> EncryptedSpanPayload:
+        with self._lock:
+            self._require_open()
+            span = EncryptedSpan(
+                backend=self._backend,
+                content_key=self._content_key,
+                previous_block=bytes(self._previous),
+                ciphertext_offset=self._ciphertext_offset,
+                ciphertext_length=self._ciphertext_length,
+                frame_offset=self._frame_offset,
+                payload_length=self._length,
+            )
+            return type(self)(self._snapshot, span)
 
 
 
@@ -450,9 +584,14 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
     #### Wipe copied CBC state once without closing borrowed resources.
     ####
     def close(self) -> None:
-        if not self._closed:
+        with self._lock:
+            if self._closed:
+                return
             self._previous[:] = bytes(len(self._previous))
             self._closed = True
+            iterators = tuple(self._iterators)
+        for iterator in iterators:
+            iterator._close_from_owner()
 
 
 
@@ -488,6 +627,85 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
     ####
     def __repr__(self) -> str:
         return f"EncryptedSpanPayload(length={self.length}, closed={self.closed})"
+
+
+
+#### Coordinate one deferred generator with its owning payload's close operation.
+####
+#### Closing the payload closes every registered generator, which immediately wipes
+#### its suspended mutable output and releases its keyed CBC context.
+####
+class _EncryptedSpanIterator:
+    __slots__ = ("_closed", "_iterator", "_lock", "_owner")
+
+
+
+    #### Register one not-yet-started bounded stream under an independent lock.
+    ####
+    def __init__(self, owner: EncryptedSpanPayload, chunk_size: int) -> None:
+        self._owner = owner
+        self._iterator = owner._stream_chunks(chunk_size)
+        self._lock = RLock()
+        self._closed = False
+
+
+
+    #### Return this stateful iterator without creating a second stream.
+    ####
+    def __iter__(self) -> Self:
+        return self
+
+
+
+    #### Advance only while the owning payload remains open.
+    ####
+    def __next__(self) -> memoryview[int]:
+        with self._lock:
+            if self._owner.closed:
+                raise PayloadClosedError()
+            if self._closed:
+                raise StopIteration
+            try:
+                return next(self._iterator)
+            except BaseException:
+                self._finish()
+                raise
+
+
+
+    #### Close an abandoned consumer stream and wipe suspended plaintext now.
+    ####
+    def close(self) -> None:
+        self._close_from_owner()
+
+
+
+    #### Close this generator immediately because its owning payload is terminal.
+    ####
+    def _close_from_owner(self) -> None:
+        with self._lock:
+            if not self._closed:
+                close = getattr(self._iterator, "close", None)
+                if callable(close):
+                    close()
+                self._finish()
+
+
+
+    #### Mark completion and release the owner's strong registration once.
+    ####
+    def _finish(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._owner._release_iterator(self)
+
+
+
+    #### Defensively close an abandoned iterator and wipe suspended plaintext.
+    ####
+    def __del__(self) -> None:
+        with suppress(BaseException):
+            self._close_from_owner()
 
 
 

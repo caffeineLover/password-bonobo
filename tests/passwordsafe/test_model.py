@@ -18,6 +18,8 @@ from bonobo_core.passwordsafe.model import (
     PreservationWarningCode,
     RawField,
     RawRecord,
+    RecordHandle,
+    RevisionToken,
     VaultDocument,
     documents_equal_exact,
 )
@@ -88,6 +90,73 @@ class _FailingPayload:
     def close(self) -> None:
         self.close_calls += 1
         raise KeyboardInterrupt("synthetic payload cleanup failure")
+
+
+
+    #### Retain is unused here but keeps this runtime protocol fake complete.
+    ####
+    def retain(self) -> _FailingPayload:
+        return _FailingPayload()
+
+
+
+#### Stream caller-selected chunks under one independently declared length.
+####
+class _ScriptedPayload:
+
+
+
+    #### Retain fixed chunks, declaration, and optional iteration failure.
+    ####
+    def __init__(
+        self,
+        length: int,
+        chunks: tuple[bytes, ...],
+        *,
+        failure: BaseException | None = None,
+    ) -> None:
+        self._length = length
+        self._chunks = chunks
+        self._failure = failure
+
+
+
+    #### Return the intentionally independent declared length.
+    ####
+    @property
+    def length(self) -> int:
+        return self._length
+
+
+
+    #### Yield scripted chunks before any configured caller-visible failure.
+    ####
+    def iter_chunks(self, _chunk_size: int) -> Iterator[memoryview[int]]:
+        for chunk in self._chunks:
+            yield memoryview(chunk)
+        if self._failure is not None:
+            raise self._failure
+
+
+
+    #### Return a separate scripted payload lifetime without copying chunk bytes.
+    ####
+    def retain(self) -> _ScriptedPayload:
+        return _ScriptedPayload(self._length, self._chunks, failure=self._failure)
+
+
+
+    #### Complete the synthetic protocol lifetime without mutable storage.
+    ####
+    def close(self) -> None:
+        return None
+
+
+
+#### Build one document around a caller-selected raw header field sequence.
+####
+def _header_document(fields: tuple[RawField, ...]) -> VaultDocument:
+    return VaultDocument.create(VERSION_0311, fields, ())
 
 
 
@@ -244,3 +313,146 @@ def test_document_rejects_copy_and_pickle() -> None:
         pickle.dumps(document)
 
     document.close()
+
+
+
+#### Retain independent document payload leases without copying plaintext bytes.
+####
+@pytest.mark.parametrize("close_original_first", [True, False])
+def test_document_retain_survives_close_in_either_order(close_original_first: bool) -> None:
+    storage = bytearray(b"fabricated-secret")
+    payload = InlinePayload.take_ownership(storage)
+    original = _header_document(
+        (
+            RawField(0xE0, payload, 0, FieldClassification.UNKNOWN),
+            RawField(0xE1, payload, 1, FieldClassification.UNKNOWN),
+        ),
+    )
+    retained = original.retain()
+
+    first, second = (original, retained) if close_original_first else (retained, original)
+    first.close()
+
+    assert storage == bytearray(b"fabricated-secret")
+    assert second.semantic_manifest().field_count == 2
+    second.close()
+    assert storage == bytearray(17)
+
+
+
+#### Finalizing either document revision releases only its independent payload lease.
+####
+def test_document_retain_survives_original_finalizer() -> None:
+    storage = bytearray(b"fabricated-secret")
+    original = _header_document(
+        (RawField(0xE0, InlinePayload.take_ownership(storage), 0, FieldClassification.UNKNOWN),),
+    )
+    retained = original.retain()
+
+    original.__del__()
+
+    assert retained.semantic_manifest().field_count == 1
+    assert storage == bytearray(b"fabricated-secret")
+    retained.__del__()
+    assert storage == bytearray(17)
+
+
+
+#### Keep opaque tokens immutable and hash-stable inside set and dictionary keys.
+####
+@pytest.mark.parametrize("factory", [RecordHandle, RevisionToken])
+def test_identity_tokens_reject_mutation_copy_and_state(factory: type[RecordHandle] | type[RevisionToken]) -> None:
+    token = factory()
+    mapping = {token: "retained"}
+    members = {token}
+
+    with pytest.raises((AttributeError, TypeError)):
+        token._token = object()
+    with pytest.raises((AttributeError, TypeError)):
+        del token._token
+    with pytest.raises(TypeError, match="opaque identity cannot be copied or serialized"):
+        copy.copy(token)
+    with pytest.raises(TypeError, match="opaque identity cannot be copied or serialized"):
+        copy.deepcopy(token)
+    with pytest.raises(TypeError, match="opaque identity cannot be copied or serialized"):
+        pickle.dumps(token)
+    with pytest.raises(TypeError, match="opaque identity cannot be copied or serialized"):
+        token.__getstate__()
+    with pytest.raises(TypeError, match="opaque identity cannot be copied or serialized"):
+        token.__setstate__({})
+
+    assert mapping[token] == "retained"
+    assert token in members
+
+
+
+#### Return False rather than raising when ordered container counts differ.
+####
+def test_exact_comparison_is_total_for_container_count_mismatches() -> None:
+    one_header = _header_document((_field(0xE0, b"a", 0),))
+    two_headers = _header_document((_field(0xE0, b"a", 0), _field(0xE1, b"b", 1)))
+    one_field_record = RawRecord.create((_field(0xE0, b"a", 0),), ordinal=0)
+    two_field_record = RawRecord.create((_field(0xE0, b"a", 0), _field(0xE1, b"b", 1)), ordinal=0)
+    one_record = VaultDocument.create(VERSION_0311, (), (one_field_record,))
+    two_records = VaultDocument.create(VERSION_0311, (), (one_field_record, two_field_record))
+    field_mismatch = VaultDocument.create(VERSION_0311, (), (two_field_record,))
+
+    assert not documents_equal_exact(one_header, two_headers)
+    assert not documents_equal_exact(one_record, two_records)
+    assert not documents_equal_exact(one_record, field_mismatch)
+
+    for document in (one_header, two_headers, one_record, two_records, field_mismatch):
+        document.close()
+
+
+
+#### Reject zero chunks and declared stream underflow or overflow as mismatches.
+####
+@pytest.mark.parametrize(
+    "scripted",
+    [
+        _ScriptedPayload(2, (b"", b"ab")),
+        _ScriptedPayload(2, (b"a",)),
+        _ScriptedPayload(2, (b"abc",)),
+    ],
+)
+def test_exact_comparison_rejects_invalid_payload_stream_lengths(scripted: _ScriptedPayload) -> None:
+    expected = _header_document((_field(0xE0, b"ab", 0),))
+    candidate = _header_document((RawField(0xE0, scripted, 0, FieldClassification.UNDERSTOOD),))
+
+    assert not documents_equal_exact(expected, candidate, chunk_size=2)
+
+    expected.close()
+    candidate.close()
+
+
+
+#### Accept different bounded chunk boundaries only when all bytes match exactly.
+####
+def test_exact_comparison_accepts_different_chunk_boundaries() -> None:
+    first_payload = _ScriptedPayload(4, (b"a", b"bc", b"d"))
+    second_payload = _ScriptedPayload(4, (b"ab", b"cd"))
+    first = _header_document((RawField(0xE0, first_payload, 0, FieldClassification.UNKNOWN),))
+    second = _header_document((RawField(0xE0, second_payload, 0, FieldClassification.UNKNOWN),))
+
+    assert documents_equal_exact(first, second, chunk_size=3)
+
+    first.close()
+    second.close()
+
+
+
+#### Propagate payload access failures instead of misclassifying them as inequality.
+####
+def test_exact_comparison_propagates_payload_exception() -> None:
+    failure = KeyboardInterrupt("synthetic comparison failure")
+    failing = _ScriptedPayload(1, (), failure=failure)
+    first = _header_document((RawField(0xE0, failing, 0, FieldClassification.UNKNOWN),))
+    second = _header_document((RawField(0xE0, InlinePayload.from_bytes(b"x"), 0, FieldClassification.UNKNOWN),))
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        documents_equal_exact(first, second)
+
+    assert caught.value is failure
+    first.close()
+    second.close()

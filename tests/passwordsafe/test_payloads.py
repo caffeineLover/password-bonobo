@@ -254,6 +254,57 @@ def test_encrypted_span_close_is_idempotent_and_borrow_preserving() -> None:
 
 
 
+#### Wipe a suspended yielded chunk and prevent any bytes after payload close.
+####
+@pytest.mark.parametrize("chunk_size", [1, 7, 16, 17, 64])
+def test_encrypted_span_close_terminates_suspended_iterator(chunk_size: int) -> None:
+    payload, _snapshot, key, _span = _deferred_payload(bytes(range(64)))
+    iterator = payload.iter_chunks(chunk_size)
+    yielded = next(iterator)
+
+    payload.close()
+
+    with pytest.raises(ValueError, match="released memoryview"):
+        bytes(yielded)
+    with pytest.raises(PayloadClosedError, match="field payload is closed"):
+        next(iterator)
+    key.close()
+
+
+
+#### Fork only deferred CBC metadata while keeping borrowed owners caller-owned.
+####
+def test_encrypted_span_retain_has_independent_lifecycle() -> None:
+    expected = bytes(range(64))
+    payload, snapshot, key, _span = _deferred_payload(expected)
+    retained = payload.retain()
+
+    assert snapshot.calls == []
+    payload.close()
+
+    assert b"".join(bytes(chunk) for chunk in retained.iter_chunks(9)) == expected
+    assert not key.closed
+    retained.close()
+    key.close()
+
+
+
+#### Share inline storage until the final retained lease closes and wipes it.
+####
+def test_inline_payload_retain_wipes_only_after_last_lease() -> None:
+    storage = bytearray(b"fabricated-secret")
+    first = InlinePayload.take_ownership(storage)
+    second = first.retain()
+
+    first.close()
+
+    assert storage == bytearray(b"fabricated-secret")
+    assert b"".join(bytes(chunk) for chunk in second.iter_chunks(5)) == b"fabricated-secret"
+    second.close()
+    assert storage == bytearray(17)
+
+
+
 #### Exercise every generic copy and serialization path against one payload owner.
 ####
 def _assert_payload_copy_and_pickle_rejected(payload: InlinePayload | EncryptedSpanPayload) -> None:
