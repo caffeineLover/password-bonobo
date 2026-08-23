@@ -2,7 +2,7 @@
 
 Date: 2026-08-23
 
-Status: Draft assembled from approved design sections; pending committed-spec review
+Status: Approved
 
 Target: Password Bonobo lossless PasswordSafe V3 core
 
