@@ -106,6 +106,20 @@ class _ExclusiveCryptoOwner:
 
 
 
+    #### Reject direct slot-state extraction before owner state is inspected.
+    ####
+    def __getstate__(self) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
+    #### Reject direct fabricated-state injection without mutating this owner.
+    ####
+    def __setstate__(self, _state: object) -> NoReturn:
+        raise TypeError("cryptographic owner cannot be copied or serialized")
+
+
+
     #### Reject legacy reduction used by generic serialization protocols.
     ####
     def __reduce__(self) -> NoReturn:
@@ -136,7 +150,8 @@ class DerivedKey(_ExclusiveCryptoOwner, SecretBuffer):
         if not isinstance(data, bytearray):
             raise TypeError("derived key ownership requires a bytearray")
         if hasattr(self, "_data"):
-            data[:] = bytes(len(data))
+            if data is not self._data:
+                data[:] = bytes(len(data))
             raise TypeError("derived key cannot be reinitialized")
         if len(data) != HMAC_BYTES:
             data[:] = bytes(len(data))
@@ -160,11 +175,17 @@ def _wipe_transferred_bytearray(candidate: object) -> None:
 
 
 
-#### Wipe two transfer candidates without wiping aliased storage more than once.
+#### Wipe distinct fresh transfer candidates while preserving adopted storage.
 ####
-def _wipe_distinct_transferred_bytearrays(first: object, second: object) -> None:
-    _wipe_transferred_bytearray(first)
-    if second is not first:
+def _wipe_distinct_transferred_bytearrays(
+    first: object,
+    second: object,
+    *,
+    preserved: tuple[bytearray, ...] = (),
+) -> None:
+    if not any(first is owned for owned in preserved):
+        _wipe_transferred_bytearray(first)
+    if second is not first and not any(second is owned for owned in preserved):
         _wipe_transferred_bytearray(second)
 
 
@@ -188,7 +209,19 @@ class VaultKeys(_ExclusiveCryptoOwner):
         content_candidate: object = content_key
         hmac_candidate: object = hmac_key
         if hasattr(self, "_content_key") or hasattr(self, "_hmac_key"):
-            _wipe_distinct_transferred_bytearrays(content_candidate, hmac_candidate)
+            preserved = tuple(
+                owner._data
+                for owner in (
+                    getattr(self, "_content_key", None),
+                    getattr(self, "_hmac_key", None),
+                )
+                if isinstance(owner, SecretBuffer)
+            )
+            _wipe_distinct_transferred_bytearrays(
+                content_candidate,
+                hmac_candidate,
+                preserved=preserved,
+            )
             raise TypeError("vault keys cannot be reinitialized")
         if content_candidate is hmac_candidate:
             _wipe_transferred_bytearray(content_candidate)

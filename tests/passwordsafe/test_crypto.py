@@ -15,7 +15,7 @@ from builtins import bytearray as builtin_bytearray
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
-from typing import Final, SupportsIndex, cast, overload
+from typing import Final, Protocol, SupportsIndex, cast, overload
 
 import pytest
 from helpers import DeterministicRandomSource, build_spec_vault
@@ -316,6 +316,26 @@ class _WipeCountingBytearray(bytearray):
 
 
 
+#### Describe direct state hooks that exclusive owners must reject safely.
+####
+class _StateSerializationOwner(Protocol):
+
+
+
+    #### Attempt direct state extraction without relying on pickle framing.
+    ####
+    def __getstate__(self) -> object:
+        raise NotImplementedError
+
+
+
+    #### Attempt direct fabricated-state injection without deserializing secrets.
+    ####
+    def __setstate__(self, state: object) -> None:
+        raise NotImplementedError
+
+
+
 #### Assert all generic duplication and serialization routes reject one owner safely.
 ####
 def _assert_copy_and_serialization_rejected(owner: object) -> None:
@@ -354,6 +374,31 @@ class _DigestFailureHmac:
 def _new_digest_failure_hmac(_key: object, *, digestmod: object) -> hmac.HMAC:
     del digestmod
     return cast(hmac.HMAC, _DigestFailureHmac())
+
+
+
+#### Create all five live owner types plus their two caller-owned source keys.
+####
+def _make_crypto_owner_set() -> tuple[
+    DerivedKey,
+    VaultKeys,
+    CbcEncryptor,
+    CbcDecryptor,
+    FieldAuthenticator,
+    SecretBuffer,
+    SecretBuffer,
+]:
+    content_source = SecretBuffer.from_bytes(bytes(32))
+    hmac_source = SecretBuffer.from_bytes(b"k" * 32)
+    return (
+        DerivedKey(bytearray(range(32))),
+        VaultKeys(bytearray(range(32)), bytearray(range(32, 64))),
+        CbcEncryptor(_FakeTwofishBackend(), content_source, bytes(16)),
+        CbcDecryptor(_FakeTwofishBackend(), content_source, bytes(16)),
+        FieldAuthenticator(hmac_source),
+        content_source,
+        hmac_source,
+    )
 
 
 
@@ -495,6 +540,39 @@ def test_derived_key_reinitialization_preserves_existing_owned_storage() -> None
 
 
 
+#### Preserve owned derived storage while wiping only a fresh reinit candidate.
+####
+@pytest.mark.parametrize("closed", [False, True])
+@pytest.mark.parametrize("candidate_kind", ["owned", "fresh"])
+def test_derived_key_reinitialization_is_owned_storage_aware(
+    closed: bool,
+    candidate_kind: str,
+) -> None:
+    owned_storage = _WipeCountingBytearray(bytes(range(32)))
+    fresh_storage = _WipeCountingBytearray(bytes(range(32, 64)))
+    derived = DerivedKey(owned_storage)
+    owner_identity = derived._data
+    if closed:
+        derived.close()
+    candidate = owned_storage if candidate_kind == "owned" else fresh_storage
+
+    with pytest.raises(TypeError, match="derived key cannot be reinitialized"):
+        DerivedKey.__init__(derived, candidate)
+
+    assert derived._data is owner_identity
+    assert derived.closed is closed
+    assert owned_storage == (bytearray(32) if closed else bytearray(range(32)))
+    assert owned_storage.wipe_count == (1 if closed else 0)
+    if candidate_kind == "fresh":
+        assert fresh_storage == bytearray(32)
+        assert fresh_storage.wipe_count == 1
+    else:
+        assert fresh_storage == bytearray(range(32, 64))
+        assert fresh_storage.wipe_count == 0
+    derived.close()
+
+
+
 #### Reject one buffer transferred as both vault keys and wipe it exactly once.
 ####
 def test_vault_keys_reject_shared_storage_before_any_owner_can_escape() -> None:
@@ -583,6 +661,74 @@ def test_vault_keys_reinitialization_wipes_shared_candidate_exactly_once() -> No
 
 
 
+#### Preserve current vault storage and wipe every distinct fresh candidate once.
+####
+@pytest.mark.parametrize("closed", [False, True])
+@pytest.mark.parametrize(
+    ("content_candidate_name", "hmac_candidate_name"),
+    [
+        ("content", "hmac"),
+        ("hmac", "content"),
+        ("content", "content"),
+        ("hmac", "hmac"),
+        ("content", "fresh_a"),
+        ("fresh_a", "content"),
+        ("hmac", "fresh_a"),
+        ("fresh_a", "hmac"),
+        ("fresh_a", "fresh_a"),
+        ("fresh_a", "fresh_b"),
+    ],
+)
+def test_vault_keys_reinitialization_is_owned_storage_aware(
+    closed: bool,
+    content_candidate_name: str,
+    hmac_candidate_name: str,
+) -> None:
+    content_storage = _WipeCountingBytearray(bytes(range(32)))
+    hmac_storage = _WipeCountingBytearray(bytes(range(32, 64)))
+    fresh_a = _WipeCountingBytearray(bytes(range(32)))
+    fresh_b = _WipeCountingBytearray(bytes(range(32, 64)))
+    keys = VaultKeys(content_storage, hmac_storage)
+    content_owner = keys.content_key
+    hmac_owner = keys.hmac_key
+    if closed:
+        keys.close()
+    candidates = {
+        "content": content_storage,
+        "hmac": hmac_storage,
+        "fresh_a": fresh_a,
+        "fresh_b": fresh_b,
+    }
+
+    with pytest.raises(TypeError, match="vault keys cannot be reinitialized"):
+        VaultKeys.__init__(
+            keys,
+            candidates[content_candidate_name],
+            candidates[hmac_candidate_name],
+        )
+
+    assert keys.content_key is content_owner
+    assert keys.hmac_key is hmac_owner
+    assert keys.closed is closed
+    assert content_storage == (bytearray(32) if closed else bytearray(range(32)))
+    assert hmac_storage == (bytearray(32) if closed else bytearray(range(32, 64)))
+    assert content_storage.wipe_count == (1 if closed else 0)
+    assert hmac_storage.wipe_count == (1 if closed else 0)
+    used_names = {content_candidate_name, hmac_candidate_name}
+    for name, fresh_storage, initial in (
+        ("fresh_a", fresh_a, bytearray(range(32))),
+        ("fresh_b", fresh_b, bytearray(range(32, 64))),
+    ):
+        if name in used_names:
+            assert fresh_storage == bytearray(32)
+            assert fresh_storage.wipe_count == 1
+        else:
+            assert fresh_storage == initial
+            assert fresh_storage.wipe_count == 0
+    keys.close()
+
+
+
 #### Prevent callers from replacing either key owner outside joint lifecycle control.
 ####
 def test_vault_key_properties_are_read_only() -> None:
@@ -635,6 +781,88 @@ def test_crypto_owners_reject_copy_deepcopy_and_pickle_when_live_or_closed() -> 
 
     content_key.close()
     hmac_key.close()
+
+
+
+#### Reject direct live and closed state extraction or injection without mutation.
+####
+@pytest.mark.parametrize("closed", [False, True])
+@pytest.mark.parametrize("hook_name", ["getstate", "setstate"])
+def test_crypto_owners_reject_direct_state_hooks_without_mutation(
+    closed: bool,
+    hook_name: str,
+) -> None:
+    (
+        derived,
+        vault_keys,
+        encryptor,
+        decryptor,
+        authenticator,
+        content_source,
+        hmac_source,
+    ) = _make_crypto_owner_set()
+    owners: tuple[object, ...] = (derived, vault_keys, encryptor, decryptor, authenticator)
+    derived_storage = derived._data
+    content_owner = vault_keys.content_key
+    hmac_owner = vault_keys.hmac_key
+    encrypt_context = encryptor._context
+    decrypt_context = decryptor._context
+    encrypt_chain = encryptor._previous
+    decrypt_chain = decryptor._previous
+    hmac_state = authenticator._hmac
+    if closed:
+        derived.close()
+        vault_keys.close()
+        encryptor.close()
+        decryptor.close()
+        authenticator.close()
+
+    try:
+        for owner in owners:
+            state_owner = cast(_StateSerializationOwner, owner)
+            with pytest.raises(TypeError, match=r"^cryptographic owner cannot be copied or serialized$"):
+                if hook_name == "getstate":
+                    state_owner.__getstate__()
+                else:
+                    state_owner.__setstate__({"fabricated": ("state", 1)})
+
+        assert derived._data is derived_storage
+        assert vault_keys.content_key is content_owner
+        assert vault_keys.hmac_key is hmac_owner
+        assert encryptor._context is encrypt_context
+        assert decryptor._context is decrypt_context
+        assert encryptor._previous is encrypt_chain
+        assert decryptor._previous is decrypt_chain
+        if closed:
+            assert derived.closed
+            assert vault_keys.closed
+            assert encryptor.closed
+            assert decryptor.closed
+            assert authenticator.closed
+            assert derived_storage == bytearray(32)
+            assert encrypt_chain == bytearray(16)
+            assert decrypt_chain == bytearray(16)
+            assert authenticator._hmac is None
+        else:
+            assert bytes(derived.borrow()) == bytes(range(32))
+            assert bytes(vault_keys.content_key.borrow()) == bytes(range(32))
+            assert bytes(vault_keys.hmac_key.borrow()) == bytes(range(32, 64))
+            assert encryptor.transform(bytes(range(16))) == bytes(range(16))
+            assert decryptor.transform(bytes(range(16))) == bytes(range(16))
+            assert authenticator._hmac is hmac_state
+            authenticator.update(b"first")
+            authenticator.update(b"second")
+            assert authenticator.digest().hex() == (
+                "135c55ecf0b3052079eefadd5670cf5601d91084db46147a63ae900749423429"
+            )
+    finally:
+        derived.close()
+        vault_keys.close()
+        encryptor.close()
+        decryptor.close()
+        authenticator.close()
+        content_source.close()
+        hmac_source.close()
 
 
 
