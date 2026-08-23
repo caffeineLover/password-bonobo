@@ -201,6 +201,36 @@ class _ExplodingSymbolLibrary:
 
 
 
+#### Raise a configured exception when direct construction resolves a KAT symbol.
+####
+class _DynamicSymbolLibrary(_FakeBotanLibrary):
+
+
+
+    #### Retain one exception without disturbing assignment of the fake symbols.
+    ####
+    def __init__(self, symbol_exception: BaseException) -> None:
+        super().__init__()
+        self._symbol_exception = symbol_exception
+
+
+
+    #### Model a hostile dynamic property for one later required cipher symbol.
+    ####
+    def __getattribute__(self, name: str) -> object:
+        if name == "botan_block_cipher_init":
+            raise object.__getattribute__(self, "_symbol_exception")
+        return super().__getattribute__(name)
+
+
+
+#### Model the exact subclass override that previously skipped constructor KAT work.
+####
+def _skip_self_test(_backend: BotanBackend) -> None:
+    return None
+
+
+
 #### Resolve either the required CI artifact or an optional local developer build.
 ####
 def _resolve_botan_library(default_library: Path = _DEFAULT_BOTAN_LIBRARY) -> Path:
@@ -386,6 +416,102 @@ def test_botan_direct_construction_enforces_known_answer_gate() -> None:
     assert len(library.botan_block_cipher_init.calls) == 1
     assert len(library.botan_block_cipher_encrypt_blocks.calls) == 1
     assert len(library.botan_block_cipher_destroy.calls) == 1
+
+
+
+#### Keep constructor validation independent from monkeypatchable instance methods.
+####
+def test_botan_constructor_uses_non_overridable_known_answer_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary(valid_vector=False)
+    monkeypatch.setattr(BotanBackend, "self_test", _skip_self_test)
+
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend(cast(_BotanLibrary, library))
+
+    assert caught.value.reason == CryptoBackendReason.SELF_TEST_FAILED.value
+    assert library.botan_ffi_supports_api.calls == [(BOTAN_FFI_API_VERSION,)]
+    assert len(library.botan_version_major.calls) == 1
+    assert len(library.botan_version_minor.calls) == 1
+    assert len(library.botan_version_patch.calls) == 1
+    assert len(library.botan_block_cipher_init.calls) == 1
+    assert len(library.botan_block_cipher_set_key.calls) == 1
+    assert len(library.botan_block_cipher_encrypt_blocks.calls) == 1
+    assert len(library.botan_block_cipher_decrypt_blocks.calls) == 1
+    assert len(library.botan_block_cipher_destroy.calls) == 1
+
+
+
+#### Reject the subclass extension point that previously allowed a no-op KAT.
+####
+def test_botan_backend_rejects_subclass_gate_bypass() -> None:
+    library = _FakeBotanLibrary(valid_vector=False)
+
+    with pytest.raises(TypeError):
+        bypass_backend = type("BypassBotanBackend", (BotanBackend,), {"self_test": _skip_self_test})
+        bypass_backend(cast(_BotanLibrary, library))
+
+    assert library.botan_ffi_supports_api.calls == []
+    assert library.botan_block_cipher_init.calls == []
+
+
+
+#### Publish no candidate library on an object retained across failed initialization.
+####
+def test_botan_failed_initialization_leaves_retained_object_unusable() -> None:
+    library = _FakeBotanLibrary(statuses={"supports_api": -1})
+    retained_backend = BotanBackend.__new__(BotanBackend)
+
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend.__init__(retained_backend, cast(_BotanLibrary, library))
+
+    assert caught.value.reason == CryptoBackendReason.INVALID_ABI.value
+    assert not hasattr(retained_backend, "_library")
+    with (
+        SecretBuffer.from_bytes(TWOFISH_ZERO_KEY) as key_material,
+        pytest.raises(AttributeError),
+        retained_backend.key(key_material),
+    ):
+        pytest.fail("a retained failed backend reached cipher use")
+    assert library.botan_block_cipher_init.calls == []
+
+
+
+#### Reject reinitialization without replacing an already validated library.
+####
+def test_botan_reinitialization_preserves_existing_valid_state() -> None:
+    valid_library = _FakeBotanLibrary()
+    invalid_library = _FakeBotanLibrary(statuses={"supports_api": -1})
+    backend = BotanBackend(cast(_BotanLibrary, valid_library))
+
+    with pytest.raises(TypeError):
+        BotanBackend.__init__(backend, cast(_BotanLibrary, invalid_library))
+
+    backend.self_test()
+    assert invalid_library.botan_ffi_supports_api.calls == []
+    assert invalid_library.botan_block_cipher_init.calls == []
+    assert len(valid_library.botan_block_cipher_init.calls) == 2
+
+
+
+#### Contain a hostile direct-construction symbol without retaining its details.
+####
+def test_botan_direct_construction_contains_dynamic_symbol_exception() -> None:
+    library = _DynamicSymbolLibrary(RuntimeError("E:/fabricated/path/fabricated-direct-symbol-detail"))
+
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend(cast(_BotanLibrary, library))
+
+    _assert_safe_backend_error(caught.value, CryptoBackendReason.INVALID_ABI)
+
+
+
+#### Allow process-control exceptions to propagate across direct symbol resolution.
+####
+def test_botan_direct_construction_propagates_keyboard_interrupt() -> None:
+    library = _DynamicSymbolLibrary(KeyboardInterrupt())
+
+    with pytest.raises(KeyboardInterrupt):
+        BotanBackend(cast(_BotanLibrary, library))
 
 
 

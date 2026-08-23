@@ -62,6 +62,90 @@ class _BotanLibrary(Protocol):
 
 
 
+#### Retain one stable set of required symbols and its native library owner.
+####
+#### Resolving every dynamic attribute before validation prevents later property
+#### access from escaping the native exception-containment boundary.
+####
+class _ResolvedBotanLibrary:
+    __slots__ = (
+        "_owner",
+        "botan_block_cipher_decrypt_blocks",
+        "botan_block_cipher_destroy",
+        "botan_block_cipher_encrypt_blocks",
+        "botan_block_cipher_init",
+        "botan_block_cipher_set_key",
+        "botan_ffi_supports_api",
+        "botan_version_major",
+        "botan_version_minor",
+        "botan_version_patch",
+    )
+
+    botan_block_cipher_decrypt_blocks: _BotanFunction
+    botan_block_cipher_destroy: _BotanFunction
+    botan_block_cipher_encrypt_blocks: _BotanFunction
+    botan_block_cipher_init: _BotanFunction
+    botan_block_cipher_set_key: _BotanFunction
+    botan_ffi_supports_api: _BotanFunction
+    botan_version_major: _BotanFunction
+    botan_version_minor: _BotanFunction
+    botan_version_patch: _BotanFunction
+
+
+
+    #### Snapshot every callable while retaining the object that owns them.
+    ####
+    def __init__(
+        self,
+        owner: object,
+        *,
+        ffi_supports_api: _BotanFunction,
+        version_major: _BotanFunction,
+        version_minor: _BotanFunction,
+        version_patch: _BotanFunction,
+        block_cipher_init: _BotanFunction,
+        block_cipher_destroy: _BotanFunction,
+        block_cipher_set_key: _BotanFunction,
+        block_cipher_encrypt_blocks: _BotanFunction,
+        block_cipher_decrypt_blocks: _BotanFunction,
+    ) -> None:
+        self._owner = owner
+        self.botan_ffi_supports_api = ffi_supports_api
+        self.botan_version_major = version_major
+        self.botan_version_minor = version_minor
+        self.botan_version_patch = version_patch
+        self.botan_block_cipher_init = block_cipher_init
+        self.botan_block_cipher_destroy = block_cipher_destroy
+        self.botan_block_cipher_set_key = block_cipher_set_key
+        self.botan_block_cipher_encrypt_blocks = block_cipher_encrypt_blocks
+        self.botan_block_cipher_decrypt_blocks = block_cipher_decrypt_blocks
+
+
+
+#### Resolve every required callable inside one closed exception boundary.
+####
+#### Exception subclasses become missing ABI state; process-control BaseException
+#### subclasses retain their normal propagation behavior.
+####
+def _resolve_library(candidate: _BotanLibrary) -> _ResolvedBotanLibrary | None:
+    try:
+        return _ResolvedBotanLibrary(
+            candidate,
+            ffi_supports_api=candidate.botan_ffi_supports_api,
+            version_major=candidate.botan_version_major,
+            version_minor=candidate.botan_version_minor,
+            version_patch=candidate.botan_version_patch,
+            block_cipher_init=candidate.botan_block_cipher_init,
+            block_cipher_destroy=candidate.botan_block_cipher_destroy,
+            block_cipher_set_key=candidate.botan_block_cipher_set_key,
+            block_cipher_encrypt_blocks=candidate.botan_block_cipher_encrypt_blocks,
+            block_cipher_decrypt_blocks=candidate.botan_block_cipher_decrypt_blocks,
+        )
+    except Exception:
+        return None
+
+
+
 #### Load a caller-selected Botan binary while discarding unsafe loader details.
 ####
 #### A failure returns no platform exception object, so a later typed error cannot
@@ -229,6 +313,60 @@ class _BotanTwofishKey:
 
 
 
+#### Create one fixed Twofish handle with deterministic exception-safe cleanup.
+####
+@contextmanager
+def _managed_twofish_key(library: _BotanLibrary, key_material: SecretBuffer) -> Iterator[_BotanTwofishKey]:
+    key = _BotanTwofishKey(library, key_material)
+    try:
+        yield key
+    except BaseException:
+        with suppress(CryptoBackendError):
+            key.close()
+        raise
+    else:
+        key.close()
+
+
+
+#### Run the independent official vector directly against candidate-local state.
+####
+#### This operation has no backend receiver and therefore cannot dispatch through
+#### an override while deciding whether construction may publish the library.
+####
+def _run_twofish_known_answer(library: _BotanLibrary) -> None:
+    with SecretBuffer.from_bytes(_TWOFISH_ZERO_KEY) as key_material, _managed_twofish_key(
+        library,
+        key_material,
+    ) as key:
+        ciphertext = key.encrypt_block(_TWOFISH_ZERO_BLOCK)
+        plaintext = key.decrypt_block(_TWOFISH_ZERO_CIPHERTEXT)
+        if ciphertext != _TWOFISH_ZERO_CIPHERTEXT or plaintext != _TWOFISH_ZERO_BLOCK:
+            raise CryptoBackendError(CryptoBackendReason.SELF_TEST_FAILED)
+
+
+
+#### Resolve, version-check, and self-test one candidate without publishing it.
+####
+def _validate_library(candidate: _BotanLibrary) -> _ResolvedBotanLibrary:
+    library = _resolve_library(candidate)
+    if library is None:
+        raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
+
+    supported_api = _call(library.botan_ffi_supports_api, BOTAN_FFI_API_VERSION)
+    major = _call(library.botan_version_major)
+    minor = _call(library.botan_version_minor)
+    patch = _call(library.botan_version_patch)
+    if supported_api != 0 or major != _BOTAN_MAJOR_VERSION or minor is None or minor < _BOTAN_MINIMUM_MINOR_VERSION:
+        raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
+    if patch is None:
+        raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
+
+    _run_twofish_known_answer(library)
+    return library
+
+
+
 #### Provide a gated fixed-Twofish backend over one verified Botan library.
 ####
 class BotanBackend:
@@ -236,23 +374,23 @@ class BotanBackend:
 
 
 
-    #### Validate one bound library completely before construction can return.
+    #### Reject extension because validation is intentionally not an override point.
     ####
-    #### Direct and factory construction share this single ABI, version, and KAT
-    #### path, so no importable token or alternate entry can bypass the gate.
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        raise TypeError("BotanBackend does not support subclassing")
+
+
+
+    #### Validate one bound library completely before publishing usable state.
+    ####
+    #### Reinitialization cannot replace a previously validated library.  First
+    #### construction keeps the candidate local until the complete gate succeeds.
     ####
     def __init__(self, library: _BotanLibrary) -> None:
-        self._library = library
-
-        supported_api = _call(library.botan_ffi_supports_api, BOTAN_FFI_API_VERSION)
-        major = _call(library.botan_version_major)
-        minor = _call(library.botan_version_minor)
-        patch = _call(library.botan_version_patch)
-        if supported_api != 0 or major != _BOTAN_MAJOR_VERSION or minor is None or minor < _BOTAN_MINIMUM_MINOR_VERSION:
-            raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
-        if patch is None:
-            raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
-        self.self_test()
+        if hasattr(self, "_library"):
+            raise TypeError("BotanBackend cannot be reinitialized")
+        validated_library = _validate_library(library)
+        self._library = validated_library
 
 
 
@@ -280,23 +418,12 @@ class BotanBackend:
     ####
     @contextmanager
     def key(self, key_material: SecretBuffer) -> Iterator[TwofishKey]:
-        key = _BotanTwofishKey(self._library, key_material)
-        try:
+        with _managed_twofish_key(self._library, key_material) as key:
             yield key
-        except BaseException:
-            with suppress(CryptoBackendError):
-                key.close()
-            raise
-        else:
-            key.close()
 
 
 
     #### Verify encryption and decryption against the official zero-key vector.
     ####
     def self_test(self) -> None:
-        with SecretBuffer.from_bytes(_TWOFISH_ZERO_KEY) as key_material, self.key(key_material) as key:
-            ciphertext = key.encrypt_block(_TWOFISH_ZERO_BLOCK)
-            plaintext = key.decrypt_block(_TWOFISH_ZERO_CIPHERTEXT)
-            if ciphertext != _TWOFISH_ZERO_CIPHERTEXT or plaintext != _TWOFISH_ZERO_BLOCK:
-                raise CryptoBackendError(CryptoBackendReason.SELF_TEST_FAILED)
+        _run_twofish_known_answer(self._library)
