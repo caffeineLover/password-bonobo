@@ -92,8 +92,7 @@ These scenarios specify observable inputs and outcomes, not internal design:
 \begin{itemize}
 \tightlist
 \item
-  \passthrough{\lstinline!PasswordSafe!} means the official format is authoritative for file structure, fields, and
-  preservation.
+  \nolinkurl{PasswordSafe} means the official format is authoritative for file structure, fields, and preservation.
 \item
   \passthrough{\lstinline!Gorilla!} means the pinned dossier observation is the compatibility authority.
 \item
@@ -118,20 +117,19 @@ Every value below is fabricated, non-secret, and confined to a disposable test d
 hosts to a controlled local endpoint. No personal vault, real credential, provider account, device account, or upstream
 vault file is permitted.
 
-\passthrough{\lstinline!PB-SYN-BASE!} is a synthetic PasswordSafe V3 vault named
-\passthrough{\lstinline!pb-syn-main.psafe3!} with:
+\nolinkurl{PB-SYN-BASE} is a synthetic PasswordSafe V3 vault named \nolinkurl{pb-syn-main.psafe3} with:
 
 \begin{itemize}
 \tightlist
 \item
   database UUID \nolinkurl{11111111-1111-4111-8111-111111111111};
 \item
-  master input \passthrough{\lstinline!fabricated-master-input-one!};
+  master input \nolinkurl{fabricated-master-input-one};
 \item
-  record UUID \nolinkurl{22222222-2222-4222-8222-222222222222} in group \passthrough{\lstinline!Research.Sample!};
+  record UUID \nolinkurl{22222222-2222-4222-8222-222222222222} in group \nolinkurl{Research.Sample};
 \item
-  title \passthrough{\lstinline!Alpha Portal!}, username \passthrough{\lstinline!sample-user!}, and password
-  \passthrough{\lstinline!fabricated-credential-value!};
+  title \passthrough{\lstinline!Alpha Portal!}, username \nolinkurl{sample-user}, and password
+  \nolinkurl{fabricated-credential-value};
 \item
   URL \nolinkurl{https://alpha.example.invalid/login} and note \passthrough{\lstinline!fabricated note A!};
 \item
@@ -141,12 +139,12 @@ vault file is permitted.
   unknown header field type \passthrough{\lstinline!0xE1!} with the same fabricated bytes.
 \end{itemize}
 
-\passthrough{\lstinline!PB-SYN-SECOND!} adds UUID \nolinkurl{33333333-3333-4333-8333-333333333333}, group
-\passthrough{\lstinline!Research.Beta!}, title \passthrough{\lstinline!Beta Portal!}, username
-\passthrough{\lstinline!sample-user-two!}, password \passthrough{\lstinline!fabricated-credential-two!}, URL
-\nolinkurl{https://beta.example.invalid/start}, and note \passthrough{\lstinline!fabricated note B!}. A semantic
-manifest records database and record UUIDs, every standard field, every unknown field type and byte sequence, and the
-declared format level. A separate SHA-256 value records each encrypted file.
+\nolinkurl{PB-SYN-SECOND} adds UUID \nolinkurl{33333333-3333-4333-8333-333333333333}, group \nolinkurl{Research.Beta},
+title \passthrough{\lstinline!Beta Portal!}, username \nolinkurl{sample-user-two}, password
+\nolinkurl{fabricated-credential-two}, URL \nolinkurl{https://beta.example.invalid/start}, and note
+\passthrough{\lstinline!fabricated note B!}. A semantic manifest records database and record UUIDs, every standard
+field, every unknown field type and byte sequence, and the declared format level. A separate SHA-256 value records each
+encrypted file.
 
 \subsection{Gorilla and PasswordSafe compatibility oracles}\label{gorilla-and-passwordsafe-compatibility-oracles}
 
@@ -157,20 +155,18 @@ declared format level. A separate SHA-256 value records each encrypted file.
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-001!} and \passthrough{\lstinline!GOR-BEH-003!}.
+  Evidence: \nolinkurl{GOR-BEH-001} and \nolinkurl{GOR-BEH-003}.
 \item
-  Synthetic setup: Start with no active vault and the fabricated values from \passthrough{\lstinline!PB-SYN-BASE!}.
+  Synthetic setup: Start with no active vault and the fabricated values from \nolinkurl{PB-SYN-BASE}.
 \item
-  Action: Create a vault, enter the master input twice, save as \passthrough{\lstinline!pb-syn-main.psafe3!}, close it,
-  and reopen it.
+  Action: Create a vault, enter the master input twice, save as \nolinkurl{pb-syn-main.psafe3}, close it, and reopen it.
 \item
   Expected observation: The empty vault precedes the first save; reopen accepts the input and shows the one record.
 \item
-  Preservation requirement: No earlier file changes; the saved record shows every \passthrough{\lstinline!PB-SYN-BASE!}
-  standard value.
+  Preservation requirement: No earlier file changes; the saved record shows every \nolinkurl{PB-SYN-BASE} standard
+  value.
 \item
-  Cleanup: Close without pending changes and remove \passthrough{\lstinline!pb-syn-main.psafe3!} from the disposable
-  directory.
+  Cleanup: Close without pending changes and remove \nolinkurl{pb-syn-main.psafe3} from the disposable directory.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision.
 \end{itemize}
@@ -182,13 +178,12 @@ declared format level. A separate SHA-256 value records each encrypted file.
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-007!} and the approved program design section 6.
+  Evidence: \nolinkurl{GOR-BEH-007} and the approved program design section 6.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} with fabricated input
-  \passthrough{\lstinline!fabricated-master-input-one!}.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} with fabricated input \nolinkurl{fabricated-master-input-one}.
 \item
-  Action: Change it to \passthrough{\lstinline!fabricated-master-input-two!}, save, close, then try the old and new
-  inputs in that order.
+  Action: Change it to \nolinkurl{fabricated-master-input-two}, save, close, then try the old and new inputs in that
+  order.
 \item
   Expected observation: The old input is rejected; the new input opens the same record and database identity.
 \item
@@ -204,12 +199,11 @@ declared format level. A separate SHA-256 value records each encrypted file.
 \begin{itemize}
 \tightlist
 \item
-  Authority: \passthrough{\lstinline!PasswordSafe!}.
+  Authority: \nolinkurl{PasswordSafe}.
 \item
-  Evidence: Program design sections 4 and 11; \passthrough{\lstinline!GOR-BEH-008!}.
+  Evidence: Program design sections 4 and 11; \nolinkurl{GOR-BEH-008}.
 \item
-  Synthetic setup: Copy \passthrough{\lstinline!PB-SYN-BASE!}; record its encrypted hash and complete fabricated
-  semantic manifest.
+  Synthetic setup: Copy \nolinkurl{PB-SYN-BASE}; record its encrypted hash and complete fabricated semantic manifest.
 \item
   Action: Open the copy in Bonobo, make no semantic edit, invoke Save once, close, and reopen it in each client.
 \item
@@ -232,9 +226,9 @@ work}\label{gor-test-004---guard-a-switch-and-close-with-unsaved-work}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-012!} through \passthrough{\lstinline!GOR-BEH-014!}.
+  Evidence: \nolinkurl{GOR-BEH-012} through \nolinkurl{GOR-BEH-014}.
 \item
-  Synthetic setup: Open a copy of \passthrough{\lstinline!PB-SYN-BASE!} and change its fabricated note to
+  Synthetic setup: Open a copy of \nolinkurl{PB-SYN-BASE} and change its fabricated note to
   \passthrough{\lstinline!fabricated pending note!}.
 \item
   Action: Request another file and choose Cancel; request close and choose Cancel; request close again and discard.
@@ -255,13 +249,11 @@ rest}\label{gor-test-005---edit-one-known-field-and-preserve-the-rest}
 \begin{itemize}
 \tightlist
 \item
-  Authority: \passthrough{\lstinline!PasswordSafe!}.
+  Authority: \nolinkurl{PasswordSafe}.
 \item
-  Evidence: Program design section 4; \passthrough{\lstinline!GOR-BEH-023!}, \passthrough{\lstinline!GOR-BEH-025!}, and
-  \passthrough{\lstinline!GOR-BEH-057!}.
+  Evidence: Program design section 4; \nolinkurl{GOR-BEH-023}, \nolinkurl{GOR-BEH-025}, and \nolinkurl{GOR-BEH-057}.
 \item
-  Synthetic setup: Copy \passthrough{\lstinline!PB-SYN-BASE!}; retain its fabricated manifest and both unknown field
-  byte sequences.
+  Synthetic setup: Copy \nolinkurl{PB-SYN-BASE}; retain its fabricated manifest and both unknown field byte sequences.
 \item
   Action: Change only the title to \passthrough{\lstinline!Alpha Portal Renamed!}, save, reopen, then delete the record
   and discard on close.
@@ -284,13 +276,13 @@ rest}\label{gor-test-005---edit-one-known-field-and-preserve-the-rest}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-030!} through \passthrough{\lstinline!GOR-BEH-032!}.
+  Evidence: \nolinkurl{GOR-BEH-030} through \nolinkurl{GOR-BEH-032}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} plus \passthrough{\lstinline!PB-SYN-SECOND!}; add empty
-  fabricated group \passthrough{\lstinline!Research.Empty!}.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} plus \nolinkurl{PB-SYN-SECOND}; add empty fabricated group
+  \nolinkurl{Research.Empty}.
 \item
-  Action: Move Beta under \passthrough{\lstinline!Research.Sample!}, rename that group to
-  \passthrough{\lstinline!Research.Renamed!}, and save and reopen.
+  Action: Move Beta under \nolinkurl{Research.Sample}, rename that group to \nolinkurl{Research.Renamed}, and save and
+  reopen.
 \item
   Expected observation: Both records use the renamed path; the empty group is absent after reopen.
 \item
@@ -308,10 +300,9 @@ rest}\label{gor-test-005---edit-one-known-field-and-preserve-the-rest}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-036!}.
+  Evidence: \nolinkurl{GOR-BEH-036}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} plus \passthrough{\lstinline!PB-SYN-SECOND!} with no
-  pending changes.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} plus \nolinkurl{PB-SYN-SECOND} with no pending changes.
 \item
   Action: Search titles for \passthrough{\lstinline!Beta!}, advance once, then search case-sensitively for
   \passthrough{\lstinline!beta!}.
@@ -333,10 +324,10 @@ gap}\label{gor-test-008---characterize-the-filtering-evidence-gap}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-037!}; \passthrough{\lstinline!GAP-037!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-037}; \passthrough{\lstinline!GAP-037!} in the feature matrix.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} plus \passthrough{\lstinline!PB-SYN-SECOND!} and record
-  the two fabricated visible titles.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} plus \nolinkurl{PB-SYN-SECOND} and record the two fabricated visible
+  titles.
 \item
   Action: Inspect available record-view actions, apply any visible filter for \passthrough{\lstinline!Alpha!}, then
   clear it if offered.
@@ -357,10 +348,10 @@ gap}\label{gor-test-008---characterize-the-filtering-evidence-gap}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-041!}.
+  Evidence: \nolinkurl{GOR-BEH-041}.
 \item
-  Synthetic setup: Edit the \passthrough{\lstinline!PB-SYN-BASE!} record with fabricated policy length 12 and letters
-  and digits enabled.
+  Synthetic setup: Edit the \nolinkurl{PB-SYN-BASE} record with fabricated policy length 12 and letters and digits
+  enabled.
 \item
   Action: Generate once, record only length and character classes, cancel, reopen the edit, and inspect the password.
 \item
@@ -381,15 +372,14 @@ behavior}\label{gor-test-010---characterize-password-history-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-027!}; matrix \passthrough{\lstinline!GAP-027!}; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} section 3.3 note 12.
+  Evidence: \nolinkurl{GOR-BEH-027}; matrix \passthrough{\lstinline!GAP-027!}; official PasswordSafe
+  \nolinkurl{formatV3.txt} section 3.3 note 12.
 \item
-  Synthetic setup: In Password Safe, create \passthrough{\lstinline!PB-SYN-BASE!}, enable password history with limit 2,
-  and save with password \passthrough{\lstinline!fabricated-history-one!}; change and save
-  \passthrough{\lstinline!fabricated-history-two!}, then \passthrough{\lstinline!fabricated-history-current!}.
+  Synthetic setup: In Password Safe, create \nolinkurl{PB-SYN-BASE}, enable password history with limit 2, and save with
+  password \nolinkurl{fabricated-history-one}; change and save \nolinkurl{fabricated-history-two}, then
+  \nolinkurl{fabricated-history-current}.
 \item
-  Action: View history if available, change the password to \passthrough{\lstinline!fabricated-new-value!}, save, close,
-  and reopen.
+  Action: View history if available, change the password to \nolinkurl{fabricated-new-value}, save, close, and reopen.
 \item
   Expected observation: Record visible history and the exact field \passthrough{\lstinline!0x0F!} value before and after
   the Gorilla change.
@@ -408,8 +398,8 @@ behavior}\label{gor-test-010---characterize-password-history-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-028!}; matrix \passthrough{\lstinline!GAP-028!}; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} section 3.3 note 3.
+  Evidence: \nolinkurl{GOR-BEH-028}; matrix \passthrough{\lstinline!GAP-028!}; official PasswordSafe
+  \nolinkurl{formatV3.txt} section 3.3 note 3.
 \item
   Synthetic setup: A fabricated official-format fixture authority gives target UUID
   \nolinkurl{22222222-2222-4222-8222-222222222222} mandatory Title \passthrough{\lstinline!Alpha Portal!}. Alias UUID
@@ -437,8 +427,8 @@ behavior}\label{gor-test-012---characterize-record-shortcut-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-029!}; matrix \passthrough{\lstinline!GAP-029!}; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} section 3.3 note 4.
+  Evidence: \nolinkurl{GOR-BEH-029}; matrix \passthrough{\lstinline!GAP-029!}; official PasswordSafe
+  \nolinkurl{formatV3.txt} section 3.3 note 4.
 \item
   Synthetic setup: A fabricated official-format fixture authority gives target UUID
   \nolinkurl{22222222-2222-4222-8222-222222222222} mandatory Title \passthrough{\lstinline!Alpha Portal!}. Shortcut UUID
@@ -466,12 +456,12 @@ behavior}\label{gor-test-013---characterize-protected-entry-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-026!}; matrix \passthrough{\lstinline!GAP-026!}; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} section 3.3 note 17.
+  Evidence: \nolinkurl{GOR-BEH-026}; matrix \passthrough{\lstinline!GAP-026!}; official PasswordSafe
+  \nolinkurl{formatV3.txt} section 3.3 note 17.
 \item
   Synthetic setup: A fabricated official-format fixture authority sets record field type \passthrough{\lstinline!0x15!}
-  to byte \passthrough{\lstinline!01!} on \passthrough{\lstinline!PB-SYN-BASE!}; Password Safe opens it and confirms the
-  record is protected before Gorilla receives a copy.
+  to byte \passthrough{\lstinline!01!} on \nolinkurl{PB-SYN-BASE}; Password Safe opens it and confirms the record is
+  protected before Gorilla receives a copy.
 \item
   Action: Attempt edit, deletion, export, merge, username copy, and password copy in separate disposable copies.
 \item
@@ -491,11 +481,11 @@ behavior}\label{gor-test-013---characterize-protected-entry-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-044!}.
+  Evidence: \nolinkurl{GOR-BEH-044}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} copies
-  \passthrough{\lstinline!pb-syn-clipboard-timer.psafe3!}, \passthrough{\lstinline!pb-syn-clipboard-manual.psafe3!}, and
-  \passthrough{\lstinline!pb-syn-clipboard-lock.psafe3!}; set a one-second clear interval.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} copies \nolinkurl{pb-syn-clipboard-timer.psafe3},
+  \nolinkurl{pb-syn-clipboard-manual.psafe3}, and \nolinkurl{pb-syn-clipboard-lock.psafe3}; set a one-second clear
+  interval.
 \item
   Action: In the named timer, manual, and lock copies respectively, copy username and wait, copy password and clear, and
   copy username and lock without manual clearing.
@@ -504,8 +494,8 @@ behavior}\label{gor-test-013---characterize-protected-entry-behavior}
 \item
   Preservation requirement: Vault bytes and fields remain unchanged; copied text never enters logs or result files.
 \item
-  Cleanup: Clear the clipboard, close all views, and remove \passthrough{\lstinline!pb-syn-clipboard-timer.psafe3!},
-  \passthrough{\lstinline!pb-syn-clipboard-manual.psafe3!}, and \passthrough{\lstinline!pb-syn-clipboard-lock.psafe3!}.
+  Cleanup: Clear the clipboard, close all views, and remove \nolinkurl{pb-syn-clipboard-timer.psafe3},
+  \nolinkurl{pb-syn-clipboard-manual.psafe3}, and \nolinkurl{pb-syn-clipboard-lock.psafe3}.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision.
 \end{itemize}
@@ -517,9 +507,9 @@ behavior}\label{gor-test-013---characterize-protected-entry-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-043!}; \passthrough{\lstinline!GAP-043!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-043}; \passthrough{\lstinline!GAP-043!} in the feature matrix.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} on each desktop target with a cleared clipboard.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} on each desktop target with a cleared clipboard.
 \item
   Action: Press the documented URL-copy key and the active alternate key once each, clearing between presses.
 \item
@@ -540,15 +530,13 @@ URL}\label{gor-test-016---launch-the-original-fabricated-url}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-046!}.
+  Evidence: \nolinkurl{GOR-BEH-046}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} with a test browser that records only its fabricated
-  launch argument.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} with a test browser that records only its fabricated launch argument.
 \item
   Action: Invoke Open Website once with username auto-copy disabled and once with it enabled.
 \item
-  Expected observation: Both launches receive the exact stored URL; only the enabled run copies
-  \passthrough{\lstinline!sample-user!}.
+  Expected observation: Both launches receive the exact stored URL; only the enabled run copies \nolinkurl{sample-user}.
 \item
   Preservation requirement: Vault bytes and record fields remain unchanged; no real network destination is contacted.
 \item
@@ -565,7 +553,7 @@ presentation}\label{gor-test-017---characterize-browser-error-presentation}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-047!}; \passthrough{\lstinline!GAP-047!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-047}; \passthrough{\lstinline!GAP-047!} in the feature matrix.
 \item
   Synthetic setup: Use fabricated copies with an empty URL, invalid substitution, and unavailable test browser.
 \item
@@ -587,10 +575,10 @@ presentation}\label{gor-test-017---characterize-browser-error-presentation}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-048!}; \passthrough{\lstinline!GAP-048!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-048}; \passthrough{\lstinline!GAP-048!} in the feature matrix.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} with fabricated AutoType pattern
-  \passthrough{\lstinline!username-tab-password-enter!}.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} with fabricated AutoType pattern
+  \nolinkurl{username-tab-password-enter}.
 \item
   Action: Focus a disposable local text capture surface and invoke every visible AutoType action once.
 \item
@@ -609,10 +597,10 @@ presentation}\label{gor-test-017---characterize-browser-error-presentation}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-050!} and \passthrough{\lstinline!GOR-BEH-051!}.
+  Evidence: \nolinkurl{GOR-BEH-050} and \nolinkurl{GOR-BEH-051}.
 \item
-  Synthetic setup: Write \passthrough{\lstinline!pb-syn-import.csv!} as UTF-8 without BOM, using LF and this exact
-  header and row content:
+  Synthetic setup: Write \nolinkurl{pb-syn-import.csv} as UTF-8 without BOM, using LF and this exact header and row
+  content:
 
 \begin{lstlisting}
 Group,Title,Username,Password,URL,Notes
@@ -626,8 +614,8 @@ Research.Beta,Beta Import,sample-user-two,fabricated-two,https://beta.example.in
   Expected observation: The first and third data rows are imported; the middle row with an extra seventh column is
   reported and skipped; reopen shows exactly Alpha Import and Beta Import as the two additions.
 \item
-  Preservation requirement: Existing \passthrough{\lstinline!PB-SYN-BASE!} data and UUID remain unchanged; no row
-  contains a real credential.
+  Preservation requirement: Existing \nolinkurl{PB-SYN-BASE} data and UUID remain unchanged; no row contains a real
+  credential.
 \item
   Cleanup: Remove the CSV and imported synthetic vault.
 \item
@@ -641,15 +629,15 @@ Research.Beta,Beta Import,sample-user-two,fabricated-two,https://beta.example.in
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-049!}.
+  Evidence: \nolinkurl{GOR-BEH-049}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!}; choose fabricated output
-  \passthrough{\lstinline!pb-syn-export.csv!} in the disposable directory.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE}; choose fabricated output \nolinkurl{pb-syn-export.csv} in the
+  disposable directory.
 \item
   Action: Accept the plaintext warning and export title and username while excluding password and notes.
 \item
-  Expected observation: UTF-8 output contains \passthrough{\lstinline!Alpha Portal!} and
-  \passthrough{\lstinline!sample-user!} but neither excluded field.
+  Expected observation: UTF-8 output contains \passthrough{\lstinline!Alpha Portal!} and \nolinkurl{sample-user} but
+  neither excluded field.
 \item
   Preservation requirement: The vault hash remains unchanged; the plaintext file is treated as sensitive test output.
 \item
@@ -658,30 +646,29 @@ Research.Beta,Beta Import,sample-user-two,fabricated-two,https://beta.example.in
   Required clients: Bonobo and Gorilla at the pinned revision.
 \end{itemize}
 
-\subsubsection{GOR-TEST-021 - Merge and preserve unresolved conflict
-records}\label{gor-test-021---merge-and-preserve-unresolved-conflict-records}
+\subsubsection{GOR-TEST-021 - Merge, defer, and durably resolve conflict
+records}\label{gor-test-021---merge-defer-and-durably-resolve-conflict-records}
 
 \begin{itemize}
 \tightlist
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-052!} through \passthrough{\lstinline!GOR-BEH-054!} and
-  \passthrough{\lstinline!GOR-BEH-063!}.
+  Evidence: \nolinkurl{GOR-BEH-052} through \nolinkurl{GOR-BEH-054}.
 \item
-  Synthetic setup: Merge \passthrough{\lstinline!PB-SYN-BASE!} with a copy whose same UUID has title
+  Synthetic setup: Prepare two independent merges of \nolinkurl{PB-SYN-BASE} with a copy whose same UUID has title
   \passthrough{\lstinline!Alpha Portal Other!}.
 \item
-  Action: In one conflict session, save while the unresolved pair remains; combine after that save by choosing
-  \passthrough{\lstinline!Alpha Portal!}; close without another save; reopen the saved file.
+  Action: In the first merge, leave the pair unresolved, save, close, and reopen. In the second merge, choose
+  \passthrough{\lstinline!Alpha Portal!} for every differing field, combine the pair, save, close, and reopen.
 \item
-  Expected observation: Close shows no unsaved-change prompt; after reopen the combination is lost and the unresolved
-  pair remains exactly as it was at the preceding save.
+  Expected observation: The deferred copy reopens with both complete conflict records. The resolved-and-saved copy
+  reopens with one combined record and no paired duplicate.
 \item
-  Preservation requirement: Record the saved hash and both complete conflict-record manifests before combination; close
-  changes neither, and reopen yields both saved records with their saved identities and field values.
+  Preservation requirement: Both paths retain the database UUID, unrelated records, unknown fields, and exact chosen
+  field values. Deferral loses only the temporary conflict association, not either underlying record.
 \item
-  Cleanup: Close the reopened vault without changes and remove the merged synthetic file and both source copies.
+  Cleanup: Close both reopened vaults and remove the merged synthetic files and source copies.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision.
 \end{itemize}
@@ -694,7 +681,7 @@ merge}\label{gor-test-022---characterize-interrupted-import-and-merge}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-060!}; \passthrough{\lstinline!GAP-060!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-060}; \passthrough{\lstinline!GAP-060!} in the feature matrix.
 \item
   Synthetic setup: Prepare 100 fabricated CSV rows and a 100-record fabricated merge vault in separate copies.
 \item
@@ -716,14 +703,14 @@ merge}\label{gor-test-022---characterize-interrupted-import-and-merge}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-020!} and \passthrough{\lstinline!GOR-BEH-021!}.
+  Evidence: \nolinkurl{GOR-BEH-020} and \nolinkurl{GOR-BEH-021}.
 \item
-  Synthetic setup: Save \passthrough{\lstinline!PB-SYN-BASE!} with \passthrough{\lstinline!fabricated note A!}; make and
-  reopen an earlier backup to verify that note. Then change the primary note to
+  Synthetic setup: Save \nolinkurl{PB-SYN-BASE} with \passthrough{\lstinline!fabricated note A!}; make and reopen an
+  earlier backup to verify that note. Then change the primary note to
   \passthrough{\lstinline!fabricated note recovered!}, save the primary successfully, and retain its copy.
 \item
   Action: Remove only the active primary path; open the earlier backup and save it as
-  \passthrough{\lstinline!pb-syn-recovered.psafe3!}; separately open the retained saved-primary copy.
+  \nolinkurl{pb-syn-recovered.psafe3}; separately open the retained saved-primary copy.
 \item
   Expected observation: The earlier backup and recovered copy show \passthrough{\lstinline!fabricated note A!}; the
   saved primary shows \passthrough{\lstinline!fabricated note recovered!}; no client offers recovery without the
@@ -745,10 +732,9 @@ semantics}\label{gor-test-024---resolve-backup-enablement-semantics}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-018!}; \passthrough{\lstinline!GAP-018!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-018}; \passthrough{\lstinline!GAP-018!} in the feature matrix.
 \item
-  Synthetic setup: Open two \passthrough{\lstinline!PB-SYN-BASE!} copies in empty directories with backup preference off
-  and on.
+  Synthetic setup: Open two \nolinkurl{PB-SYN-BASE} copies in empty directories with backup preference off and on.
 \item
   Action: Change each note to a distinct fabricated value, save once, and list resulting files after close.
 \item
@@ -769,10 +755,9 @@ changes}\label{gor-test-025---apply-preferences-without-hidden-record-changes}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-039!}, \passthrough{\lstinline!GOR-BEH-040!}, and
-  \passthrough{\lstinline!GOR-BEH-061!}.
+  Evidence: \nolinkurl{GOR-BEH-039}, \nolinkurl{GOR-BEH-040}, and \nolinkurl{GOR-BEH-061}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!}; use fabricated preference copies for autosave on and off.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE}; use fabricated preference copies for autosave on and off.
 \item
   Action: Change a global display preference, cancel; enable autosave, edit the note, and close and reopen.
 \item
@@ -793,10 +778,10 @@ history}\label{gor-test-026---bound-and-clear-recent-file-history}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-038!} and \passthrough{\lstinline!GOR-BEH-039!}.
+  Evidence: \nolinkurl{GOR-BEH-038} and \nolinkurl{GOR-BEH-039}.
 \item
-  Synthetic setup: Create fabricated files \passthrough{\lstinline!pb-syn-one.psafe3!} and
-  \passthrough{\lstinline!pb-syn-two.psafe3!} with capacity one.
+  Synthetic setup: Create fabricated files \nolinkurl{pb-syn-one.psafe3} and \nolinkurl{pb-syn-two.psafe3} with capacity
+  one.
 \item
   Action: Open one then two, inspect history, clear it, cancel preferences, and inspect history again.
 \item
@@ -817,9 +802,9 @@ loss}\label{gor-test-027---lock-after-idle-time-without-data-loss}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-015!} through \passthrough{\lstinline!GOR-BEH-017!}.
+  Evidence: \nolinkurl{GOR-BEH-015} through \nolinkurl{GOR-BEH-017}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!}, set one-minute idle lock, and make fabricated note
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE}, set one-minute idle lock, and make fabricated note
   \passthrough{\lstinline!pending before lock!}.
 \item
   Action: Copy the username, wait without activity, unlock with the master input, then save and reopen.
@@ -839,16 +824,15 @@ fields}\label{gor-test-028---preserve-format-level-and-unknown-fields}
 \begin{itemize}
 \tightlist
 \item
-  Authority: \passthrough{\lstinline!PasswordSafe!}.
+  Authority: \nolinkurl{PasswordSafe}.
 \item
-  Evidence: Program design section 4; \passthrough{\lstinline!GOR-BEH-055!} through
-  \passthrough{\lstinline!GOR-BEH-057!}; official PasswordSafe \passthrough{\lstinline!formatV3.txt!} sections 2.9.1,
-  3.2 note 1, and 4.1.
+  Evidence: Program design section 4; \nolinkurl{GOR-BEH-055} through \nolinkurl{GOR-BEH-057}; official PasswordSafe
+  \nolinkurl{formatV3.txt} sections 2.9.1, 3.2 note 1, and 4.1.
 \item
-  Synthetic setup: An official-format fixture authority creates two \passthrough{\lstinline!PB-SYN-BASE!} copies. Their
-  mandatory header Version field type \passthrough{\lstinline!0x00!} has length 2 and bytes
-  \passthrough{\lstinline!00 03!} for V3 level \passthrough{\lstinline!0x0300!}, and \passthrough{\lstinline!02 03!} for
-  V3 level \passthrough{\lstinline!0x0302!}.
+  Synthetic setup: An official-format fixture authority creates two \nolinkurl{PB-SYN-BASE} copies. Their mandatory
+  header Version field type \passthrough{\lstinline!0x00!} has length 2 and bytes \passthrough{\lstinline!00 03!} for V3
+  level \passthrough{\lstinline!0x0300!}, and \passthrough{\lstinline!02 03!} for V3 level
+  \passthrough{\lstinline!0x0302!}.
 \item
   Action: In Bonobo, open and save each without migration consent; then round-trip separate copies through Gorilla and
   Password Safe and compare their manifests.
@@ -872,8 +856,8 @@ field}\label{gor-test-029---fail-closed-on-a-malformed-mandatory-version-field}
 \item
   Authority: \passthrough{\lstinline!Bonobo!}.
 \item
-  Evidence: Program design section 10; \passthrough{\lstinline!GOR-BEH-058!}; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} sections 2.9.1, 3 \passthrough{\lstinline!Field Structure!}, and 3.2 note 1.
+  Evidence: Program design section 10; \nolinkurl{GOR-BEH-058}; official PasswordSafe \nolinkurl{formatV3.txt} sections
+  2.9.1, 3 \passthrough{\lstinline!Field Structure!}, and 3.2 note 1.
 \item
   Synthetic setup: An independent official-format fixture authority creates the fabricated file
   \nolinkurl{pb-syn-version-length-one.psafe3}. Its header Version field type \passthrough{\lstinline!0x00!} uses
@@ -905,10 +889,10 @@ access}\label{gor-test-030---characterize-concurrent-gorilla-access}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-059!}; \passthrough{\lstinline!GAP-059!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-059}; \passthrough{\lstinline!GAP-059!} in the feature matrix.
 \item
-  Synthetic setup: Give two Gorilla processes separate disposable copies and then one shared
-  \passthrough{\lstinline!PB-SYN-BASE!} path.
+  Synthetic setup: Give two Gorilla processes separate disposable copies and then one shared \nolinkurl{PB-SYN-BASE}
+  path.
 \item
   Action: Open the shared path in both, edit distinct fabricated notes, save process one, then save process two.
 \item
@@ -929,10 +913,9 @@ mutation}\label{gor-test-031---report-a-correctable-error-without-mutation}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-024!} and \passthrough{\lstinline!GOR-BEH-062!}.
+  Evidence: \nolinkurl{GOR-BEH-024} and \nolinkurl{GOR-BEH-062}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} and start a fabricated new entry with empty title, URL,
-  and username.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} and start a fabricated new entry with empty title, URL, and username.
 \item
   Action: Accept the invalid entry, acknowledge the error, cancel the edit, and close without saving.
 \item
@@ -953,11 +936,11 @@ behavior}\label{gor-test-032---characterize-localization-behavior}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-062!}; \passthrough{\lstinline!GAP-900!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-062}; \passthrough{\lstinline!GAP-900!} in the feature matrix.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} in fresh profiles using default
-  \passthrough{\lstinline!en!}, available \passthrough{\lstinline!fr!} from
-  \passthrough{\lstinline!sources/msgs/fr.msg!}, and unavailable fabricated locale \passthrough{\lstinline!zz-ZZ!}.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} in fresh profiles using default \passthrough{\lstinline!en!}, available
+  \passthrough{\lstinline!fr!} from \nolinkurl{sources/msgs/fr.msg}, and unavailable fabricated locale
+  \passthrough{\lstinline!zz-ZZ!}.
 \item
   Action: In each run edit Alpha, clear title, URL, and username, attempt to save the edit, acknowledge the error, close
   without saving, restart with the same profile, and repeat; title fallback cannot apply.
@@ -981,8 +964,7 @@ gap}\label{gor-test-033---close-the-help-workflow-evidence-gap}
 \item
   Evidence: Matrix \passthrough{\lstinline!GAP-901!}; approved program design parity-closure requirement.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} in a disposable future Bonobo acceptance build with fields
-  concealed.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} in a disposable future Bonobo acceptance build with fields concealed.
 \item
   Action: Attempt to reach user guidance for open, forgotten master input, edit, export, merge, and lock tasks.
 \item
@@ -1005,9 +987,9 @@ keyboard}\label{gor-test-034---complete-core-workflows-by-keyboard}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-035!} and \passthrough{\lstinline!GOR-BEH-042!}.
+  Evidence: \nolinkurl{GOR-BEH-035} and \nolinkurl{GOR-BEH-042}.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} on each desktop target with pointer input unavailable.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} on each desktop target with pointer input unavailable.
 \item
   Action: Select Alpha, open its edit, cancel, search for Alpha, copy username, clear it, and invoke lock by keyboard.
 \item
@@ -1028,10 +1010,9 @@ interruption}\label{gor-test-035---characterize-replacement-interruption}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-065!}; \passthrough{\lstinline!GAP-065!} in the feature matrix.
+  Evidence: \nolinkurl{GOR-BEH-065}; \passthrough{\lstinline!GAP-065!} in the feature matrix.
 \item
-  Synthetic setup: Copy \passthrough{\lstinline!PB-SYN-BASE!} to a test filesystem that denies replacement after staged
-  output exists.
+  Synthetic setup: Copy \nolinkurl{PB-SYN-BASE} to a test filesystem that denies replacement after staged output exists.
 \item
   Action: Change note to \passthrough{\lstinline!fabricated interrupted note!}, save once, end the client during a
   second controlled run, then reopen every surviving file after each run.
@@ -1057,11 +1038,11 @@ deletion}\label{gor-test-036---archive-a-complete-selection-before-staging-delet
 \item
   Evidence: URL-audit design sections 5 through 14 and program design sections 6.3 and 8.
 \item
-  Synthetic setup: In \passthrough{\lstinline!PB-SYN-SECOND!}, set Alpha URL to
+  Synthetic setup: In \nolinkurl{PB-SYN-SECOND}, set Alpha URL to
   \nolinkurl{https://audit.example.invalid/path?mode=fabricated#review}, save note
   \passthrough{\lstinline!fabricated ordinary edit!}, audit Alpha through a controlled endpoint, and select exactly two
   UUIDs: \nolinkurl{22222222-2222-4222-8222-222222222222} and \nolinkurl{33333333-3333-4333-8333-333333333333}; choose
-  \passthrough{\lstinline!pb-syn-archive.psafe3!} as the archive destination.
+  \nolinkurl{pb-syn-archive.psafe3} as the archive destination.
 \item
   Action: Invoke \passthrough{\lstinline!Archive \& Delete Selected!} once.
 \item
@@ -1099,21 +1080,26 @@ mutation}\label{gor-test-037---refuse-overwrite-after-external-mutation}
 \item
   Evidence: Program design sections 6.2, 7, 10, and 11.
 \item
-  Synthetic setup: Open provider copy A of \passthrough{\lstinline!PB-SYN-BASE!}; prepare B with note
+  Synthetic setup: Open provider copy A of \nolinkurl{PB-SYN-BASE}, begin changing its title to
+  \passthrough{\lstinline!Alpha Local Edit!}, and leave the complete edit form open and unconfirmed. Prepare B with note
   \passthrough{\lstinline!fabricated external edit!}.
 \item
-  Action: In Bonobo change A\textquotesingle s title to \passthrough{\lstinline!Alpha Local Edit!}; externally replace
-  the provider file with B; invoke Save.
+  Action: While the local edit remains unconfirmed, externally replace the provider file with B, then confirm the
+  complete edit form in Bonobo.
 \item
-  Expected observation: Bonobo reports Conflict and preserves A, B, and an offered save-as-copy; B is not overwritten.
+  Expected observation: Confirmation reports \passthrough{\lstinline!Conflict!}; the provider\textquotesingle s exact B
+  bytes and the local A-based attempted version are both preserved, neither version overwrites the other, and
+  save-as-copy remains available.
 \item
-  Preservation requirement: Every version retains its UUID and unknown bytes; no custom sync counter enters the vault.
+  Preservation requirement: Every version retains its UUID and unknown bytes; no custom sync counter enters the vault,
+  and no pre-confirmation write races the external replacement.
 \item
-  Cleanup: Save A only as \passthrough{\lstinline!pb-syn-conflict-copy.psafe3!}, verify all copies, then remove them.
+  Cleanup: Save A only as \nolinkurl{pb-syn-conflict-copy.psafe3}, verify all copies, then remove them.
 \item
   Required clients: Bonobo, Gorilla at the pinned revision, and Password Safe open B and the conflict copy.
 \item
-  Coverage: external-mutation-conflict; cross-client-extension-gate; deferred-native-no-vault-metadata.
+  Coverage: unconfirmed-edit-provider-replacement-conflict; external-mutation-conflict; cross-client-extension-gate;
+  deferred-native-no-vault-metadata.
 \end{itemize}
 
 \subsubsection{GOR-TEST-038 - Autofill only the requested fabricated
@@ -1126,15 +1112,15 @@ credential}\label{gor-test-038---autofill-only-the-requested-fabricated-credenti
 \item
   Evidence: Program design sections 9.2, 11, and 12.6.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} on Android and ChromeOS with a local
-  \passthrough{\lstinline!alpha.example.invalid!} login form.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} on Android and ChromeOS with a local \nolinkurl{alpha.example.invalid}
+  login form.
 \item
   Action: Focus username, choose Alpha from Autofill, fill once, then attempt extension-only listing, URL-audit,
   publication, and export actions before locking Bonobo and requesting Autofill again.
 \item
-  Expected observation: The first request fills only \passthrough{\lstinline!sample-user!} and the fabricated password.
-  The Autofill surface cannot independently enumerate decrypted vault records, initiate a URL audit, publish, or export
-  the vault; locked access fails, and no Bonobo cloud account or cloud copy exists.
+  Expected observation: The first request fills only \nolinkurl{sample-user} and the fabricated password. The Autofill
+  surface cannot independently enumerate decrypted vault records, initiate a URL audit, publish, or export the vault;
+  locked access fails, and no Bonobo cloud account or cloud copy exists.
 \item
   Preservation requirement: Local-file-first access remains app-authorized; the vault hash and manifest remain
   unchanged, and no Autofill or cloud state is written to the vault.
@@ -1156,8 +1142,7 @@ metadata}\label{gor-test-039---unlock-with-device-authentication-without-vault-m
 \item
   Evidence: Program design sections 9.1, 11, and 12.6.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} with its fabricated input on enrolled Android and ChromeOS
-  test devices.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} with its fabricated input on enrolled Android and ChromeOS test devices.
 \item
   Action: Enable biometric unlock, close and restart, cancel once, authenticate once, then change the master input.
 \item
@@ -1182,8 +1167,7 @@ provider}\label{gor-test-040---restrict-the-ios-credential-provider}
 \item
   Evidence: Program design sections 9.2, 11, and 12.7.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} on iOS with a local relying party for
-  \passthrough{\lstinline!alpha.example.invalid!}.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} on iOS with a local relying party for \nolinkurl{alpha.example.invalid}.
 \item
   Action: Request while locked, unlock, fill Alpha once, then attempt provider-only listing, URL-audit, publication, and
   export actions before relocking and requesting again.
@@ -1212,7 +1196,7 @@ metadata}\label{gor-test-041---unlock-with-ios-device-authentication-without-vau
 \item
   Evidence: Program design sections 9.1, 11, and 12.7.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-BASE!} with its fabricated input on an enrolled iOS test device.
+  Synthetic setup: Open \nolinkurl{PB-SYN-BASE} with its fabricated input on an enrolled iOS test device.
 \item
   Action: Enable biometric unlock, close and restart, cancel once, authenticate once, then change the master input.
 \item
@@ -1237,24 +1221,23 @@ failures}\label{gor-test-042---preserve-the-active-vault-across-lifecycle-failur
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-002!}, \passthrough{\lstinline!GOR-BEH-004!}, and
-  \passthrough{\lstinline!GOR-BEH-005!}.
+  Evidence: \nolinkurl{GOR-BEH-002}, \nolinkurl{GOR-BEH-004}, and \nolinkurl{GOR-BEH-005}.
 \item
-  Synthetic setup: Copy \passthrough{\lstinline!PB-SYN-BASE!} to
-  \passthrough{\lstinline!pb-syn-lifecycle-source.psafe3!} and \nolinkurl{pb-syn-lifecycle-readable.psafe3}; open the
-  source, change its note to \passthrough{\lstinline!fabricated pending note!}, and retain its hash.
+  Synthetic setup: Copy \nolinkurl{PB-SYN-BASE} to \nolinkurl{pb-syn-lifecycle-source.psafe3} and
+  \nolinkurl{pb-syn-lifecycle-readable.psafe3}; open the source, change its note to
+  \passthrough{\lstinline!fabricated pending note!}, and retain its hash.
 \item
   Action: Resolve unsaved work before a new vault by choosing Cancel; attempt to open inaccessible
-  \passthrough{\lstinline!pb-syn-missing.psafe3!}; then open \nolinkurl{pb-syn-lifecycle-readable.psafe3} with wrong
-  master input \passthrough{\lstinline!fabricated-master-input-wrong!}.
+  \nolinkurl{pb-syn-missing.psafe3}; then open \nolinkurl{pb-syn-lifecycle-readable.psafe3} with wrong master input
+  \nolinkurl{fabricated-master-input-wrong}.
 \item
   Expected observation: The canceled new-vault request preserves the pending edit. The inaccessible path keeps its open
   prompt available. The wrong master input is cleared and retry remains possible. Neither failure replaces Alpha.
 \item
   Preservation requirement: The source bytes and hash remain unchanged; the pending in-memory note remains active.
 \item
-  Cleanup: Cancel the prompt, discard the edit, close, and remove
-  \passthrough{\lstinline!pb-syn-lifecycle-source.psafe3!} and \nolinkurl{pb-syn-lifecycle-readable.psafe3}.
+  Cleanup: Cancel the prompt, discard the edit, close, and remove \nolinkurl{pb-syn-lifecycle-source.psafe3} and
+  \nolinkurl{pb-syn-lifecycle-readable.psafe3}.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision.
 \end{itemize}
@@ -1267,15 +1250,15 @@ failures}\label{gor-test-043---save-as-and-preserve-data-on-writable-path-failur
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-009!} through \passthrough{\lstinline!GOR-BEH-011!}.
+  Evidence: \nolinkurl{GOR-BEH-009} through \nolinkurl{GOR-BEH-011}.
 \item
-  Synthetic setup: Open three \passthrough{\lstinline!PB-SYN-BASE!} copies and give each a distinct fabricated note
-  edit. Make copy two\textquotesingle s destination read-only. Put copy three on a controlled filesystem that returns
-  disk-full after 64 output bytes while leaving its existing destination readable; record each original destination hash
-  and directory listing.
+  Synthetic setup: Open three \nolinkurl{PB-SYN-BASE} copies and give each a distinct fabricated note edit. Make copy
+  two\textquotesingle s destination read-only. Put copy three on a controlled filesystem that returns disk-full after 64
+  output bytes while leaving its existing destination readable; record each original destination hash and directory
+  listing.
 \item
-  Action: On copy one, cancel Save As, then save to \passthrough{\lstinline!pb-syn-renamed.psafe3!}. Save copy two and
-  cancel at the read-only warning. Save copy three to exercise the caught write-stage failure.
+  Action: On copy one, cancel Save As, then save to \nolinkurl{pb-syn-renamed.psafe3}. Save copy two and cancel at the
+  read-only warning. Save copy three to exercise the caught write-stage failure.
 \item
   Expected observation: Save As cancel changes no path; success adopts the new path and clears dirty state. Read-only
   cancel leaves the edit dirty. The caught write-stage failure reports an error and leaves no temporary output.
@@ -1296,18 +1279,17 @@ entries}\label{gor-test-044---create-validate-and-delete-fabricated-entries}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-022!} through \passthrough{\lstinline!GOR-BEH-025!}.
+  Evidence: \nolinkurl{GOR-BEH-022} through \nolinkurl{GOR-BEH-025}.
 \item
-  Synthetic setup: Open five independent \passthrough{\lstinline!PB-SYN-BASE!} copies for create, fallback, two
-  validation, and deletion runs. In validation copy A, prepare a new record with blank title, URL, and username, valid
-  group \passthrough{\lstinline!Research.Valid!}, and password \passthrough{\lstinline!fabricated-validation-a!}. In
-  separately reset validation copy B, prepare valid title \passthrough{\lstinline!Valid Identity!}, username
-  \passthrough{\lstinline!sample-valid!}, password \passthrough{\lstinline!fabricated-validation-b!}, and malformed
-  dot-prefixed group \passthrough{\lstinline!.Bad!}.
+  Synthetic setup: Open five independent \nolinkurl{PB-SYN-BASE} copies for create, fallback, two validation, and
+  deletion runs. In validation copy A, prepare a new record with blank title, URL, and username, valid group
+  \nolinkurl{Research.Valid}, and password \nolinkurl{fabricated-validation-a}. In separately reset validation copy B,
+  prepare valid title \passthrough{\lstinline!Valid Identity!}, username \nolinkurl{sample-valid}, password
+  \nolinkurl{fabricated-validation-b}, and malformed dot-prefixed group \passthrough{\lstinline!.Bad!}.
 \item
   Action: Create and accept Beta with a title; create Gamma with empty title to exercise title fallback from URL
-  \passthrough{\lstinline!https://gamma.example.invalid/!}; attempt acceptance in validation copy A, then independently
-  in validation copy B; delete Alpha in the fifth copy without confirmation.
+  \nolinkurl{https://gamma.example.invalid/}; attempt acceptance in validation copy A, then independently in validation
+  copy B; delete Alpha in the fifth copy without confirmation.
 \item
   Expected observation: Beta appears and Gamma uses its URL as title. Validation copy A is rejected for missing
   identity; validation copy B is rejected for its group. Alpha disappears immediately without a confirmation.
@@ -1328,10 +1310,10 @@ entry}\label{gor-test-045---delete-groups-safely-and-activate-an-entry}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-030!} through \passthrough{\lstinline!GOR-BEH-035!}.
+  Evidence: \nolinkurl{GOR-BEH-030} through \nolinkurl{GOR-BEH-035}.
 \item
-  Synthetic setup: Open three \passthrough{\lstinline!PB-SYN-SECOND!} copies; add fabricated empty group
-  \passthrough{\lstinline!Research.Empty!} to two copies.
+  Synthetic setup: Open three \nolinkurl{PB-SYN-SECOND} copies; add fabricated empty group \nolinkurl{Research.Empty} to
+  two copies.
 \item
   Action: Delete the empty group in copy one. In copy two, delete the nonempty group \passthrough{\lstinline!Research!},
   cancel, then confirm. In copy three, select Alpha and activate it twice with the configured action set to Edit.
@@ -1356,17 +1338,15 @@ clearing}\label{gor-test-046---observe-x11-selection-transfer-and-lock-clearing}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-044!} and \passthrough{\lstinline!GOR-BEH-045!}.
+  Evidence: \nolinkurl{GOR-BEH-044} and \nolinkurl{GOR-BEH-045}.
 \item
-  Synthetic setup: On X11, open \passthrough{\lstinline!PB-SYN-BASE!}, enable auto-copy, and clear the test clipboard
-  and selection.
+  Synthetic setup: On X11, open \nolinkurl{PB-SYN-BASE}, enable auto-copy, and clear the test clipboard and selection.
 \item
   Action: Copy Alpha username; have a controlled second application make an actual X11 selection request; observe the
   resulting clipboard; lock without manual clearing, then request both clipboard and selection again.
 \item
-  Expected observation: The selection request receives \passthrough{\lstinline!sample-user!} and schedules the
-  fabricated password for the clipboard. Lock clears both owned values, so neither post-lock request returns fabricated
-  credential text.
+  Expected observation: The selection request receives \nolinkurl{sample-user} and schedules the fabricated password for
+  the clipboard. Lock clears both owned values, so neither post-lock request returns fabricated credential text.
 \item
   Preservation requirement: Vault bytes and fields remain unchanged; captured fabricated text is held only in memory.
 \item
@@ -1385,9 +1365,9 @@ fails}\label{gor-test-047---refuse-deletion-when-archive-validation-fails}
 \item
   Evidence: URL-audit design sections 8, 9, and 13; program design sections 6.3 and 8.
 \item
-  Synthetic setup: Open \passthrough{\lstinline!PB-SYN-SECOND!} and select both fabricated records. A controlled fault
-  filesystem acknowledges each new archive write but returns a valid one-record fabricated archive containing only Alpha
-  on every later read.
+  Synthetic setup: Open \nolinkurl{PB-SYN-SECOND} and select both fabricated records. A controlled fault filesystem
+  acknowledges each new archive write but returns a valid one-record fabricated archive containing only Alpha on every
+  later read.
 \item
   Action: Invoke \passthrough{\lstinline!Archive \& Delete Selected!} once and acknowledge the archive validation
   failure.
@@ -1408,17 +1388,16 @@ handling}\label{gor-test-048---contrast-stored-hmac-integrity-mismatch-handling}
 \begin{itemize}
 \tightlist
 \item
-  Authority: \passthrough{\lstinline!PasswordSafe!} + \passthrough{\lstinline!Gorilla!} +
-  \passthrough{\lstinline!Bonobo!}.
+  Authority: \nolinkurl{PasswordSafe} + \passthrough{\lstinline!Gorilla!} + \passthrough{\lstinline!Bonobo!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-006!}; program design section 10; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} sections 2.8, 2.9, and 3.
+  Evidence: \nolinkurl{GOR-BEH-006}; program design section 10; official PasswordSafe \nolinkurl{formatV3.txt} sections
+  2.8, 2.9, and 3.
 \item
-  Synthetic setup: An official-format fixture authority copies \passthrough{\lstinline!PB-SYN-BASE!}, flips exactly one
-  bit in its stored HMAC after the unencrypted end marker, and duplicates the result as two byte-identical stored-HMAC
-  mismatch copies: \passthrough{\lstinline!pb-syn-hmac-bonobo.psafe3!} for Bonobo and
-  \passthrough{\lstinline!pb-syn-hmac-gorilla.psafe3!} for Gorilla. Retain the unmodified baseline, byte offset, XOR
-  mask, and both pre-open SHA-256 values; \nolinkurl{pb-syn-hmac-bonobo-output.psafe3} begins absent.
+  Synthetic setup: An official-format fixture authority copies \nolinkurl{PB-SYN-BASE}, flips exactly one bit in its
+  stored HMAC after the unencrypted end marker, and duplicates the result as two byte-identical stored-HMAC mismatch
+  copies: \nolinkurl{pb-syn-hmac-bonobo.psafe3} for Bonobo and \nolinkurl{pb-syn-hmac-gorilla.psafe3} for Gorilla.
+  Retain the unmodified baseline, byte offset, XOR mask, and both pre-open SHA-256 values;
+  \nolinkurl{pb-syn-hmac-bonobo-output.psafe3} begins absent.
 \item
   Action: Open the Bonobo copy with the correct fabricated master input and record the result. Separately open the
   Gorilla copy with that input, record and dismiss its warning, inspect Alpha, close without saving, and compare both
@@ -1445,11 +1424,11 @@ failures}\label{gor-test-049---distinguish-initial-and-later-backup-failures}
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-019!}.
+  Evidence: \nolinkurl{GOR-BEH-019}.
 \item
-  Synthetic setup: Open two \passthrough{\lstinline!PB-SYN-BASE!} copies and give each a fabricated note edit. For copy
-  one, keep the primary writable but deny creation at the initial-backup path. For copy two, permit primary and initial
-  backup writes but deny creation in the configured later-backup directory.
+  Synthetic setup: Open two \nolinkurl{PB-SYN-BASE} copies and give each a fabricated note edit. For copy one, keep the
+  primary writable but deny creation at the initial-backup path. For copy two, permit primary and initial backup writes
+  but deny creation in the configured later-backup directory.
 \item
   Action: Request close and Save on each copy; after the reported error, request close again without another edit.
 \item
@@ -1471,13 +1450,13 @@ enabled}\label{gor-test-050---lock-an-untitled-vault-with-backup-behavior-enable
 \item
   Authority: \passthrough{\lstinline!Gorilla!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-064!}.
+  Evidence: \nolinkurl{GOR-BEH-064}.
 \item
   Synthetic setup: Create two untitled vaults with fabricated Alpha content, enable backup-on-save behavior, and make
   the configured later-backup directory deny creation while the primary destination remains writable.
 \item
   Action: Lock copy one, choose No at the save prompt, and inspect its directory. Lock copy two, choose Yes, select
-  \passthrough{\lstinline!pb-syn-lock.psafe3!}, allow a later backup failure, acknowledge the result, and unlock it.
+  \nolinkurl{pb-syn-lock.psafe3}, allow a later backup failure, acknowledge the result, and unlock it.
 \item
   Expected observation: No creates no file and locking continues. Yes creates the primary file before the backup error;
   locking continues after the error, and unlock shows the saved fabricated Alpha content.
@@ -1497,15 +1476,15 @@ format}\label{gor-test-051---fail-closed-on-a-synthetic-unsupported-major-format
 \item
   Authority: \passthrough{\lstinline!Bonobo!}.
 \item
-  Evidence: Program design section 10; official PasswordSafe \passthrough{\lstinline!formatV3.txt!} sections 1.2, 2.9.1,
-  and 3.2 note 1.
+  Evidence: Program design section 10; official PasswordSafe \nolinkurl{formatV3.txt} sections 1.2, 2.9.1, and 3.2 note
+  1.
 \item
   Synthetic setup: An independent official-format fixture authority creates the fabricated file
-  \passthrough{\lstinline!pb-syn-unsupported-major.psafe3!} as a structurally valid authenticated envelope. Header
-  Version field type \passthrough{\lstinline!0x00!} declares length 2 and holds bytes \passthrough{\lstinline!00 04!},
-  the little-endian value \passthrough{\lstinline!0x0400!}. Header END, every mandatory record field, record END, EOF,
-  and stored HMAC are valid. This is a synthetic later-major 4.0 probe, not an actual V4 format or product claim, and
-  the mandatory Version value is not an unknown preservable field.
+  \nolinkurl{pb-syn-unsupported-major.psafe3} as a structurally valid authenticated envelope. Header Version field type
+  \passthrough{\lstinline!0x00!} declares length 2 and holds bytes \passthrough{\lstinline!00 04!}, the little-endian
+  value \passthrough{\lstinline!0x0400!}. Header END, every mandatory record field, record END, EOF, and stored HMAC are
+  valid. This is a synthetic later-major 4.0 probe, not an actual V4 format or product claim, and the mandatory Version
+  value is not an unknown preservable field.
 \item
   Action: Record the complete encrypted input and SHA-256, attempt ordinary Open in Bonobo once, and dismiss the error.
 \item
@@ -1529,13 +1508,11 @@ field}\label{gor-test-052---contrast-a-missing-mandatory-version-field}
 \begin{itemize}
 \tightlist
 \item
-  Authority: \passthrough{\lstinline!PasswordSafe!} + \passthrough{\lstinline!Gorilla!} +
-  \passthrough{\lstinline!Bonobo!}.
+  Authority: \nolinkurl{PasswordSafe} + \passthrough{\lstinline!Gorilla!} + \passthrough{\lstinline!Bonobo!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-066!}; program design section 10; official PasswordSafe
-  \passthrough{\lstinline!formatV3.txt!} sections 2.9.1, 2.11, and 3.2 note 1; pinned locations
-  \nolinkurl{sources/pwsafe/pwsafe-v3.tcl:176-183}, \passthrough{\lstinline!sources/gorilla.tcl:4494-4520!}, and
-  \passthrough{\lstinline!sources/gorilla.tcl:4584-4636!}.
+  Evidence: \nolinkurl{GOR-BEH-066}; program design section 10; official PasswordSafe \nolinkurl{formatV3.txt} sections
+  2.9.1, 2.11, and 3.2 note 1; pinned locations \nolinkurl{sources/pwsafe/pwsafe-v3.tcl:176-183},
+  \nolinkurl{sources/gorilla.tcl:4494-4520}, and \nolinkurl{sources/gorilla.tcl:4584-4636}.
 \item
   Synthetic setup: An official-format authority creates authenticated \nolinkurl{pb-syn-missing-version-control.psafe3}
   and two byte-identical fabricated copies: \nolinkurl{pb-syn-missing-version-bonobo.psafe3} for Bonobo and
@@ -1544,11 +1521,10 @@ field}\label{gor-test-052---contrast-a-missing-mandatory-version-field}
   \passthrough{\lstinline!0x02!} has an empty UTF-8 value, and header END is valid. Its Alpha record has UUID
   \nolinkurl{22222222-2222-4222-8222-222222222222}, mandatory Title \passthrough{\lstinline!Alpha!}, mandatory Password
   \passthrough{\lstinline!fabricated password 1!}, record END, EOF, and a stored HMAC over every plaintext field
-  present. Record both hashes; \passthrough{\lstinline!pb-syn-bonobo-rejected.psafe3!} begins absent. Create isolated
-  disposable profile \passthrough{\lstinline!pb-syn-gorilla-profile-052!} and output directory
-  \passthrough{\lstinline!pb-syn-gorilla-052!}. Before action, set Gorilla Preferences
-  \passthrough{\lstinline!timeStampBackup=false!} and \passthrough{\lstinline!backupPath!} to that exact absolute output
-  directory; the named output and \passthrough{\lstinline!.bak!} paths begin absent.
+  present. Record both hashes; \nolinkurl{pb-syn-bonobo-rejected.psafe3} begins absent. Create isolated disposable
+  profile \nolinkurl{pb-syn-gorilla-profile-052} and output directory \nolinkurl{pb-syn-gorilla-052}. Before action, use
+  visible Preferences controls to disable timestamped backups and select that exact absolute directory as the backup
+  location; the named output and \passthrough{\lstinline!.bak!} paths begin absent.
 \item
   Action: Attempt Open on the Bonobo source with the fabricated master input and inspect the error and directory.
   Separately launch Gorilla with only the isolated profile, open its source, and use Save As to create
@@ -1566,10 +1542,9 @@ field}\label{gor-test-052---contrast-a-missing-mandatory-version-field}
   order, padding, or writer-owned Preferences serialization and header normalization. The output-to-backup comparison
   covers every byte.
 \item
-  Cleanup: Dismiss Bonobo\textquotesingle s error and close Gorilla. Remove
-  \passthrough{\lstinline!pb-syn-gorilla-profile-052!}, all three named sources, the named output, initial
-  \passthrough{\lstinline!.bak!}, absent-output sentinel, hashes, manifests, and exact
-  \passthrough{\lstinline!pb-syn-gorilla-052!} directory.
+  Cleanup: Dismiss Bonobo\textquotesingle s error and close Gorilla. Remove \nolinkurl{pb-syn-gorilla-profile-052}, all
+  three named sources, the named output, initial \passthrough{\lstinline!.bak!}, absent-output sentinel, hashes,
+  manifests, and exact \nolinkurl{pb-syn-gorilla-052} directory.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision; PasswordSafe supplies mandatory-field authority.
 \end{itemize}
@@ -1582,23 +1557,22 @@ transactions}\label{gor-test-053---compare-ordinary-edit-persistence-transaction
 \item
   Authority: \passthrough{\lstinline!Gorilla!} + \passthrough{\lstinline!Bonobo!}.
 \item
-  Evidence: \passthrough{\lstinline!GOR-BEH-008!}; program design sections 6.2, 10, and 11; pinned locations
-  \passthrough{\lstinline!sources/gorilla.tcl:4382-4407!} and \passthrough{\lstinline!sources/gorilla.tcl:4584-4636!}.
+  Evidence: \nolinkurl{GOR-BEH-008}; program design sections 6.2, 10, and 11; pinned locations
+  \nolinkurl{sources/gorilla.tcl:4382-4407} and \nolinkurl{sources/gorilla.tcl:4584-4636}.
 \item
-  Synthetic setup: Prepare four independent \passthrough{\lstinline!PB-SYN-BASE!} copies whose Alpha note is
+  Synthetic setup: Prepare four independent \nolinkurl{PB-SYN-BASE} copies whose Alpha note is
   \passthrough{\lstinline!fabricated note A!}. The Gorilla success paths are
   \nolinkurl{pb-syn-gorilla-053/pb-syn-gorilla-save-success.psafe3} and
   \nolinkurl{pb-syn-gorilla-053/pb-syn-gorilla-save-success.bak}. The failure paths are
   \nolinkurl{pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.psafe3} and
   \nolinkurl{pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.bak}; both initial \passthrough{\lstinline!.bak!} paths
-  begin absent. Create isolated disposable profile \passthrough{\lstinline!pb-syn-gorilla-profile-053!}. Before action,
-  set Gorilla Preferences \passthrough{\lstinline!timeStampBackup=false!} and \passthrough{\lstinline!backupPath!} to
-  the exact absolute \passthrough{\lstinline!pb-syn-gorilla-053!} directory. Retain pre-action hashes and manifests; use
-  an external filesystem gate that can pause or deny only either named \passthrough{\lstinline!.bak!}. The Bonobo
-  provider sources are \nolinkurl{pb-syn-bonobo-provider-success.psafe3} and
-  \nolinkurl{pb-syn-bonobo-provider-offline.psafe3}; their named encrypted local documents are
-  \nolinkurl{pb-syn-bonobo-local-success.psafe3} and \nolinkurl{pb-syn-bonobo-local-offline.psafe3}. Stage no audit
-  cleanup.
+  begin absent. Create isolated disposable profile \nolinkurl{pb-syn-gorilla-profile-053}. Before action, use visible
+  Preferences controls to disable timestamped backups and select exact absolute directory \nolinkurl{pb-syn-gorilla-053}
+  as the backup location. Retain pre-action hashes and manifests; use an external filesystem gate that can pause or deny
+  only either named \passthrough{\lstinline!.bak!}. The Bonobo provider sources are
+  \nolinkurl{pb-syn-bonobo-provider-success.psafe3} and \nolinkurl{pb-syn-bonobo-provider-offline.psafe3}; their named
+  encrypted local documents are \nolinkurl{pb-syn-bonobo-local-success.psafe3} and
+  \nolinkurl{pb-syn-bonobo-local-offline.psafe3}. Stage no audit cleanup.
 \item
   Action: Gorilla client --- on the success primary, confirm the note change to
   \passthrough{\lstinline!fabricated Gorilla saved!}, invoke explicit Save once, pause exact initial-backup creation,
@@ -1627,11 +1601,73 @@ transactions}\label{gor-test-053---compare-ordinary-edit-persistence-transaction
   note; the unavailable-provider source remains byte-identical to its control. No client publishes plaintext recovery
   data.
 \item
-  Cleanup: Restore filesystem and provider availability. Remove \passthrough{\lstinline!pb-syn-gorilla-profile-053!},
-  exact directory \passthrough{\lstinline!pb-syn-gorilla-053!} with both primaries and \passthrough{\lstinline!.bak!}
-  paths, all four named Bonobo documents, hashes, and manifests.
+  Cleanup: Restore filesystem and provider availability. Remove \nolinkurl{pb-syn-gorilla-profile-053}, exact directory
+  \nolinkurl{pb-syn-gorilla-053} with both primaries and \passthrough{\lstinline!.bak!} paths, all four named Bonobo
+  documents, hashes, and manifests.
 \item
   Required clients: Bonobo and Gorilla at the pinned revision perform only their named client-specific operations.
+\end{itemize}
+
+\subsubsection{GOR-TEST-054 - Characterize Gorilla post-save conflict-resolution
+loss}\label{gor-test-054---characterize-gorilla-post-save-conflict-resolution-loss}
+
+\begin{itemize}
+\tightlist
+\item
+  Authority: \passthrough{\lstinline!Gorilla!}.
+\item
+  Evidence: \nolinkurl{GOR-BEH-063}.
+\item
+  Contract: \nolinkurl{excluded-gorilla-only-characterization}.
+\item
+  Synthetic setup: Merge \nolinkurl{PB-SYN-BASE} with a copy whose same UUID has title
+  \passthrough{\lstinline!Alpha Portal Other!}; save while both conflict records remain unresolved and retain the saved
+  hash and both record manifests.
+\item
+  Action: After that save, choose \passthrough{\lstinline!Alpha Portal!} for every differing field, combine the pair,
+  close without another save, and reopen the saved file.
+\item
+  Expected observation: Gorilla closes without an unsaved-change prompt; reopen restores the exact saved conflicting
+  pair and does not retain the later field choices or duplicate deletion.
+\item
+  Preservation requirement: This expected loss is evidence about the pinned Gorilla client only. It is not a Bonobo
+  acceptance result or a cross-implementation passing oracle, and the pre-close saved file remains unchanged.
+\item
+  Cleanup: Close the reopened vault without changes and remove the merged synthetic file and both source copies.
+\item
+  Required clients: Gorilla at the pinned revision only.
+\end{itemize}
+
+\subsubsection{GOR-TEST-055 - Persist Bonobo conflict resolution transactionally before
+close}\label{gor-test-055---persist-bonobo-conflict-resolution-transactionally-before-close}
+
+\begin{itemize}
+\tightlist
+\item
+  Authority: \passthrough{\lstinline!Bonobo!}.
+\item
+  Evidence: Program design sections 6.2, 7, 10, and 11.
+\item
+  Synthetic setup: Open provider copy A of \nolinkurl{PB-SYN-BASE}, merge a copy whose same UUID has title
+  \passthrough{\lstinline!Alpha Portal Other!}, and retain both complete record manifests. Configure a controlled
+  provider publication fault.
+\item
+  Action: Resolve every differing field, choose the A title, and confirm the duplicate deletion while publication is
+  unavailable; then request close. Restore publication, complete it, close, and reopen the provider document.
+\item
+  Expected observation: The confirmed resolution and deletion first become transactional durable work. Publication
+  failure leaves them explicitly staged or conflicted and blocks silent close or discard. After publication, reopen
+  shows one resolved record, the chosen field values, and no duplicate.
+\item
+  Preservation requirement: Before publication succeeds, both source manifests or a complete encrypted transactional
+  representation remain recoverable. Close cannot silently lose the resolution or deletion, and unrelated standard
+  fields, UUIDs, unknown fields, and unknown bytes remain unchanged.
+\item
+  Cleanup: Restore provider availability, close the reopened vault, and remove every synthetic provider and local copy.
+\item
+  Required clients: Bonobo.
+\item
+  Coverage: transactional-merge-resolution-no-loss.
 \end{itemize}
 
 \subsection{Extension metadata gate}\label{extension-metadata-gate}

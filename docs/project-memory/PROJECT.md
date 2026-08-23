@@ -25,5 +25,6 @@ foundation infrastructure and a neutral compatibility contract, not vault produc
 - [Repository-foundation specification](../specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md)
 - [URL-audit design](../specs/password-bonobo-url-audit-design.md)
 - [Source-provenance policy](../legal/source-provenance-policy.md)
+- [Dependency and asset provenance ledger](../legal/dependency-asset-provenance-ledger.md)
 - [Compatibility matrix](../compatibility/gorilla/feature-parity-matrix.md)
 - [Black-box test oracles](../compatibility/gorilla/test-oracles.md)

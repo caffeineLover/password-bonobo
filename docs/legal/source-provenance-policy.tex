@@ -167,6 +167,12 @@ or immutable revision, license or terms, intended use, distribution implications
 review status. The ledger must flag dependencies and assets that are incompatible with an iOS distribution decision or
 with the project\textquotesingle s no-copy boundary.
 
+The canonical \href{dependency-asset-provenance-ledger.md}{dependency and asset provenance ledger} covers resolved and
+declared Python packages, GitHub Actions, document tools, and tracked repository assets. Run
+\passthrough{\lstinline!uv run python -m tools.check\_provenance!} after any dependency declaration, lock, action pin,
+document tool, or asset change; a passing freshness check records coverage, not legal approval for a row whose review
+remains pending.
+
 \subsection{8. Upstream revision updates}\label{8-upstream-revision-updates}
 
 Updating an external research revision requires a separate review, a newly pinned immutable revision, a provenance

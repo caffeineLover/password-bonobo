@@ -31,11 +31,37 @@ is unresolved; see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 
 ## Development
 
+Install [Git from its official distribution page](https://git-scm.com/downloads) and
+[uv by its official installer](https://docs.astral.sh/uv/getting-started/installation/), then verify both commands:
+
+```powershell
+git --version
+uv --version
+```
+
 Install the selected Python baseline and synchronize the locked development environment:
 
 ```powershell
 uv python install 3.14
 uv sync --locked --all-groups
+```
+
+Document generation and visual QA additionally require
+[Pandoc](https://pandoc.org/installing.html), a XeLaTeX distribution such as
+[MiKTeX](https://miktex.org/download), and Poppler's `pdfinfo` and `pdftoppm` commands.  Verify them before running
+the document gate:
+
+```powershell
+pandoc --version
+xelatex --version
+pdfinfo -v
+pdftoppm -v
+```
+
+Regenerate the tracked LaTeX sources, ignored PDFs, rendered review pages, logs, and manifest with:
+
+```powershell
+uv run python -m tools.generate_documents --write --render
 ```
 
 Run the complete local validation sequence from the repository root:
@@ -47,11 +73,17 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
+git diff --cached --check
 ```
 
-These commands validate only the Bonobo repository and never require the external Gorilla research checkout.
+Stage every intended file before the REUSE command so that it validates the exact release candidate.  These commands
+validate only the Bonobo repository and never require the external Gorilla research checkout.

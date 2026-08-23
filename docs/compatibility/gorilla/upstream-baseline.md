@@ -26,7 +26,7 @@ Create the default checkout only after confirming that the target is outside the
 $bonoboRoot = (Resolve-Path -LiteralPath '.').Path
 $researchRoot = Join-Path (Split-Path -Parent $bonoboRoot) 'Password Bonobo Research'
 $gorillaRoot = Join-Path $researchRoot 'gorilla'
-New-Item -ItemType Directory -Path $researchRoot
+New-Item -ItemType Directory -Force -Path $researchRoot
 git clone --filter=blob:none --no-checkout https://github.com/zdia/gorilla.git $gorillaRoot
 git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
 ```

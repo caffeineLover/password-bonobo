@@ -72,7 +72,7 @@ Test IDs resolve in
 | GOR-FEAT-018 | AutoType gap | Unverified | GOR-BEH-048; GAP-048 | O8 | D/B | Critical | Critical | GOR-TEST-018 |
 | GOR-FEAT-019 | CSV import | Required | GOR-BEH-050–051 | O3 | ALL | Critical | Material | GOR-TEST-019 |
 | GOR-FEAT-020 | CSV export | Required | GOR-BEH-049 | O3 | ALL | Critical | Critical | GOR-TEST-020 |
-| GOR-FEAT-021 | Merge | Modernized | GOR-BEH-052–054, GOR-BEH-063 | O3 | ALL | Critical | Critical | GOR-TEST-021 |
+|GOR-FEAT-021|Merge|Modernized|GOR-BEH-052–054|O3|ALL|Critical|Critical|GOR-TEST-021,GOR-TEST-055|
 | GOR-FEAT-022 | Interruption gap | Unverified | GOR-BEH-060; GAP-060 | O8 | ALL | Critical | Material | GOR-TEST-022 |
 |GOR-FEAT-023|Backup/recovery|Modernized|GOR-BEH-019–021|O3|ALL|Critical|Critical|GOR-TEST-023,GOR-TEST-049|
 | GOR-FEAT-024 | Backup gap | Unverified | GOR-BEH-018; GAP-018 | O8 | D/B | Critical | Material | GOR-TEST-024 |
@@ -96,6 +96,7 @@ Test IDs resolve in
 |GOR-FEAT-042|Untitled-vault lock save|Modernized|GOR-BEH-064|O3|ALL|Critical|Critical|GOR-TEST-050|
 |GOR-FEAT-043|Fail-open|Excluded|GOR-BEH-006,GOR-BEH-066;Approved:S8|O2|ALL|Critical|Critical|GOR-TEST-048,GOR-TEST-052|
 |GOR-FEAT-044|Ordinary-edit persistence|Required|GOR-BEH-008; Approved:S5+S8|O2|ALL|Critical|Critical|GOR-TEST-053|
+|GOR-FEAT-045|Gorilla post-save resolution loss|Excluded|GOR-BEH-063|O3|ALL|Critical|Critical|GOR-TEST-054|
 
 `GOR-FEAT-043` deliberately excludes two atomic Gorilla outcomes: `GOR-BEH-006` warning-open for a stored-HMAC mismatch
 and `GOR-BEH-066` in-memory V3.0 defaulting when Version is absent. The official V3 Version header is mandatory and has
@@ -106,6 +107,14 @@ retain the original encrypted bytes, and create no replacement. The row does not
 explicit Save and backup path. Bonobo commits an ordinary edit when its complete form is confirmed; provider
 unavailability retains the encrypted local edit as `Sync pending`. Save/discard close prompts belong only to staged
 URL-audit cleanup.
+
+`GOR-FEAT-021` preserves normal merge classification, field-by-field resolution, and unresolved-record preservation
+without inheriting the destructive close outcome in `GOR-BEH-063`.  Bonobo's no-loss authority requires a confirmed
+resolution or deletion to become transactional durable work before close.  If provider publication cannot complete,
+the work remains explicitly staged or conflicted and silent discard is blocked.
+
+`GOR-FEAT-045` isolates `GOR-BEH-063` as an Excluded Gorilla-only characterization.  It is neither a modernized Bonobo
+merge behavior nor a cross-implementation passing oracle.
 
 ## Evidence-gap register
 

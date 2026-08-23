@@ -5,8 +5,8 @@ Last updated: 2026-08-22
 ## Overview and current state
 
 This record distinguishes executed local checks from hosted service state.  The complete local release gate and
-document review passed against the staged Task 9 content.  Hosted CI has not yet run because this branch introduces the
-workflow; its Windows, macOS, and Linux jobs remain to be observed after integration or publication.
+document review passed against the staged whole-branch remediation candidate.  Hosted CI has not yet run because this
+branch introduces the workflow; its Windows, macOS, and Linux jobs remain to be observed after publication.
 
 ## CI action pin evidence
 
@@ -45,41 +45,47 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
 git diff --cached --check
 ```
 
 Result: all commands passed on Windows with CPython 3.14.7 and uv 0.12.5.  Ruff and strict mypy reported no issues;
-pytest 9.1.1 passed 15 tests with 73% measured coverage; the Python-structure and NUL-delimited tracked-file audits
-reported no violations; Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; REUSE
-classified 52 of 52 files; both distributions built; and the staged diff check was clean.  The local package's expected
-not-on-PyPI pip-audit skip is not a third-party dependency omission.
+pytest 9.1.1 passed 39 tests with 70% measured coverage; the structure, compatibility, provenance, and NUL-delimited
+tracked-file audits reported no violations.  The compatibility contract has 66 behaviors, 45 features, and 55 oracles.
+Bandit reported zero issues; pip-audit found no known third-party vulnerabilities; exact REUSE classified 62 of 62
+files; both distributions built; the wheel carried the declared exact GPL text; document verification passed; and the
+staged diff check was clean.  The local package's expected not-on-PyPI pip-audit skip is not a third-party omission.
 
 ## Generated-document review
 
-Fifteen substantial Markdown documents have exact, regenerated same-basename LaTeX sources.  A deterministic semantic
-comparison found 15 of 15 generated sources identical.  All documents stabilized after two XeLaTeX passes.  The final
-page counts are:
+Sixteen substantive Markdown documents have exact, regenerated same-basename LaTeX sources.  The tracked verifier
+found 16 of 16 generated sources byte-identical after physical line-ending normalization.  Every document received at
+least two XeLaTeX passes; eight required the bounded third pass requested by the compiler.  The final page counts are:
 
 | Document | Pages |
 |---|---:|
 | Behavior dossier | 20 |
 | Feature-parity matrix | 5 |
-| Test oracles | 17 |
+| Test oracles | 18 |
 | Upstream baseline | 2 |
 | App Store exception plan | 1 |
+| Dependency and asset provenance ledger | 11 |
 | Source-provenance policy | 2 |
-| Canonical memory; decisions, project, state, and verification records | 1; 2, 1, 1, 2 |
+| Canonical memory; decisions, project, state, and verification records | 2; 2, 1, 2, 2 |
 | Program design | 9 |
 | Repository-foundation specification | 6 |
 | URL-audit design | 13 |
 | Implementation plan | 24 |
 
-Result: 106 PDF pages and 106 rendered page images were visually inspected page by page.  The final logs have no
+Result: 120 PDF pages and 120 rendered page images were visually inspected page by page.  The final logs have no
 overflow, missing-glyph, undefined-reference, or rerun warnings.  Markdown and LaTeX have no lines over 120 characters
 or drafting tokens.  Listing wrapping and the landscape wide-table treatment were explicitly reconfirmed.  There are
 no observed clipping, overlap, hierarchy, glyph, or page-transition defects.  Review PDFs, build files, and page images

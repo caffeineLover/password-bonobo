@@ -28,7 +28,10 @@ The subproject is complete when it has:
 6. Recorded the upstream URL, exact commit, retrieval instructions, observed license, and source-analysis boundary.
 7. Produced a neutral behavior dossier, feature-parity matrix, and executable test-oracle catalog.
 8. Created durable project memory that records decisions, status, verification evidence, and the next approved work.
-9. Demonstrated that generated documentation is reproducible and that generated PDFs remain uncommitted.
+9. Demonstrated through a tracked exact generator that paired documentation is reproducible and generated PDFs remain
+   uncommitted.
+10. Recorded dependencies, build and documentation tools, workflow actions, and repository assets in an automatically
+    checked provenance ledger.
 
 ## 3. Repository Boundary
 
@@ -180,10 +183,11 @@ The foundation workflow will run on Windows, macOS, and Linux with Python 3.14. 
 3. Check formatting.
 4. Run Ruff and strict mypy.
 5. Run pytest with coverage.
-6. Run the Python structure-policy test.
-7. Run Bandit, pip-audit, and REUSE checks.
-8. Verify that forbidden file types and likely credential artifacts are absent from tracked files.
-9. Build the Python wheel and source distribution.
+6. Run the Python structure-policy and clean-room compatibility-contract checks.
+7. Verify provenance-ledger freshness.
+8. Run Bandit, pip-audit, and REUSE checks.
+9. Verify that forbidden file types and likely credential artifacts are absent from tracked files.
+10. Build the Python wheel and source distribution, then assert exact GPL metadata and license-file content.
 
 The workflow must not clone Gorilla, contact password providers, or require secrets.
 
@@ -224,7 +228,9 @@ Foundation verification will include:
 - A detached upstream checkout whose `HEAD` equals the selected commit and whose worktree is clean.
 - Dossier evidence coverage for every initial parity-matrix row.
 - A scan proving the dossier contains no copied multi-line source fragments or unresolved drafting tokens.
-- Successful Markdown-to-LaTeX generation and XeLaTeX compilation for substantial project documents.
+- Passing typed compatibility, provenance-ledger, and wheel-content release assertions.
+- Successful exact Markdown-to-LaTeX verification and at least two-pass XeLaTeX stabilization for every substantive
+  document, with a bounded third pass when requested by the compiler.
 - Page-by-page visual inspection of generated PDFs.
 
 ## 12. Acceptance Criteria

@@ -105,31 +105,46 @@ read-only checkout. A different revision requires a new pin, provenance review, 
 
 \subsection{2026-08-22 - Python 3.14 and repository tools}\label{2026-08-22---python-314-and-repository-tools}
 
-The foundation targets CPython \passthrough{\lstinline!>=3.14,<3.15!}, Hatchling, uv, autopep8, Ruff, strict mypy,
-pytest, Bandit, pip-audit, and REUSE. Mobile and binary dependencies must be requalified before their platform
-subprojects adopt them.
+The foundation targets CPython \nolinkurl{>=3.14,<3.15}, Hatchling, uv, autopep8, Ruff, strict mypy, pytest, Bandit,
+pip-audit, and REUSE. Mobile and binary dependencies must be requalified before their platform subprojects adopt them.
 
 \subsection{2026-08-22 - Git boundary and product-free
 foundation}\label{2026-08-22---git-boundary-and-product-free-foundation}
 
 The Bonobo Git repository excludes generated PDFs, local environments, logs, vault-like files outside a future
 synthetic-fixture allowlist, shared standards, temporary files, and upstream source trees. The initial
-\passthrough{\lstinline!bonobo\_core!} package intentionally exposes identity only; product behavior belongs to later
-approved subprojects.
+\nolinkurl{bonobo_core} package intentionally exposes identity only; product behavior belongs to later approved
+subprojects.
 
 \subsection{2026-08-22 - Enforcing formatter and license
 gates}\label{2026-08-22---enforcing-formatter-and-license-gates}
 
 Formatting runs autopep8 in place and then requires a scoped clean diff. REUSE lint runs with
-\passthrough{\lstinline!--no-multiprocessing!} because repeated Python 3.14 Windows runs showed default worker startup
-instability while the single-process mode checks identical metadata. Every new tracked path is explicitly classified
-before license lint.
+\nolinkurl{--no-multiprocessing} because repeated Python 3.14 Windows runs showed default worker startup instability
+while the single-process mode checks identical metadata. Every new tracked path is explicitly classified before license
+lint.
 
 \subsection{2026-08-22 - Generated-document policy}\label{2026-08-22---generated-document-policy}
 
 Substantial documentation has canonical Markdown and committed same-basename LaTeX. A shared Pandoc header preserves
-listing and table wrapping. XeLaTeX review PDFs and rendered pages remain ignored and are visually checked, never
-committed.
+listing and table wrapping. The tracked generator verifies exact Pandoc output, performs at least two XeLaTeX passes and
+a bounded third when the compiler requests it, and emits an ignored manifest, logs, PDFs, and optional page renders.
+Review PDFs and rendered pages remain ignored, visually checked, and never committed.
+
+\subsection{2026-08-22 - Compatibility and no-loss authority}\label{2026-08-22---compatibility-and-no-loss-authority}
+
+Observed Gorilla data loss is an Excluded characterization, not a passing cross-client contract. Bonobo must persist
+conflict resolution or deletion transactionally before close; if publication cannot complete, it must retain explicit
+staged or conflicted work and block silent discard. A typed compatibility check enforces closure, critical authority,
+and the clean-room expression boundary.
+
+\subsection{2026-08-22 - Release provenance and GPL wheel
+content}\label{2026-08-22---release-provenance-and-gpl-wheel-content}
+
+The paired dependency and asset ledger records direct and transitive Python packages, build tools, workflow actions,
+document tools, and repository assets. Its checker prevents stale or incomplete coverage without converting pending
+review into approval. Built wheels must declare GPL-3.0-or-later and contain the repository\textquotesingle s exact GPL
+license text.
 
 \subsection{2026-08-22 - External contribution hold}\label{2026-08-22---external-contribution-hold}
 

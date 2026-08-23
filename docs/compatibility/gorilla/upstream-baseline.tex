@@ -99,11 +99,11 @@
 \item
   Tree: \nolinkurl{b5d464a25ac51fa3a2753a7634b7a791f6f967dc}
 \item
-  Commit author date: \passthrough{\lstinline!2026-03-07T11:53:21-05:00!}
+  Commit author date: \nolinkurl{2026-03-07T11:53:21-05:00}
 \item
   Commit subject: \passthrough{\lstinline!Add [file home] shim if on pre-9.0 Tcl interpreter.!}
 \item
-  Observation date: \passthrough{\lstinline!2026-08-22!}
+  Observation date: \nolinkurl{2026-08-22}
 \end{itemize}
 
 The upstream README\textquotesingle s GPL-2.0-or-later declaration is a license observation about the external project.
@@ -124,7 +124,7 @@ Create the default checkout only after confirming that the target is outside the
 $bonoboRoot = (Resolve-Path -LiteralPath '.').Path
 $researchRoot = Join-Path (Split-Path -Parent $bonoboRoot) 'Password Bonobo Research'
 $gorillaRoot = Join-Path $researchRoot 'gorilla'
-New-Item -ItemType Directory -Path $researchRoot
+New-Item -ItemType Directory -Force -Path $researchRoot
 git clone --filter=blob:none --no-checkout https://github.com/zdia/gorilla.git $gorillaRoot
 git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
 \end{lstlisting}
@@ -167,10 +167,9 @@ Each later compatibility evidence record must use neutral prose and identify:
 \end{itemize}
 
 The approved research pass may inspect application workflows and user-visible behavior in
-\passthrough{\lstinline!sources/gorilla.tcl!}; data concepts and compatibility behavior in
-\passthrough{\lstinline!sources/pwsafe/*.tcl!}; user-facing contracts in \passthrough{\lstinline!sources/help.txt!},
-message catalogs, and upstream README material; behavioral examples and edge cases in
-\passthrough{\lstinline!unit-tests/**/*.test!} and \passthrough{\lstinline!unit-tests/**/*.tcl!}; and
+\nolinkurl{sources/gorilla.tcl}; data concepts and compatibility behavior in \nolinkurl{sources/pwsafe/*.tcl};
+user-facing contracts in \nolinkurl{sources/help.txt}, message catalogs, and upstream README material; behavioral
+examples and edge cases in \nolinkurl{unit-tests/**/*.test} and \nolinkurl{unit-tests/**/*.tcl}; and
 compatibility-relevant upstream change history.
 
 Gorilla material is evidence of behavior, not implementation material. Do not copy or adapt upstream source, comments,

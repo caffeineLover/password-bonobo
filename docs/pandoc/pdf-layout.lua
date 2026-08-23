@@ -12,6 +12,11 @@ local FEATURE_MATRIX_WIDTHS = {
   0.17,
 }
 
+local PROVENANCE_WIDTHS = {
+  [8] = {0.20, 0.13, 0.15, 0.15, 0.09, 0.08, 0.09, 0.11},
+  [10] = {0.13, 0.05, 0.15, 0.08, 0.14, 0.15, 0.05, 0.05, 0.09, 0.06},
+}
+
 local URL_AUDIT_COMPONENT_IDS = {
   ['gorilla::URLAudit'] = 'url-audit',
   ['gorilla::URLAudit::URL'] = 'url',
@@ -24,7 +29,7 @@ local URL_AUDIT_COMPONENT_IDS = {
 -- Render long, whitespace-free code spans through URL's break-aware monospace command.
 function Code(inline)
   local text = inline.text
-  if #text >= 32 and not text:match('%s') and not text:match('[{}]') then
+  if #text >= 10 and not text:match('%s') and not text:match('[{}]') then
     return pandoc.RawInline('latex', '\\nolinkurl{' .. text .. '}')
   end
   return inline
@@ -39,12 +44,16 @@ function Header(block)
   return block
 end
 
--- Give the nine-column feature matrix explicit proportional widths so every cell can wrap.
+-- Give wide feature and provenance tables explicit proportional widths so every cell can wrap.
 function Table(block)
-  if #block.colspecs ~= #FEATURE_MATRIX_WIDTHS then
+  local widths = PROVENANCE_WIDTHS[#block.colspecs]
+  if #block.colspecs == #FEATURE_MATRIX_WIDTHS then
+    widths = FEATURE_MATRIX_WIDTHS
+  end
+  if not widths then
     return block
   end
-  for index, width in ipairs(FEATURE_MATRIX_WIDTHS) do
+  for index, width in ipairs(widths) do
     block.colspecs[index] = {block.colspecs[index][1], width}
   end
   return {

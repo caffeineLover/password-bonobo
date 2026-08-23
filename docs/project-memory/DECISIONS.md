@@ -38,8 +38,22 @@ single-process mode checks identical metadata.  Every new tracked path is explic
 ## 2026-08-22 - Generated-document policy
 
 Substantial documentation has canonical Markdown and committed same-basename LaTeX.  A shared Pandoc header preserves
-listing and table wrapping.  XeLaTeX review PDFs and rendered pages remain ignored and are visually checked, never
-committed.
+listing and table wrapping.  The tracked generator verifies exact Pandoc output, performs at least two XeLaTeX passes
+and a bounded third when the compiler requests it, and emits an ignored manifest, logs, PDFs, and optional page renders.
+Review PDFs and rendered pages remain ignored, visually checked, and never committed.
+
+## 2026-08-22 - Compatibility and no-loss authority
+
+Observed Gorilla data loss is an Excluded characterization, not a passing cross-client contract.  Bonobo must persist
+conflict resolution or deletion transactionally before close; if publication cannot complete, it must retain explicit
+staged or conflicted work and block silent discard.  A typed compatibility check enforces closure, critical authority,
+and the clean-room expression boundary.
+
+## 2026-08-22 - Release provenance and GPL wheel content
+
+The paired dependency and asset ledger records direct and transitive Python packages, build tools, workflow actions,
+document tools, and repository assets.  Its checker prevents stale or incomplete coverage without converting pending
+review into approval.  Built wheels must declare GPL-3.0-or-later and contain the repository's exact GPL license text.
 
 ## 2026-08-22 - External contribution hold
 

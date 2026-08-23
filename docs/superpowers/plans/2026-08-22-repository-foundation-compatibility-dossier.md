@@ -1,7 +1,8 @@
 # Repository Foundation and Compatibility Dossier Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Completed historical record:** All 60 implementation steps are complete and use checked (`- [x]`) syntax.  The
+> resulting release commands include the whole-branch compatibility, provenance, wheel, and document-verification
+> remediations applied before final acceptance.
 
 **Goal:** Establish a policy-enforced Bonobo repository and convert a pinned, untouched Gorilla source baseline into a
 neutral compatibility dossier, parity matrix, and test-oracle catalog.
@@ -112,7 +113,7 @@ The sibling research checkout defaults to `../Password Bonobo Research/gorilla` 
 - Consumes: The existing workspace and approved specifications.
 - Produces: A `main` repository whose ignore rules define every later task's tracked-file boundary.
 
-- [ ] **Step 1: Reconfirm the repository boundary**
+- [x] **Step 1: Reconfirm the repository boundary**
 
 Run from the workspace root:
 
@@ -125,7 +126,7 @@ git -C $parent rev-parse --show-toplevel
 
 Expected: both Git commands fail with `not a git repository`.  Stop if either resolves to an existing repository.
 
-- [ ] **Step 2: Initialize the primary branch**
+- [x] **Step 2: Initialize the primary branch**
 
 Run:
 
@@ -136,7 +137,7 @@ git status --short
 
 Expected: Git reports untracked workspace files and branch `main`.
 
-- [ ] **Step 3: Create the repository exclusions**
+- [x] **Step 3: Create the repository exclusions**
 
 Create `.gitignore` with exactly these initial rules:
 
@@ -176,7 +177,7 @@ Thumbs.db
 !/tests/fixtures/synthetic/**/*.psafe
 ```
 
-- [ ] **Step 4: Create text and editor policy**
+- [x] **Step 4: Create text and editor policy**
 
 Create `.gitattributes`:
 
@@ -217,7 +218,7 @@ indent_style = space
 indent_size = 4
 ```
 
-- [ ] **Step 5: Create the project entry document**
+- [x] **Step 5: Create the project entry document**
 
 Create `README.md` with these sections and claims:
 
@@ -248,7 +249,7 @@ Bonobo-authored code is intended for GPL-3.0-or-later licensing.  Formal license
 by the repository-foundation plan before product implementation begins.
 ```
 
-- [ ] **Step 6: Verify the ignore boundary before staging**
+- [x] **Step 6: Verify the ignore boundary before staging**
 
 Run:
 
@@ -262,7 +263,7 @@ git status --short
 Expected: each queried generated or shared file matches an ignore rule.  `git status` must not list `docs/prompts/`, any
 PDF, or `tmp/`.
 
-- [ ] **Step 7: Commit the intentional baseline**
+- [x] **Step 7: Commit the intentional baseline**
 
 Run:
 
@@ -296,7 +297,7 @@ working branch becomes `foundation/compatibility-dossier`.
 - Consumes: Git and repository policy from Task 1.
 - Produces: `bonobo_core.__version__: Final[str]`, an importable typed package, and `uv run` quality commands.
 
-- [ ] **Step 1: Install uv and CPython 3.14 outside the repository**
+- [x] **Step 1: Install uv and CPython 3.14 outside the repository**
 
 Run:
 
@@ -308,7 +309,7 @@ uv python pin 3.14
 
 Expected: `.python-version` contains `3.14`, and `uv run python --version` reports Python 3.14.x.
 
-- [ ] **Step 2: Create package and tool configuration**
+- [x] **Step 2: Create package and tool configuration**
 
 Create `pyproject.toml`:
 
@@ -381,7 +382,7 @@ source = ["bonobo_core", "tools"]
 targets = ["src", "tools"]
 ```
 
-- [ ] **Step 3: Lock and install the development environment**
+- [x] **Step 3: Lock and install the development environment**
 
 Run:
 
@@ -392,7 +393,7 @@ uv sync --all-groups
 
 Expected: `uv.lock` is created and `uv run python --version` reports Python 3.14.x.
 
-- [ ] **Step 4: Write the failing package-contract test**
+- [x] **Step 4: Write the failing package-contract test**
 
 Create `tests/foundation/test_package_contract.py`:
 
@@ -418,7 +419,7 @@ def test_package_identity_is_typed() -> None:
     assert (package_directory / "py.typed").is_file()
 ```
 
-- [ ] **Step 5: Run the contract test and verify failure**
+- [x] **Step 5: Run the contract test and verify failure**
 
 Run:
 
@@ -428,7 +429,7 @@ uv run pytest tests/foundation/test_package_contract.py -v
 
 Expected: collection fails with `ModuleNotFoundError: No module named 'bonobo_core'`.
 
-- [ ] **Step 6: Add the minimum typed package identity**
+- [x] **Step 6: Add the minimum typed package identity**
 
 Create `src/bonobo_core/__init__.py`:
 
@@ -451,7 +452,7 @@ Create `tools/__init__.py`:
 """Provide repository-owned validation utilities that never enter product builds."""
 ```
 
-- [ ] **Step 7: Run foundation quality checks**
+- [x] **Step 7: Run foundation quality checks**
 
 Run:
 
@@ -465,7 +466,7 @@ uv build
 
 Expected: the formatter prints no diff; lint, typing, and test commands pass; wheel and source distribution are built.
 
-- [ ] **Step 8: Commit the package foundation**
+- [x] **Step 8: Commit the package foundation**
 
 Run:
 
@@ -493,7 +494,7 @@ git commit -m "build: add typed Python foundation"
 - Produces: `Violation`, `check_source(path, source)`, `check_paths(paths)`, and a CLI returning zero only when
   policy passes.
 
-- [ ] **Step 1: Create positive and negative source fixtures**
+- [x] **Step 1: Create positive and negative source fixtures**
 
 Create `tests/fixtures/python_structure/documented.py.txt`:
 
@@ -515,7 +516,7 @@ def missing_comment(value):
     return value
 ```
 
-- [ ] **Step 2: Write failing checker tests**
+- [x] **Step 2: Write failing checker tests**
 
 Create `tests/foundation/test_python_structure.py` with these public-contract tests:
 
@@ -561,7 +562,7 @@ def test_repository_python_sources_pass() -> None:
     assert check_paths((Path("src"), Path("tests"), Path("tools"))) == ()
 ```
 
-- [ ] **Step 3: Run the tests and verify the missing checker failure**
+- [x] **Step 3: Run the tests and verify the missing checker failure**
 
 Run:
 
@@ -571,7 +572,7 @@ uv run pytest tests/foundation/test_python_structure.py -v
 
 Expected: collection fails because `tools.check_python_structure` does not exist.
 
-- [ ] **Step 4: Implement the AST-backed checker**
+- [x] **Step 4: Implement the AST-backed checker**
 
 Keep the responsibility docstring in `tools/__init__.py`.  Implement `tools/check_python_structure.py` with these exact
 public types and rules:
@@ -698,7 +699,7 @@ if __name__ == "__main__":
 Before accepting this implementation, add a test case for a decorated declaration and one for more than three blank
 lines.  Use the same fixture-string approach and assert the exact violation messages shown above.
 
-- [ ] **Step 5: Run the full validation cycle**
+- [x] **Step 5: Run the full validation cycle**
 
 Run:
 
@@ -712,7 +713,7 @@ uv run python -m tools.check_python_structure src tests tools
 
 Expected: every command passes.  Confirm manually that formatting did not remove required blank lines or `####` blocks.
 
-- [ ] **Step 6: Commit the source-policy gate**
+- [x] **Step 6: Commit the source-policy gate**
 
 Run:
 
@@ -736,7 +737,7 @@ git commit -m "test: enforce Python source structure policy"
 - Consumes: Git repository and Python policy from Tasks 1-3.
 - Produces: `find_forbidden(paths) -> tuple[ForbiddenPath, ...]` and a CI-safe tracked-file audit command.
 
-- [ ] **Step 1: Write failing path-policy tests**
+- [x] **Step 1: Write failing path-policy tests**
 
 Create tests covering these exact cases:
 
@@ -777,7 +778,7 @@ def test_safe_paths_are_allowed() -> None:
     assert find_forbidden(paths) == ()
 ```
 
-- [ ] **Step 2: Verify the tests fail because the module is missing**
+- [x] **Step 2: Verify the tests fail because the module is missing**
 
 Run:
 
@@ -787,7 +788,7 @@ uv run pytest tests/foundation/test_tracked_files.py -v
 
 Expected: collection fails because `tools.check_tracked_files` does not exist.
 
-- [ ] **Step 3: Implement the tracked-file validator**
+- [x] **Step 3: Implement the tracked-file validator**
 
 Implement `tools/check_tracked_files.py`:
 
@@ -959,7 +960,7 @@ When no positional path arguments are supplied and standard input is redirected,
 Git paths from `git ls-files -z` to avoid Git's C-style quoting ambiguity.  Positional arguments take precedence.  It
 prints only a path and non-sensitive reason, returns one on a violation, and returns two for malformed standard input.
 
-- [ ] **Step 4: Exercise the command entry point**
+- [x] **Step 4: Exercise the command entry point**
 
 Run:
 
@@ -973,7 +974,7 @@ uv run python -m tools.check_python_structure tools tests
 
 Expected: all commands pass and no tracked path is reported.
 
-- [ ] **Step 5: Commit the tracked-file gate**
+- [x] **Step 5: Commit the tracked-file gate**
 
 Run:
 
@@ -1002,7 +1003,7 @@ git commit -m "test: block unsafe tracked artifacts"
 - Consumes: REUSE installed by Task 2 and source boundary from the specification.
 - Produces: Machine-checkable GPL licensing and human-readable rules for all later contributions and source research.
 
-- [ ] **Step 1: Download the canonical GPL text with REUSE**
+- [x] **Step 1: Download the canonical GPL text with REUSE**
 
 Run:
 
@@ -1012,7 +1013,7 @@ uv run reuse download GPL-3.0-or-later
 
 Expected: `LICENSES/GPL-3.0-or-later.txt` exists and `reuse lint` recognizes the license identifier.
 
-- [ ] **Step 2: Create machine-readable file annotations**
+- [x] **Step 2: Create machine-readable file annotations**
 
 Create `REUSE.toml` using REUSE specification version 3.3:
 
@@ -1067,7 +1068,7 @@ documentation.  Add future Bonobo-authored paths deliberately; do not use a dire
 artifact is handled solely by REUSE's `LICENSES` mechanism and is not annotated with Bonobo contributor copyright.
 Ignored `docs/prompts/`, generated PDFs, and the external Gorilla checkout are not repository content.
 
-- [ ] **Step 3: Create the source-provenance policy**
+- [x] **Step 3: Create the source-provenance policy**
 
 Write `docs/legal/source-provenance-policy.md` with these mandatory sections:
 
@@ -1082,7 +1083,7 @@ Write `docs/legal/source-provenance-policy.md` with these mandatory sections:
 8. Upstream revision update procedure.
 9. Incident response for suspected copied expression.
 
-- [ ] **Step 4: Document the iOS exception work without publishing license language**
+- [x] **Step 4: Document the iOS exception work without publishing license language**
 
 Write `docs/legal/app-store-distribution-exception-plan.md` with:
 
@@ -1094,7 +1095,7 @@ Write `docs/legal/app-store-distribution-exception-plan.md` with:
 - A decision gate before the first iOS distribution build.
 - A statement that this planning document is not license text or legal advice.
 
-- [ ] **Step 5: Add contribution and security entry points**
+- [x] **Step 5: Add contribution and security entry points**
 
 Create `CONTRIBUTING.md` stating that external contributions are not yet accepted, why the distribution-exception rights
 must first be settled, and how that status will be changed deliberately.  Create `SECURITY.md` prohibiting public issue
@@ -1103,7 +1104,7 @@ reporting channel once enabled.  Do not invent an email address.
 
 Update `README.md` so the license and security links point to these completed files.
 
-- [ ] **Step 6: Verify policy and license metadata**
+- [x] **Step 6: Verify policy and license metadata**
 
 Run:
 
@@ -1115,7 +1116,7 @@ rg -n "Gorilla source|GPL-3.0-or-later|not license text" README.md CONTRIBUTING.
 
 Expected: REUSE passes, the tracked-file audit passes, and each required policy phrase appears in its intended document.
 
-- [ ] **Step 7: Commit licensing and policy**
+- [x] **Step 7: Commit licensing and policy**
 
 Run:
 
@@ -1140,7 +1141,7 @@ git commit -m "docs: establish licensing and provenance policy"
 - Consumes: Upstream URL and commit from Global Constraints.
 - Produces: A reproducible detached checkout and an evidence-citation baseline for Tasks 7 and 8.
 
-- [ ] **Step 1: Resolve and verify the external target**
+- [x] **Step 1: Resolve and verify the external target**
 
 Run from the Bonobo root:
 
@@ -1155,12 +1156,12 @@ Write-Output "GORILLA=$gorillaRoot"
 
 Expected: `$gorillaRoot` is not inside `$bonoboRoot`.  Stop if it resolves beneath the Bonobo repository.
 
-- [ ] **Step 2: Create the research checkout at the exact revision**
+- [x] **Step 2: Create the research checkout at the exact revision**
 
 If the target does not exist, run:
 
 ```powershell
-New-Item -ItemType Directory -Path $researchRoot
+New-Item -ItemType Directory -Force -Path $researchRoot
 git clone --filter=blob:none --no-checkout https://github.com/zdia/gorilla.git $gorillaRoot
 git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
 ```
@@ -1168,7 +1169,7 @@ git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
 If the target already exists, verify that it is the expected Gorilla repository and contains no local changes before
 fetching the exact commit.  Never reset or delete an existing research checkout automatically.
 
-- [ ] **Step 3: Verify identity and immutability evidence**
+- [x] **Step 3: Verify identity and immutability evidence**
 
 Run:
 
@@ -1182,7 +1183,7 @@ git -C $gorillaRoot show -s --format='%H%n%T%n%aI%n%s' HEAD
 Expected: origin equals the approved URL, `HEAD` equals the pinned commit, the worktree is clean, and Git prints the
 commit hash, tree hash, author date, and subject for the evidence record.
 
-- [ ] **Step 4: Write the upstream baseline record**
+- [x] **Step 4: Write the upstream baseline record**
 
 Create `docs/compatibility/gorilla/upstream-baseline.md` with:
 
@@ -1195,7 +1196,7 @@ Create `docs/compatibility/gorilla/upstream-baseline.md` with:
 - The reviewed source categories from the subproject specification.
 - The update procedure requiring a new pin and dossier delta.
 
-- [ ] **Step 5: Update and verify REUSE metadata**
+- [x] **Step 5: Update and verify REUSE metadata**
 
 Before committing, add `docs/compatibility/gorilla/upstream-baseline.md` to the explicit `REUSE.toml` annotation list.
 Do not use a directory wildcard or an annotation that could classify future third-party material.
@@ -1212,7 +1213,7 @@ uv run reuse lint
 
 Expected: REUSE passes after the new Bonobo-authored path is deliberately classified.
 
-- [ ] **Step 6: Prove that upstream material is absent from Bonobo**
+- [x] **Step 6: Prove that upstream material is absent from Bonobo**
 
 Run:
 
@@ -1225,7 +1226,7 @@ git diff --cached --check
 
 Expected: the intended repository files are staged; the validators pass; no upstream source path is tracked.
 
-- [ ] **Step 7: Commit the baseline record**
+- [x] **Step 7: Commit the baseline record**
 
 Run:
 
@@ -1248,7 +1249,7 @@ git commit -m "docs: pin Gorilla research baseline"
 - Consumes: Detached Gorilla checkout and evidence format from Task 6.
 - Produces: Stable behavior identifiers `GOR-BEH-001` onward for the parity matrix and test oracles.
 
-- [ ] **Step 1: Inventory the upstream evidence without modifying it**
+- [x] **Step 1: Inventory the upstream evidence without modifying it**
 
 Run read-only searches from `$gorillaRoot`:
 
@@ -1260,7 +1261,7 @@ git -C $gorillaRoot status --short
 
 Expected: the search identifies candidate evidence, and the upstream worktree remains clean.
 
-- [ ] **Step 2: Establish the dossier evidence schema**
+- [x] **Step 2: Establish the dossier evidence schema**
 
 Begin `behavior-dossier.md` with:
 
@@ -1280,7 +1281,7 @@ observation.  Source text, source identifiers, control flow, and UI expression a
 - `Unverified`: evidence is incomplete, contradictory, or unavailable in the research environment.
 ```
 
-- [ ] **Step 3: Analyze vault and record lifecycle behavior**
+- [x] **Step 3: Analyze vault and record lifecycle behavior**
 
 Read the relevant regions of `sources/gorilla.tcl`, `sources/pwsafe/*.tcl`, `sources/help.txt`, and corresponding unit
 tests.  Record separate `GOR-BEH` entries for creation, open/authentication, save/save-as, close, lock, timeout, backup,
@@ -1302,7 +1303,7 @@ For every entry, write:
 
 Increment the identifier for each analyzed behavior and replace the example statements with evidence-backed facts.
 
-- [ ] **Step 4: Analyze navigation and user workflows**
+- [x] **Step 4: Analyze navigation and user workflows**
 
 Add evidence-backed entries for groups, tree operations, selection, search, filtering, recent files, preferences,
 password generation and policies, clipboard, browser launch, AutoType, confirmations, and error presentation.
@@ -1310,13 +1311,13 @@ password generation and policies, clipboard, browser launch, AutoType, confirmat
 Record behavior rather than pixel layout.  Preserve distinctions that affect keyboard access, destructive-action safety,
 or user-authored data.
 
-- [ ] **Step 5: Analyze interchange and edge cases**
+- [x] **Step 5: Analyze interchange and edge cases**
 
 Add entries for CSV import/export, merge, PasswordSafe version handling, unknown or unsupported content, malformed
 files, database locking, backup behavior, interrupted operations, and relevant platform differences.  Treat upstream
 test databases only as research evidence; do not copy them.
 
-- [ ] **Step 6: Run dossier quality and boundary checks**
+- [x] **Step 6: Run dossier quality and boundary checks**
 
 Before this check, add `docs/compatibility/gorilla/behavior-dossier.md` to the explicit `REUSE.toml` annotation list.
 Do not use a directory wildcard or an annotation that could classify future third-party material.
@@ -1341,7 +1342,7 @@ git diff --cached --check
 Expected: the first command lists every behavior; the token scan prints nothing; the line-length scan prints nothing;
 the Gorilla checkout remains clean; the tracked-file audit passes.
 
-- [ ] **Step 7: Commit the neutral dossier**
+- [x] **Step 7: Commit the neutral dossier**
 
 Run:
 
@@ -1365,7 +1366,7 @@ git commit -m "docs: record Gorilla behavior dossier"
 - Consumes: Three-digit `GOR-BEH` identifiers from Task 7.
 - Produces: Three-digit `GOR-FEAT` rows and `GOR-TEST` scenarios for all later subprojects.
 
-- [ ] **Step 1: Create the parity-matrix schema and required feature families**
+- [x] **Step 1: Create the parity-matrix schema and required feature families**
 
 Create a Markdown table with columns:
 
@@ -1382,7 +1383,7 @@ keyboard behavior.
 Add Bonobo-extension rows for URL audit/cleanup, provider conflict safety, Android Autofill, biometric unlock, and the
 iOS credential provider.  Use only the dispositions defined in the subproject specification.
 
-- [ ] **Step 2: Assign evidence and owner subprojects**
+- [x] **Step 2: Assign evidence and owner subprojects**
 
 For every `GOR-FEAT` row:
 
@@ -1392,7 +1393,7 @@ For every `GOR-FEAT` row:
 - Mark data-loss and security relevance as `Critical`, `Material`, or `Routine`.
 - Link one or more `GOR-TEST` identifiers created in the next step.
 
-- [ ] **Step 3: Create black-box test-oracle scenarios**
+- [x] **Step 3: Create black-box test-oracle scenarios**
 
 Begin `test-oracles.md` with definitions for evidence authority and synthetic-data rules.  For each matrix feature, add:
 
@@ -1411,7 +1412,7 @@ Begin `test-oracles.md` with definitions for evidence authority and synthetic-da
 
 Increment the identifier for each scenario and replace the example statements with exact synthetic test facts.
 
-- [ ] **Step 4: Add no-loss and cross-client oracle coverage**
+- [x] **Step 4: Add no-loss and cross-client oracle coverage**
 
 Include explicit scenarios for:
 
@@ -1423,7 +1424,7 @@ Include explicit scenarios for:
 - External file mutation causing conflict rather than overwrite.
 - Gorilla and Password Safe round trips for every claimed metadata extension.
 
-- [ ] **Step 5: Validate matrix closure**
+- [x] **Step 5: Validate matrix closure**
 
 Before this check, add `docs/compatibility/gorilla/feature-parity-matrix.md` and
 `docs/compatibility/gorilla/test-oracles.md` to the explicit `REUSE.toml` annotation list.  Do not use a directory
@@ -1451,7 +1452,7 @@ git diff --cached --check
 Expected: every identifier class is present; the token scan prints nothing; every matrix row has evidence, owner,
 platform, relevance, and test values.
 
-- [ ] **Step 6: Commit the compatibility contract**
+- [x] **Step 6: Commit the compatibility contract**
 
 Run:
 
@@ -1485,7 +1486,7 @@ git commit -m "docs: define Gorilla parity and test oracles"
 - Consumes: All local validation commands and compatibility documents from Tasks 1-8.
 - Produces: Three-platform CI, durable handoff state, and evidence that subproject 1 is complete.
 
-- [ ] **Step 1: Create the three-platform workflow**
+- [x] **Step 1: Create the three-platform workflow**
 
 Create `.github/workflows/foundation.yml` with:
 
@@ -1507,7 +1508,7 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.14"
@@ -1519,12 +1520,15 @@ jobs:
       - run: uv run mypy src tests tools
       - run: uv run python -m pytest
       - run: uv run python -m tools.check_python_structure src tests tools
+      - run: uv run python -m tools.check_compatibility
+      - run: uv run python -m tools.check_provenance
       - shell: bash
         run: git ls-files -z | uv run python -m tools.check_tracked_files
       - run: uv run bandit -c pyproject.toml -r src tools
       - run: uv run pip-audit
       - run: uv run reuse --no-multiprocessing lint
       - run: uv build
+      - run: uv run python -m tools.check_wheel dist
 ```
 
 Verify the two pinned action commits against their official Git refs before committing.  On 2026-08-22,
@@ -1534,7 +1538,7 @@ Verify the two pinned action commits against their official Git refs before comm
 official action-hardening guidance, and record both object types in `docs/project-memory/VERIFICATION.md`.  Do not
 introduce floating tags.
 
-- [ ] **Step 2: Write durable project identity and current state**
+- [x] **Step 2: Write durable project identity and current state**
 
 Create memory files with these responsibilities:
 
@@ -1551,7 +1555,7 @@ Create memory files with these responsibilities:
 
 Do not include raw command transcripts, machine-specific research paths, credentials, or copied upstream content.
 
-- [ ] **Step 3: Update the README development entry points**
+- [x] **Step 3: Update the README development entry points**
 
 Add concise setup and validation commands:
 
@@ -1564,21 +1568,27 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
 ```
 
 Link the canonical `docs/PROJECT_MEMORY.md` entry point and state explicitly that these commands never require the
 Gorilla checkout.
 
-- [ ] **Step 4: Generate LaTeX and PDFs for substantial new documents**
+- [x] **Step 4: Generate LaTeX and PDFs for substantial new documents**
 
-For each substantial Markdown document created or changed by this plan, run Pandoc with
-`docs/pandoc/pdf-header.tex` and `docs/pandoc/pdf-layout.lua` to create a same-basename `.tex`, compile it with XeLaTeX
-into `tmp/pdfs/`, and copy the PDF beside its Markdown source for local review.  At minimum this includes:
+Run the tracked exact generator with `uv run python -m tools.generate_documents --write --render`.  It uses
+`docs/pandoc/pdf-header.tex` and `docs/pandoc/pdf-layout.lua`, creates every same-basename `.tex`, performs at least two
+XeLaTeX passes plus a bounded third when requested, writes useful logs and a manifest below `tmp/pdfs/`, and copies
+ignored PDFs beside their Markdown sources.
+At minimum this includes:
 
 - The subproject specification.
 - The approved program and URL-audit designs.
@@ -1616,7 +1626,7 @@ git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMOR
   docs/project-memory docs/pandoc docs/compatibility docs/legal docs/specs docs/superpowers/plans
 ```
 
-- [ ] **Step 5: Run the complete local release gate**
+- [x] **Step 5: Run the complete local release gate**
 
 Run:
 
@@ -1628,11 +1638,15 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
 git diff --cached --check
 git status --short
 ```
@@ -1640,7 +1654,7 @@ git status --short
 Expected: every validation command passes.  `git status` lists only intended Markdown/LaTeX changes and ignored PDFs do
 not appear.
 
-- [ ] **Step 6: Commit CI, memory, and generated LaTeX sources**
+- [x] **Step 6: Commit CI, memory, and generated LaTeX sources**
 
 Run:
 
@@ -1651,7 +1665,7 @@ git commit -m "ci: complete repository foundation and dossier gates"
 
 Expected: no PDF, Gorilla source, shared standards file, vault, log, or temporary render file is staged.
 
-- [ ] **Step 7: Review the completed branch**
+- [x] **Step 7: Review the completed branch**
 
 Run:
 

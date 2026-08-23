@@ -13,8 +13,11 @@ and cannot open, edit, save, or audit a vault.
 - Git, packaging, Python 3.14, source-structure, tracked-file, security, dependency, and REUSE policy foundations.
 - GPL-3.0-or-later licensing, security reporting, clean-room provenance, contribution hold, and iOS-exception planning.
 - A detached external Gorilla baseline record pinned at `6728e85c05ac25357b8f19f541487b9d26a97402`.
-- A neutral dossier with 66 behaviors, a 44-row feature matrix, and 53 synthetic black-box test oracles.
-- A three-platform CI definition and reproducible Markdown, LaTeX, and ignored review-PDF workflow.
+- A neutral dossier with 66 behaviors, a 45-row feature matrix, and 55 synthetic black-box test oracles.  Gorilla's
+  post-save loss behavior is an Excluded characterization; Bonobo's transactional no-loss oracle remains authoritative.
+- Typed compatibility-contract and clean-room expression checks, including exact feature/evidence/oracle closure.
+- A checked dependency and asset provenance ledger, exact document generator/verifier, and GPL wheel assertion.
+- A three-platform CI definition and reproducible Markdown, LaTeX, ignored review-PDF, and page-render workflow.
 - A canonical `docs/PROJECT_MEMORY.md` future-agent entry point routing to the four focused durable records.
 
 ## Active risks

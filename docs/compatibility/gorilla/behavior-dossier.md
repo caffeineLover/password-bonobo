@@ -899,7 +899,9 @@ observation. Source text, source identifiers, control flow, and UI expression ar
     kind: `source`.
   - Revision: `6728e85c05ac25357b8f19f541487b9d26a97402`; location: `sources/gorilla.tcl:4816-4847`;
     kind: `source`.
-- Bonobo note: This is a destructive-data boundary distinct from deferring and saving both records in GOR-BEH-054.
+- Compatibility classification: `Excluded`; this is a Gorilla-only destructive characterization.
+- Bonobo note: This is not normal merge parity.  Bonobo must persist the resolution or retain an explicit unresolved
+  state that blocks silent close, under its authoritative no-loss policy.
 
 ### GOR-BEH-064 - Lock an untitled vault while backups are enabled
 

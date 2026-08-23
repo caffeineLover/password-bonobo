@@ -34,5 +34,7 @@ external paths, and copied upstream content out of project memory.
   contract, not a later compatibility enhancement.
 - Bonobo-authored material is GPL-3.0-or-later.  External contributions remain closed while contributor permissions and
   any App Store distribution exception are unresolved.
-- Review PDFs and render outputs are reproducible local artifacts.  Canonical Markdown and same-basename LaTeX sources
-  are committed; generated PDFs remain ignored.
+- Review PDFs and render outputs are reproducible local artifacts produced by the tracked exact generator.  Canonical
+  Markdown and same-basename LaTeX sources are committed; generated PDFs, manifests, logs, and renders remain ignored.
+- The compatibility contract distinguishes Excluded Gorilla loss characterization from Bonobo's authoritative
+  transactional no-loss behavior; the typed compatibility gate must remain green as the dossier evolves.

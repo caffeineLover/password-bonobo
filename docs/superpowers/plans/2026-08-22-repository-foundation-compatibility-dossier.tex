@@ -87,9 +87,9 @@
 Plan}\label{repository-foundation-and-compatibility-dossier-implementation-plan}
 
 \begin{quote}
-\textbf{For agentic workers:} REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
-superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (\passthrough{\lstinline!- [ ]!})
-syntax for tracking.
+\textbf{Completed historical record:} All 60 implementation steps are complete and use checked
+(\passthrough{\lstinline!- [x]!}) syntax. The resulting release commands include the whole-branch compatibility,
+provenance, wheel, and document-verification remediations applied before final acceptance.
 \end{quote}
 
 \textbf{Goal:} Establish a policy-enforced Bonobo repository and convert a pinned, untouched Gorilla source baseline
@@ -97,7 +97,7 @@ into a neutral compatibility dossier, parity matrix, and test-oracle catalog.
 
 \textbf{Architecture:} Gorilla remains in a detached sibling research checkout and never enters the Bonobo repository.
 The repository contains only original foundation code, enforceable quality policy, neutral behavioral documentation, and
-an empty typed \passthrough{\lstinline!bonobo\_core!} package boundary for the next subproject.
+an empty typed \nolinkurl{bonobo_core} package boundary for the next subproject.
 
 \textbf{Tech Stack:} Git, CPython 3.14, Hatchling, uv, autopep8, Ruff, mypy, pytest, Bandit, pip-audit, REUSE, GitHub
 Actions, Pandoc, XeLaTeX, and Poppler.
@@ -121,11 +121,11 @@ Actions, Pandoc, XeLaTeX, and Poppler.
   recorded proof that its content is synthetic or fabricated. License review, sensitive-data scanning, and approval are
   additional mandatory gates.
 \item
-  Bonobo-authored code uses SPDX identifier \passthrough{\lstinline!GPL-3.0-or-later!}.
+  Bonobo-authored code uses SPDX identifier \nolinkurl{GPL-3.0-or-later}.
 \item
   The iOS distribution exception remains a review item; do not publish provisional wording as approved license text.
 \item
-  Target CPython \passthrough{\lstinline!>=3.14,<3.15!}.
+  Target CPython \nolinkurl{>=3.14,<3.15}.
 \item
   Every maintained Python module has a responsibility-focused triple-double-quoted module docstring.
 \item
@@ -207,11 +207,11 @@ controls}\label{task-1-establish-the-git-boundary-and-baseline-controls}
 \begin{itemize}
 \tightlist
 \item
-  Create: \passthrough{\lstinline!.gitignore!}
+  Create: \nolinkurl{.gitignore}
 \item
-  Create: \passthrough{\lstinline!.gitattributes!}
+  Create: \nolinkurl{.gitattributes}
 \item
-  Create: \passthrough{\lstinline!.editorconfig!}
+  Create: \nolinkurl{.editorconfig}
 \item
   Create: \passthrough{\lstinline!README.md!}
 \item
@@ -245,7 +245,7 @@ controls}\label{task-1-establish-the-git-boundary-and-baseline-controls}
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Reconfirm the repository boundary}
 \end{itemize}
 
@@ -263,7 +263,7 @@ existing repository.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Initialize the primary branch}
 \end{itemize}
 
@@ -278,11 +278,11 @@ Expected: Git reports untracked workspace files and branch \passthrough{\lstinli
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Create the repository exclusions}
 \end{itemize}
 
-Create \passthrough{\lstinline!.gitignore!} with exactly these initial rules:
+Create \nolinkurl{.gitignore} with exactly these initial rules:
 
 \begin{lstlisting}
 # Shared standards are read from the canonical external standards repository.
@@ -322,11 +322,11 @@ Thumbs.db
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Create text and editor policy}
 \end{itemize}
 
-Create \passthrough{\lstinline!.gitattributes!}:
+Create \nolinkurl{.gitattributes}:
 
 \begin{lstlisting}
 * text=auto eol=lf
@@ -340,7 +340,7 @@ Create \passthrough{\lstinline!.gitattributes!}:
 *.psafe3 binary
 \end{lstlisting}
 
-Create \passthrough{\lstinline!.editorconfig!}:
+Create \nolinkurl{.editorconfig}:
 
 \begin{lstlisting}
 root = true
@@ -367,7 +367,7 @@ indent_size = 4
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Create the project entry document}
 \end{itemize}
 
@@ -402,7 +402,7 @@ by the repository-foundation plan before product implementation begins.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Verify the ignore boundary before staging}
 \end{itemize}
 
@@ -416,11 +416,11 @@ git status --short
 \end{lstlisting}
 
 Expected: each queried generated or shared file matches an ignore rule. \passthrough{\lstinline!git status!} must not
-list \passthrough{\lstinline!docs/prompts/!}, any PDF, or \passthrough{\lstinline!tmp/!}.
+list \nolinkurl{docs/prompts/}, any PDF, or \passthrough{\lstinline!tmp/!}.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Commit the intentional baseline}
 \end{itemize}
 
@@ -447,17 +447,17 @@ toolchain}\label{task-2-configure-the-typed-python-package-and-reproducible-tool
 \begin{itemize}
 \tightlist
 \item
-  Create: \passthrough{\lstinline!.python-version!}
+  Create: \nolinkurl{.python-version}
 \item
-  Create: \passthrough{\lstinline!pyproject.toml!}
+  Create: \nolinkurl{pyproject.toml}
 \item
   Create: \passthrough{\lstinline!uv.lock!}
 \item
-  Create: \passthrough{\lstinline!src/bonobo\_core/\_\_init\_\_.py!}
+  Create: \nolinkurl{src/bonobo_core/__init__.py}
 \item
-  Create: \passthrough{\lstinline!src/bonobo\_core/py.typed!}
+  Create: \nolinkurl{src/bonobo_core/py.typed}
 \item
-  Create: \passthrough{\lstinline!tools/\_\_init\_\_.py!}
+  Create: \nolinkurl{tools/__init__.py}
 \item
   Create: \nolinkurl{tests/foundation/test_package_contract.py}
 \end{itemize}
@@ -475,7 +475,7 @@ toolchain}\label{task-2-configure-the-typed-python-package-and-reproducible-tool
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Install uv and CPython 3.14 outside the repository}
 \end{itemize}
 
@@ -487,16 +487,16 @@ uv python install 3.14
 uv python pin 3.14
 \end{lstlisting}
 
-Expected: \passthrough{\lstinline!.python-version!} contains \passthrough{\lstinline!3.14!}, and
+Expected: \nolinkurl{.python-version} contains \passthrough{\lstinline!3.14!}, and
 \passthrough{\lstinline!uv run python --version!} reports Python 3.14.x.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Create package and tool configuration}
 \end{itemize}
 
-Create \passthrough{\lstinline!pyproject.toml!}:
+Create \nolinkurl{pyproject.toml}:
 
 \begin{lstlisting}
 [build-system]
@@ -569,7 +569,7 @@ targets = ["src", "tools"]
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Lock and install the development environment}
 \end{itemize}
 
@@ -585,7 +585,7 @@ Python 3.14.x.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Write the failing package-contract test}
 \end{itemize}
 
@@ -615,7 +615,7 @@ def test_package_identity_is_typed() -> None:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Run the contract test and verify failure}
 \end{itemize}
 
@@ -629,11 +629,11 @@ Expected: collection fails with \passthrough{\lstinline!ModuleNotFoundError: No 
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Add the minimum typed package identity}
 \end{itemize}
 
-Create \passthrough{\lstinline!src/bonobo\_core/\_\_init\_\_.py!}:
+Create \nolinkurl{src/bonobo_core/__init__.py}:
 
 \begin{lstlisting}[language=Python]
 """Define the public identity of the Password Bonobo core package.
@@ -646,9 +646,9 @@ from typing import Final
 __version__: Final[str] = "0.0.0"
 \end{lstlisting}
 
-Create an empty \passthrough{\lstinline!src/bonobo\_core/py.typed!} file.
+Create an empty \nolinkurl{src/bonobo_core/py.typed} file.
 
-Create \passthrough{\lstinline!tools/\_\_init\_\_.py!}:
+Create \nolinkurl{tools/__init__.py}:
 
 \begin{lstlisting}[language=Python]
 """Provide repository-owned validation utilities that never enter product builds."""
@@ -656,7 +656,7 @@ Create \passthrough{\lstinline!tools/\_\_init\_\_.py!}:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Run foundation quality checks}
 \end{itemize}
 
@@ -674,7 +674,7 @@ Expected: the formatter prints no diff; lint, typing, and test commands pass; wh
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 8: Commit the package foundation}
 \end{itemize}
 
@@ -696,9 +696,9 @@ policy}\label{task-3-enforce-python-documentation-and-spacing-policy}
 \begin{itemize}
 \tightlist
 \item
-  Modify: \passthrough{\lstinline!tools/\_\_init\_\_.py!}
+  Modify: \nolinkurl{tools/__init__.py}
 \item
-  Create: \passthrough{\lstinline!tools/check\_python\_structure.py!}
+  Create: \nolinkurl{tools/check_python_structure.py}
 \item
   Create: \nolinkurl{tests/foundation/test_python_structure.py}
 \item
@@ -715,12 +715,12 @@ policy}\label{task-3-enforce-python-documentation-and-spacing-policy}
   Consumes: Python 3.14 and pytest from Task 2.
 \item
   Produces: \passthrough{\lstinline!Violation!}, \passthrough{\lstinline!check\_source(path, source)!},
-  \passthrough{\lstinline!check\_paths(paths)!}, and a CLI returning zero only when policy passes.
+  \nolinkurl{check_paths(paths)}, and a CLI returning zero only when policy passes.
 \end{itemize}
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Create positive and negative source fixtures}
 \end{itemize}
 
@@ -746,7 +746,7 @@ def missing_comment(value):
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Write failing checker tests}
 \end{itemize}
 
@@ -796,7 +796,7 @@ def test_repository_python_sources_pass() -> None:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Run the tests and verify the missing checker failure}
 \end{itemize}
 
@@ -806,16 +806,16 @@ Run:
 uv run pytest tests/foundation/test_python_structure.py -v
 \end{lstlisting}
 
-Expected: collection fails because \passthrough{\lstinline!tools.check\_python\_structure!} does not exist.
+Expected: collection fails because \nolinkurl{tools.check_python_structure} does not exist.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Implement the AST-backed checker}
 \end{itemize}
 
-Keep the responsibility docstring in \passthrough{\lstinline!tools/\_\_init\_\_.py!}. Implement
-\passthrough{\lstinline!tools/check\_python\_structure.py!} with these exact public types and rules:
+Keep the responsibility docstring in \nolinkurl{tools/__init__.py}. Implement
+\nolinkurl{tools/check_python_structure.py} with these exact public types and rules:
 
 \begin{lstlisting}[language=Python]
 """Validate Bonobo's required Python documentation, typing, and spacing structure.
@@ -941,7 +941,7 @@ lines. Use the same fixture-string approach and assert the exact violation messa
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Run the full validation cycle}
 \end{itemize}
 
@@ -960,7 +960,7 @@ Expected: every command passes. Confirm manually that formatting did not remove 
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Commit the source-policy gate}
 \end{itemize}
 
@@ -981,7 +981,7 @@ git commit -m "test: enforce Python source structure policy"
 \begin{itemize}
 \tightlist
 \item
-  Create: \passthrough{\lstinline!tools/check\_tracked\_files.py!}
+  Create: \nolinkurl{tools/check_tracked_files.py}
 \item
   Create: \nolinkurl{tests/foundation/test_tracked_files.py}
 \end{itemize}
@@ -999,7 +999,7 @@ git commit -m "test: enforce Python source structure policy"
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Write failing path-policy tests}
 \end{itemize}
 
@@ -1044,7 +1044,7 @@ def test_safe_paths_are_allowed() -> None:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Verify the tests fail because the module is missing}
 \end{itemize}
 
@@ -1054,15 +1054,15 @@ Run:
 uv run pytest tests/foundation/test_tracked_files.py -v
 \end{lstlisting}
 
-Expected: collection fails because \passthrough{\lstinline!tools.check\_tracked\_files!} does not exist.
+Expected: collection fails because \nolinkurl{tools.check_tracked_files} does not exist.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Implement the tracked-file validator}
 \end{itemize}
 
-Implement \passthrough{\lstinline!tools/check\_tracked\_files.py!}:
+Implement \nolinkurl{tools/check_tracked_files.py}:
 
 \begin{lstlisting}[language=Python]
 """Reject generated, upstream, and credential-bearing repository paths.
@@ -1225,17 +1225,17 @@ The implementation rejects:
 \begin{itemize}
 \tightlist
 \item
-  Any path below \passthrough{\lstinline!docs/prompts/!}, \passthrough{\lstinline!tmp/!},
-  \passthrough{\lstinline!logs/!}, \passthrough{\lstinline!research/!}, or a directory named
-  \passthrough{\lstinline!gorilla!} outside \passthrough{\lstinline!docs/compatibility/gorilla/!}.
+  Any path below \nolinkurl{docs/prompts/}, \passthrough{\lstinline!tmp/!}, \passthrough{\lstinline!logs/!},
+  \passthrough{\lstinline!research/!}, or a directory named \passthrough{\lstinline!gorilla!} outside
+  \nolinkurl{docs/compatibility/gorilla/}.
 \item
   Any \passthrough{\lstinline!.pdf!} path.
 \item
   Any \passthrough{\lstinline!.psafe!}, \passthrough{\lstinline!.psafe3!}, or \passthrough{\lstinline!.dat!} path
-  outside \passthrough{\lstinline!tests/fixtures/synthetic/!}.
+  outside \nolinkurl{tests/fixtures/synthetic/}.
 \item
   Any filename matching \passthrough{\lstinline!.env!}, \passthrough{\lstinline!*.key!},
-  \passthrough{\lstinline!*.pem!}, \passthrough{\lstinline!id\_rsa!}, or \passthrough{\lstinline!id\_ed25519!}.
+  \passthrough{\lstinline!*.pem!}, \passthrough{\lstinline!id\_rsa!}, or \nolinkurl{id_ed25519}.
 \end{itemize}
 
 When no positional path arguments are supplied and standard input is redirected, the command reads binary NUL-delimited
@@ -1245,7 +1245,7 @@ returns two for malformed standard input.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Exercise the command entry point}
 \end{itemize}
 
@@ -1263,7 +1263,7 @@ Expected: all commands pass and no tracked path is reported.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Commit the tracked-file gate}
 \end{itemize}
 
@@ -1285,13 +1285,13 @@ policy}\label{task-5-establish-licensing-provenance-contribution-and-security-po
 \begin{itemize}
 \tightlist
 \item
-  Create: \passthrough{\lstinline!LICENSES/GPL-3.0-or-later.txt!}
+  Create: \nolinkurl{LICENSES/GPL-3.0-or-later.txt}
 \item
-  Create: \passthrough{\lstinline!REUSE.toml!}
+  Create: \nolinkurl{REUSE.toml}
 \item
-  Create: \passthrough{\lstinline!CONTRIBUTING.md!}
+  Create: \nolinkurl{CONTRIBUTING.md}
 \item
-  Create: \passthrough{\lstinline!SECURITY.md!}
+  Create: \nolinkurl{SECURITY.md}
 \item
   Create: \nolinkurl{docs/legal/source-provenance-policy.md}
 \item
@@ -1312,7 +1312,7 @@ policy}\label{task-5-establish-licensing-provenance-contribution-and-security-po
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Download the canonical GPL text with REUSE}
 \end{itemize}
 
@@ -1322,16 +1322,16 @@ Run:
 uv run reuse download GPL-3.0-or-later
 \end{lstlisting}
 
-Expected: \passthrough{\lstinline!LICENSES/GPL-3.0-or-later.txt!} exists and \passthrough{\lstinline!reuse lint!}
-recognizes the license identifier.
+Expected: \nolinkurl{LICENSES/GPL-3.0-or-later.txt} exists and \passthrough{\lstinline!reuse lint!} recognizes the
+license identifier.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Create machine-readable file annotations}
 \end{itemize}
 
-Create \passthrough{\lstinline!REUSE.toml!} using REUSE specification version 3.3:
+Create \nolinkurl{REUSE.toml} using REUSE specification version 3.3:
 
 \begin{lstlisting}
 version = 1
@@ -1382,12 +1382,12 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 This explicit annotation list covers only the currently known Bonobo-authored source, tests, tools, configuration, and
 documentation. Add future Bonobo-authored paths deliberately; do not use a directory wildcard. The canonical license
 artifact is handled solely by REUSE\textquotesingle s \passthrough{\lstinline!LICENSES!} mechanism and is not annotated
-with Bonobo contributor copyright. Ignored \passthrough{\lstinline!docs/prompts/!}, generated PDFs, and the external
-Gorilla checkout are not repository content.
+with Bonobo contributor copyright. Ignored \nolinkurl{docs/prompts/}, generated PDFs, and the external Gorilla checkout
+are not repository content.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Create the source-provenance policy}
 \end{itemize}
 
@@ -1419,7 +1419,7 @@ Write \nolinkurl{docs/legal/source-provenance-policy.md} with these mandatory se
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Document the iOS exception work without publishing license language}
 \end{itemize}
 
@@ -1445,21 +1445,21 @@ Write \nolinkurl{docs/legal/app-store-distribution-exception-plan.md} with:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Add contribution and security entry points}
 \end{itemize}
 
-Create \passthrough{\lstinline!CONTRIBUTING.md!} stating that external contributions are not yet accepted, why the
+Create \nolinkurl{CONTRIBUTING.md} stating that external contributions are not yet accepted, why the
 distribution-exception rights must first be settled, and how that status will be changed deliberately. Create
-\passthrough{\lstinline!SECURITY.md!} prohibiting public issue content that includes credentials or vaults and directing
-reporters to the repository owner\textquotesingle s private GitHub security reporting channel once enabled. Do not
-invent an email address.
+\nolinkurl{SECURITY.md} prohibiting public issue content that includes credentials or vaults and directing reporters to
+the repository owner\textquotesingle s private GitHub security reporting channel once enabled. Do not invent an email
+address.
 
 Update \passthrough{\lstinline!README.md!} so the license and security links point to these completed files.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Verify policy and license metadata}
 \end{itemize}
 
@@ -1475,7 +1475,7 @@ Expected: REUSE passes, the tracked-file audit passes, and each required policy 
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Commit licensing and policy}
 \end{itemize}
 
@@ -1499,7 +1499,7 @@ checkout}\label{task-6-pin-and-verify-the-external-gorilla-research-checkout}
 \item
   Create: \nolinkurl{docs/compatibility/gorilla/upstream-baseline.md}
 \item
-  Modify: \passthrough{\lstinline!REUSE.toml!}
+  Modify: \nolinkurl{REUSE.toml}
 \item
   External create: \passthrough{\lstinline!../Password Bonobo Research/gorilla/!}
 \end{itemize}
@@ -1516,7 +1516,7 @@ checkout}\label{task-6-pin-and-verify-the-external-gorilla-research-checkout}
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Resolve and verify the external target}
 \end{itemize}
 
@@ -1531,19 +1531,19 @@ Write-Output "RESEARCH=$researchRoot"
 Write-Output "GORILLA=$gorillaRoot"
 \end{lstlisting}
 
-Expected: \passthrough{\lstinline!$gorillaRoot!} is not inside \passthrough{\lstinline!$bonoboRoot!}. Stop if it
-resolves beneath the Bonobo repository.
+Expected: \nolinkurl{$gorillaRoot} is not inside \nolinkurl{$bonoboRoot}. Stop if it resolves beneath the Bonobo
+repository.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Create the research checkout at the exact revision}
 \end{itemize}
 
 If the target does not exist, run:
 
 \begin{lstlisting}
-New-Item -ItemType Directory -Path $researchRoot
+New-Item -ItemType Directory -Force -Path $researchRoot
 git clone --filter=blob:none --no-checkout https://github.com/zdia/gorilla.git $gorillaRoot
 git -C $gorillaRoot checkout --detach 6728e85c05ac25357b8f19f541487b9d26a97402
 \end{lstlisting}
@@ -1553,7 +1553,7 @@ fetching the exact commit. Never reset or delete an existing research checkout a
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Verify identity and immutability evidence}
 \end{itemize}
 
@@ -1571,7 +1571,7 @@ clean, and Git prints the commit hash, tree hash, author date, and subject for t
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Write the upstream baseline record}
 \end{itemize}
 
@@ -1599,13 +1599,13 @@ Create \nolinkurl{docs/compatibility/gorilla/upstream-baseline.md} with:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Update and verify REUSE metadata}
 \end{itemize}
 
 Before committing, add \nolinkurl{docs/compatibility/gorilla/upstream-baseline.md} to the explicit
-\passthrough{\lstinline!REUSE.toml!} annotation list. Do not use a directory wildcard or an annotation that could
-classify future third-party material.
+\nolinkurl{REUSE.toml} annotation list. Do not use a directory wildcard or an annotation that could classify future
+third-party material.
 
 Stage the complete intended repository change before linting so REUSE inspects the actual index. The external Gorilla
 checkout remains outside this command and must remain unstaged.
@@ -1621,7 +1621,7 @@ Expected: REUSE passes after the new Bonobo-authored path is deliberately classi
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Prove that upstream material is absent from Bonobo}
 \end{itemize}
 
@@ -1638,7 +1638,7 @@ Expected: the intended repository files are staged; the validators pass; no upst
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Commit the baseline record}
 \end{itemize}
 
@@ -1663,7 +1663,7 @@ dossier}\label{task-7-produce-the-neutral-gorilla-behavior-dossier}
   Modify: \nolinkurl{docs/compatibility/gorilla/upstream-baseline.md} only if the evidence convention needs
   clarification
 \item
-  Modify: \passthrough{\lstinline!REUSE.toml!}
+  Modify: \nolinkurl{REUSE.toml}
 \end{itemize}
 
 \textbf{Interfaces:}
@@ -1673,17 +1673,16 @@ dossier}\label{task-7-produce-the-neutral-gorilla-behavior-dossier}
 \item
   Consumes: Detached Gorilla checkout and evidence format from Task 6.
 \item
-  Produces: Stable behavior identifiers \passthrough{\lstinline!GOR-BEH-001!} onward for the parity matrix and test
-  oracles.
+  Produces: Stable behavior identifiers \nolinkurl{GOR-BEH-001} onward for the parity matrix and test oracles.
 \end{itemize}
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Inventory the upstream evidence without modifying it}
 \end{itemize}
 
-Run read-only searches from \passthrough{\lstinline!$gorillaRoot!}:
+Run read-only searches from \nolinkurl{$gorillaRoot}:
 
 \begin{lstlisting}
 rg -n "proc |method |Save|Open|Lock|Merge|Backup|Import|Export|AutoType|Clipboard|Password|History|Alias|Shortcut" `
@@ -1695,11 +1694,11 @@ Expected: the search identifies candidate evidence, and the upstream worktree re
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Establish the dossier evidence schema}
 \end{itemize}
 
-Begin \passthrough{\lstinline!behavior-dossier.md!} with:
+Begin \nolinkurl{behavior-dossier.md} with:
 
 \begin{lstlisting}
 # Password Gorilla Neutral Behavior Dossier
@@ -1719,14 +1718,14 @@ observation.  Source text, source identifiers, control flow, and UI expression a
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Analyze vault and record lifecycle behavior}
 \end{itemize}
 
-Read the relevant regions of \passthrough{\lstinline!sources/gorilla.tcl!},
-\passthrough{\lstinline!sources/pwsafe/*.tcl!}, \passthrough{\lstinline!sources/help.txt!}, and corresponding unit
-tests. Record separate \passthrough{\lstinline!GOR-BEH!} entries for creation, open/authentication, save/save-as, close,
-lock, timeout, backup, recovery, entry create/edit/delete, protected entries, password history, aliases, and shortcuts.
+Read the relevant regions of \nolinkurl{sources/gorilla.tcl}, \nolinkurl{sources/pwsafe/*.tcl},
+\nolinkurl{sources/help.txt}, and corresponding unit tests. Record separate \passthrough{\lstinline!GOR-BEH!} entries
+for creation, open/authentication, save/save-as, close, lock, timeout, backup, recovery, entry create/edit/delete,
+protected entries, password history, aliases, and shortcuts.
 
 For every entry, write:
 
@@ -1746,7 +1745,7 @@ Increment the identifier for each analyzed behavior and replace the example stat
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Analyze navigation and user workflows}
 \end{itemize}
 
@@ -1758,7 +1757,7 @@ or user-authored data.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Analyze interchange and edge cases}
 \end{itemize}
 
@@ -1768,13 +1767,12 @@ databases only as research evidence; do not copy them.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Run dossier quality and boundary checks}
 \end{itemize}
 
-Before this check, add \nolinkurl{docs/compatibility/gorilla/behavior-dossier.md} to the explicit
-\passthrough{\lstinline!REUSE.toml!} annotation list. Do not use a directory wildcard or an annotation that could
-classify future third-party material.
+Before this check, add \nolinkurl{docs/compatibility/gorilla/behavior-dossier.md} to the explicit \nolinkurl{REUSE.toml}
+annotation list. Do not use a directory wildcard or an annotation that could classify future third-party material.
 
 Stage every intended task file before linting so REUSE inspects the actual index. The external Gorilla checkout remains
 outside this command and must remain unstaged.
@@ -1798,7 +1796,7 @@ the Gorilla checkout remains clean; the tracked-file audit passes.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Commit the neutral dossier}
 \end{itemize}
 
@@ -1824,7 +1822,7 @@ catalog}\label{task-8-build-the-parity-matrix-and-test-oracle-catalog}
 \item
   Modify: \nolinkurl{docs/compatibility/gorilla/behavior-dossier.md} when a missing evidence link is discovered
 \item
-  Modify: \passthrough{\lstinline!REUSE.toml!}
+  Modify: \nolinkurl{REUSE.toml}
 \end{itemize}
 
 \textbf{Interfaces:}
@@ -1840,7 +1838,7 @@ catalog}\label{task-8-build-the-parity-matrix-and-test-oracle-catalog}
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Create the parity-matrix schema and required feature families}
 \end{itemize}
 
@@ -1861,7 +1859,7 @@ iOS credential provider. Use only the dispositions defined in the subproject spe
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Assign evidence and owner subprojects}
 \end{itemize}
 
@@ -1870,8 +1868,8 @@ For every \passthrough{\lstinline!GOR-FEAT!} row:
 \begin{itemize}
 \tightlist
 \item
-  Link at least one \passthrough{\lstinline!GOR-BEH!} identifier, or use \passthrough{\lstinline!Unverified!} with a
-  precise evidence gap.
+  Link at least one \passthrough{\lstinline!GOR-BEH!} identifier, or use \nolinkurl{Unverified} with a precise evidence
+  gap.
 \item
   Assign one of the eight owner subprojects from the program design.
 \item
@@ -1885,12 +1883,12 @@ For every \passthrough{\lstinline!GOR-FEAT!} row:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Create black-box test-oracle scenarios}
 \end{itemize}
 
-Begin \passthrough{\lstinline!test-oracles.md!} with definitions for evidence authority and synthetic-data rules. For
-each matrix feature, add:
+Begin \nolinkurl{test-oracles.md} with definitions for evidence authority and synthetic-data rules. For each matrix
+feature, add:
 
 \begin{lstlisting}
 ### GOR-TEST-001 - Create and reopen a synthetic vault
@@ -1909,7 +1907,7 @@ Increment the identifier for each scenario and replace the example statements wi
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Add no-loss and cross-client oracle coverage}
 \end{itemize}
 
@@ -1935,13 +1933,13 @@ Include explicit scenarios for:
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Validate matrix closure}
 \end{itemize}
 
 Before this check, add \nolinkurl{docs/compatibility/gorilla/feature-parity-matrix.md} and
-\nolinkurl{docs/compatibility/gorilla/test-oracles.md} to the explicit \passthrough{\lstinline!REUSE.toml!} annotation
-list. Do not use a directory wildcard or an annotation that could classify future third-party material.
+\nolinkurl{docs/compatibility/gorilla/test-oracles.md} to the explicit \nolinkurl{REUSE.toml} annotation list. Do not
+use a directory wildcard or an annotation that could classify future third-party material.
 
 Stage every intended task file before linting so REUSE inspects the actual index. The external Gorilla checkout and
 generated PDFs remain outside this command and must remain unstaged.
@@ -1967,7 +1965,7 @@ platform, relevance, and test values.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Commit the compatibility contract}
 \end{itemize}
 
@@ -1989,13 +1987,13 @@ verification}\label{task-9-add-continuous-integration-project-memory-and-final-v
 \item
   Create: \nolinkurl{.github/workflows/foundation.yml}
 \item
-  Create: \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!}
+  Create: \nolinkurl{docs/PROJECT_MEMORY.md}
 \item
-  Create: \passthrough{\lstinline!docs/PROJECT\_MEMORY.tex!}
+  Create: \nolinkurl{docs/PROJECT_MEMORY.tex}
 \item
-  Create: \passthrough{\lstinline!docs/project-memory/PROJECT.md!}
+  Create: \nolinkurl{docs/project-memory/PROJECT.md}
 \item
-  Create: \passthrough{\lstinline!docs/project-memory/STATE.md!}
+  Create: \nolinkurl{docs/project-memory/STATE.md}
 \item
   Create: \nolinkurl{docs/project-memory/DECISIONS.md}
 \item
@@ -2003,15 +2001,15 @@ verification}\label{task-9-add-continuous-integration-project-memory-and-final-v
 \item
   Create: same-basename LaTeX for each project-memory Markdown file
 \item
-  Create: \passthrough{\lstinline!docs/pandoc/pdf-header.tex!}
+  Create: \nolinkurl{docs/pandoc/pdf-header.tex}
 \item
-  Create: \passthrough{\lstinline!docs/pandoc/pdf-layout.lua!}
+  Create: \nolinkurl{docs/pandoc/pdf-layout.lua}
 \item
   Create: same-basename LaTeX for substantial compatibility and approved design documents that do not yet have it
 \item
   Modify: \passthrough{\lstinline!README.md!}
 \item
-  Modify: \passthrough{\lstinline!REUSE.toml!}
+  Modify: \nolinkurl{REUSE.toml}
 \item
   Modify: this plan Markdown and LaTeX to synchronize the enforced Task 9 commands
 \end{itemize}
@@ -2028,7 +2026,7 @@ verification}\label{task-9-add-continuous-integration-project-memory-and-final-v
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 1: Create the three-platform workflow}
 \end{itemize}
 
@@ -2052,7 +2050,7 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.14"
@@ -2064,25 +2062,27 @@ jobs:
       - run: uv run mypy src tests tools
       - run: uv run python -m pytest
       - run: uv run python -m tools.check_python_structure src tests tools
+      - run: uv run python -m tools.check_compatibility
+      - run: uv run python -m tools.check_provenance
       - shell: bash
         run: git ls-files -z | uv run python -m tools.check_tracked_files
       - run: uv run bandit -c pyproject.toml -r src tools
       - run: uv run pip-audit
       - run: uv run reuse --no-multiprocessing lint
       - run: uv build
+      - run: uv run python -m tools.check_wheel dist
 \end{lstlisting}
 
 Verify the two pinned action commits against their official Git refs before committing. On 2026-08-22,
-\passthrough{\lstinline!refs/tags/v6!} resolved to annotated tag object
-\nolinkurl{d0d8abe699bfb85fec6de9f7adb5ae17292296ff}, while peeled \passthrough{\lstinline!refs/tags/v6\^\{\}!} and
-release \passthrough{\lstinline!refs/tags/v6.8.0!} resolved to commit
+\nolinkurl{refs/tags/v6} resolved to annotated tag object \nolinkurl{d0d8abe699bfb85fec6de9f7adb5ae17292296ff}, while
+peeled \passthrough{\lstinline!refs/tags/v6\^\{\}!} and release \nolinkurl{refs/tags/v6.8.0} resolved to commit
 \nolinkurl{d0cc045d04ccac9d8b7881df0226f9e82c39688e}. Pin the setup action to that full commit SHA, following
 GitHub\textquotesingle s official action-hardening guidance, and record both object types in
 \nolinkurl{docs/project-memory/VERIFICATION.md}. Do not introduce floating tags.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 2: Write durable project identity and current state}
 \end{itemize}
 
@@ -2091,27 +2091,27 @@ Create memory files with these responsibilities:
 \begin{itemize}
 \tightlist
 \item
-  \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!}: canonical future-agent entry point, current durable summary, and
-  required read order for the four focused records.
+  \nolinkurl{docs/PROJECT_MEMORY.md}: canonical future-agent entry point, current durable summary, and required read
+  order for the four focused records.
 \item
-  \passthrough{\lstinline!PROJECT.md!}: product purpose, supported platforms, local-file-first rule, no-loss rule,
-  licensing intent, and links to approved specifications.
+  \nolinkurl{PROJECT.md}: product purpose, supported platforms, local-file-first rule, no-loss rule, licensing intent,
+  and links to approved specifications.
 \item
   \passthrough{\lstinline!STATE.md!}: subproject 1 status, current branch, completed artifacts, active risks, and next
   approved subproject \passthrough{\lstinline!Lossless PasswordSafe core!}.
 \item
-  \passthrough{\lstinline!DECISIONS.md!}: dated records for clean-room source boundary, Gorilla pin, Python 3.14, tool
-  choices, Git boundary, generated-document policy, and external contribution hold.
+  \nolinkurl{DECISIONS.md}: dated records for clean-room source boundary, Gorilla pin, Python 3.14, tool choices, Git
+  boundary, generated-document policy, and external contribution hold.
 \item
-  \passthrough{\lstinline!VERIFICATION.md!}: exact commands, dates, results, environment limitations, PDF page counts,
-  and CI action pin evidence.
+  \nolinkurl{VERIFICATION.md}: exact commands, dates, results, environment limitations, PDF page counts, and CI action
+  pin evidence.
 \end{itemize}
 
 Do not include raw command transcripts, machine-specific research paths, credentials, or copied upstream content.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 3: Update the README development entry points}
 \end{itemize}
 
@@ -2126,26 +2126,32 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
 \end{lstlisting}
 
-Link the canonical \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!} entry point and state explicitly that these
-commands never require the Gorilla checkout.
+Link the canonical \nolinkurl{docs/PROJECT_MEMORY.md} entry point and state explicitly that these commands never require
+the Gorilla checkout.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 4: Generate LaTeX and PDFs for substantial new documents}
 \end{itemize}
 
-For each substantial Markdown document created or changed by this plan, run Pandoc with
-\passthrough{\lstinline!docs/pandoc/pdf-header.tex!} and \passthrough{\lstinline!docs/pandoc/pdf-layout.lua!} to create
-a same-basename \passthrough{\lstinline!.tex!}, compile it with XeLaTeX into \passthrough{\lstinline!tmp/pdfs/!}, and
-copy the PDF beside its Markdown source for local review. At minimum this includes:
+Run the tracked exact generator with
+\passthrough{\lstinline!uv run python -m tools.generate\_documents --write --render!}. It uses
+\nolinkurl{docs/pandoc/pdf-header.tex} and \nolinkurl{docs/pandoc/pdf-layout.lua}, creates every same-basename
+\passthrough{\lstinline!.tex!}, performs at least two XeLaTeX passes plus a bounded third when requested, writes useful
+logs and a manifest below \passthrough{\lstinline!tmp/pdfs/!}, and copies ignored PDFs beside their Markdown sources. At
+minimum this includes:
 
 \begin{itemize}
 \tightlist
@@ -2175,8 +2181,8 @@ Run XeLaTeX until references stabilize. Render every final PDF page with \passth
 every page, and correct all clipping, overlap, glyph, hierarchy, and page-transition defects. Explicitly confirm that
 code and command listings wrap within the page. Add only Markdown, LaTeX, and the shared render-source header to Git.
 
-Before Step 5, update the explicit \passthrough{\lstinline!REUSE.toml!} annotation list without a directory wildcard.
-Add every new Bonobo-authored tracked path from Tasks 6-9:
+Before Step 5, update the explicit \nolinkurl{REUSE.toml} annotation list without a directory wildcard. Add every new
+Bonobo-authored tracked path from Tasks 6-9:
 
 \begin{itemize}
 \tightlist
@@ -2191,10 +2197,9 @@ Add every new Bonobo-authored tracked path from Tasks 6-9:
 \item
   \nolinkurl{docs/compatibility/gorilla/test-oracles.md} and its generated \passthrough{\lstinline!.tex!} companion.
 \item
-  \nolinkurl{.github/workflows/foundation.yml}, \passthrough{\lstinline!docs/PROJECT\_MEMORY.md!},
-  \passthrough{\lstinline!docs/PROJECT\_MEMORY.tex!}, the four \passthrough{\lstinline!docs/project-memory!}
-  Markdown/LaTeX pairs, \passthrough{\lstinline!docs/pandoc/pdf-header.tex!}, and
-  \passthrough{\lstinline!docs/pandoc/pdf-layout.lua!}.
+  \nolinkurl{.github/workflows/foundation.yml}, \nolinkurl{docs/PROJECT_MEMORY.md}, \nolinkurl{docs/PROJECT_MEMORY.tex},
+  the four \nolinkurl{docs/project-memory} Markdown/LaTeX pairs, \nolinkurl{docs/pandoc/pdf-header.tex}, and
+  \nolinkurl{docs/pandoc/pdf-layout.lua}.
 \item
   Any additional generated source files created in scope.
 \end{itemize}
@@ -2211,7 +2216,7 @@ git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMOR
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 5: Run the complete local release gate}
 \end{itemize}
 
@@ -2225,11 +2230,15 @@ uv run ruff check src tests tools
 uv run mypy src tests tools
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_compatibility
+uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
 uv run bandit -c pyproject.toml -r src tools
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
+uv run python -m tools.check_wheel dist
+uv run python -m tools.generate_documents --verify
 git diff --cached --check
 git status --short
 \end{lstlisting}
@@ -2239,7 +2248,7 @@ changes and ignored PDFs do not appear.
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 6: Commit CI, memory, and generated LaTeX sources}
 \end{itemize}
 
@@ -2254,7 +2263,7 @@ Expected: no PDF, Gorilla source, shared standards file, vault, log, or temporar
 
 \begin{itemize}
 \tightlist
-\item[$\square$]
+\item[$\boxtimes$]
   \textbf{Step 7: Review the completed branch}
 \end{itemize}
 

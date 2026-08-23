@@ -286,18 +286,19 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 - Cleanup: Securely remove the export and synthetic vault copy from the disposable directory.
 - Required clients: Bonobo and Gorilla at the pinned revision.
 
-### GOR-TEST-021 - Merge and preserve unresolved conflict records
+### GOR-TEST-021 - Merge, defer, and durably resolve conflict records
 
 - Authority: `Gorilla`.
-- Evidence: `GOR-BEH-052` through `GOR-BEH-054` and `GOR-BEH-063`.
-- Synthetic setup: Merge `PB-SYN-BASE` with a copy whose same UUID has title `Alpha Portal Other`.
-- Action: In one conflict session, save while the unresolved pair remains; combine after that save by choosing
-  `Alpha Portal`; close without another save; reopen the saved file.
-- Expected observation: Close shows no unsaved-change prompt; after reopen the combination is lost and the unresolved
-  pair remains exactly as it was at the preceding save.
-- Preservation requirement: Record the saved hash and both complete conflict-record manifests before combination;
-  close changes neither, and reopen yields both saved records with their saved identities and field values.
-- Cleanup: Close the reopened vault without changes and remove the merged synthetic file and both source copies.
+- Evidence: `GOR-BEH-052` through `GOR-BEH-054`.
+- Synthetic setup: Prepare two independent merges of `PB-SYN-BASE` with a copy whose same UUID has title
+  `Alpha Portal Other`.
+- Action: In the first merge, leave the pair unresolved, save, close, and reopen.  In the second merge, choose
+  `Alpha Portal` for every differing field, combine the pair, save, close, and reopen.
+- Expected observation: The deferred copy reopens with both complete conflict records.  The resolved-and-saved copy
+  reopens with one combined record and no paired duplicate.
+- Preservation requirement: Both paths retain the database UUID, unrelated records, unknown fields, and exact chosen
+  field values.  Deferral loses only the temporary conflict association, not either underlying record.
+- Cleanup: Close both reopened vaults and remove the merged synthetic files and source copies.
 - Required clients: Bonobo and Gorilla at the pinned revision.
 
 ### GOR-TEST-022 - Characterize interrupted import and merge
@@ -504,13 +505,18 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 
 - Authority: `Bonobo`.
 - Evidence: Program design sections 6.2, 7, 10, and 11.
-- Synthetic setup: Open provider copy A of `PB-SYN-BASE`; prepare B with note `fabricated external edit`.
-- Action: In Bonobo change A's title to `Alpha Local Edit`; externally replace the provider file with B; invoke Save.
-- Expected observation: Bonobo reports Conflict and preserves A, B, and an offered save-as-copy; B is not overwritten.
-- Preservation requirement: Every version retains its UUID and unknown bytes; no custom sync counter enters the vault.
+- Synthetic setup: Open provider copy A of `PB-SYN-BASE`, begin changing its title to `Alpha Local Edit`, and leave
+  the complete edit form open and unconfirmed.  Prepare B with note `fabricated external edit`.
+- Action: While the local edit remains unconfirmed, externally replace the provider file with B, then confirm the
+  complete edit form in Bonobo.
+- Expected observation: Confirmation reports `Conflict`; the provider's exact B bytes and the local A-based attempted
+  version are both preserved, neither version overwrites the other, and save-as-copy remains available.
+- Preservation requirement: Every version retains its UUID and unknown bytes; no custom sync counter enters the vault,
+  and no pre-confirmation write races the external replacement.
 - Cleanup: Save A only as `pb-syn-conflict-copy.psafe3`, verify all copies, then remove them.
 - Required clients: Bonobo, Gorilla at the pinned revision, and Password Safe open B and the conflict copy.
-- Coverage: external-mutation-conflict; cross-client-extension-gate; deferred-native-no-vault-metadata.
+- Coverage: unconfirmed-edit-provider-replacement-conflict; external-mutation-conflict; cross-client-extension-gate;
+  deferred-native-no-vault-metadata.
 
 ### GOR-TEST-038 - Autofill only the requested fabricated credential
 
@@ -742,8 +748,9 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
   Its Alpha record has UUID `22222222-2222-4222-8222-222222222222`, mandatory Title `Alpha`, mandatory Password
   `fabricated password 1`, record END, EOF, and a stored HMAC over every plaintext field present. Record both hashes;
   `pb-syn-bonobo-rejected.psafe3` begins absent. Create isolated disposable profile `pb-syn-gorilla-profile-052` and
-  output directory `pb-syn-gorilla-052`. Before action, set Gorilla Preferences `timeStampBackup=false` and
-  `backupPath` to that exact absolute output directory; the named output and `.bak` paths begin absent.
+  output directory `pb-syn-gorilla-052`. Before action, use visible Preferences controls to disable timestamped
+  backups and select that exact absolute directory as the backup location; the named output and `.bak` paths begin
+  absent.
 - Action: Attempt Open on the Bonobo source with the fabricated master input and inspect the error and directory.
   Separately launch Gorilla with only the isolated profile, open its source, and use Save As to create
   `pb-syn-gorilla-052/pb-syn-defaulted-version.psafe3`. Wait for success, close, and inspect both sources, that primary,
@@ -770,9 +777,10 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
   `pb-syn-gorilla-053/pb-syn-gorilla-save-success.bak`. The failure paths are
   `pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.psafe3` and
   `pb-syn-gorilla-053/pb-syn-gorilla-backup-failure.bak`; both initial `.bak` paths begin absent.
-  Create isolated disposable profile `pb-syn-gorilla-profile-053`. Before action, set Gorilla Preferences
-  `timeStampBackup=false` and `backupPath` to the exact absolute `pb-syn-gorilla-053` directory. Retain pre-action
-  hashes and manifests; use an external filesystem gate that can pause or deny only either named `.bak`. The Bonobo
+  Create isolated disposable profile `pb-syn-gorilla-profile-053`. Before action, use visible Preferences controls to
+  disable timestamped backups and select exact absolute directory `pb-syn-gorilla-053` as the backup location. Retain
+  pre-action hashes and manifests; use an external filesystem gate that can pause or deny only either named `.bak`.
+  The Bonobo
   provider sources are
   `pb-syn-bonobo-provider-success.psafe3` and `pb-syn-bonobo-provider-offline.psafe3`; their named encrypted local
   documents are `pb-syn-bonobo-local-success.psafe3` and `pb-syn-bonobo-local-offline.psafe3`. Stage no audit cleanup.
@@ -800,6 +808,40 @@ field type and byte sequence, and the declared format level. A separate SHA-256 
 - Cleanup: Restore filesystem and provider availability. Remove `pb-syn-gorilla-profile-053`, exact directory
   `pb-syn-gorilla-053` with both primaries and `.bak` paths, all four named Bonobo documents, hashes, and manifests.
 - Required clients: Bonobo and Gorilla at the pinned revision perform only their named client-specific operations.
+
+### GOR-TEST-054 - Characterize Gorilla post-save conflict-resolution loss
+
+- Authority: `Gorilla`.
+- Evidence: `GOR-BEH-063`.
+- Contract: `excluded-gorilla-only-characterization`.
+- Synthetic setup: Merge `PB-SYN-BASE` with a copy whose same UUID has title `Alpha Portal Other`; save while both
+  conflict records remain unresolved and retain the saved hash and both record manifests.
+- Action: After that save, choose `Alpha Portal` for every differing field, combine the pair, close without another
+  save, and reopen the saved file.
+- Expected observation: Gorilla closes without an unsaved-change prompt; reopen restores the exact saved conflicting
+  pair and does not retain the later field choices or duplicate deletion.
+- Preservation requirement: This expected loss is evidence about the pinned Gorilla client only.  It is not a Bonobo
+  acceptance result or a cross-implementation passing oracle, and the pre-close saved file remains unchanged.
+- Cleanup: Close the reopened vault without changes and remove the merged synthetic file and both source copies.
+- Required clients: Gorilla at the pinned revision only.
+
+### GOR-TEST-055 - Persist Bonobo conflict resolution transactionally before close
+
+- Authority: `Bonobo`.
+- Evidence: Program design sections 6.2, 7, 10, and 11.
+- Synthetic setup: Open provider copy A of `PB-SYN-BASE`, merge a copy whose same UUID has title
+  `Alpha Portal Other`, and retain both complete record manifests.  Configure a controlled provider publication fault.
+- Action: Resolve every differing field, choose the A title, and confirm the duplicate deletion while publication is
+  unavailable; then request close.  Restore publication, complete it, close, and reopen the provider document.
+- Expected observation: The confirmed resolution and deletion first become transactional durable work.  Publication
+  failure leaves them explicitly staged or conflicted and blocks silent close or discard.  After publication, reopen
+  shows one resolved record, the chosen field values, and no duplicate.
+- Preservation requirement: Before publication succeeds, both source manifests or a complete encrypted transactional
+  representation remain recoverable.  Close cannot silently lose the resolution or deletion, and unrelated standard
+  fields, UUIDs, unknown fields, and unknown bytes remain unchanged.
+- Cleanup: Restore provider availability, close the reopened vault, and remove every synthetic provider and local copy.
+- Required clients: Bonobo.
+- Coverage: transactional-merge-resolution-no-loss.
 
 ## Extension metadata gate
 
