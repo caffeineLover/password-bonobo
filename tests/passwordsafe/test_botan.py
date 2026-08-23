@@ -354,19 +354,38 @@ def test_botan_binds_exact_ffi_signatures_and_fixed_algorithm(monkeypatch: pytes
 
 
 
-#### Prevent direct construction from bypassing the opening validation and KAT gate.
+#### Reject an unsupported ABI through the same gate during direct construction.
 ####
-def test_botan_backend_requires_private_validated_construction(monkeypatch: pytest.MonkeyPatch) -> None:
-    library = _FakeBotanLibrary()
-    _install_fake_library(monkeypatch, library)
+def test_botan_direct_construction_validates_abi_before_cipher_use() -> None:
+    library = _FakeBotanLibrary(statuses={"supports_api": -1})
     unsafe_constructor = cast(Callable[..., BotanBackend], BotanBackend)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(CryptoBackendError) as caught:
         unsafe_constructor(cast(_BotanLibrary, library))
-    with pytest.raises(TypeError):
-        unsafe_constructor(cast(_BotanLibrary, library), _token=object())
 
+    assert caught.value.reason == CryptoBackendReason.INVALID_ABI.value
+    assert library.botan_ffi_supports_api.calls == [(BOTAN_FFI_API_VERSION,)]
+    assert len(library.botan_version_major.calls) == 1
+    assert len(library.botan_version_minor.calls) == 1
+    assert len(library.botan_version_patch.calls) == 1
     assert library.botan_block_cipher_init.calls == []
+
+
+
+#### Reject a wrong KAT during direct construction before returning a backend.
+####
+def test_botan_direct_construction_enforces_known_answer_gate() -> None:
+    library = _FakeBotanLibrary(valid_vector=False)
+    unsafe_constructor = cast(Callable[..., BotanBackend], BotanBackend)
+
+    with pytest.raises(CryptoBackendError) as caught:
+        unsafe_constructor(cast(_BotanLibrary, library))
+
+    assert caught.value.reason == CryptoBackendReason.SELF_TEST_FAILED.value
+    assert library.botan_ffi_supports_api.calls == [(BOTAN_FFI_API_VERSION,)]
+    assert len(library.botan_block_cipher_init.calls) == 1
+    assert len(library.botan_block_cipher_encrypt_blocks.calls) == 1
+    assert len(library.botan_block_cipher_destroy.calls) == 1
 
 
 

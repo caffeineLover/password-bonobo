@@ -1,8 +1,8 @@
 """Bind the narrow Botan FFI surface required for PasswordSafe Twofish blocks.
 
-The adapter accepts no algorithm name from callers.  Opening verifies the pinned
-FFI contract, requires Botan 3.13 or newer in major version 3, and runs an
-independent known-answer gate before returning a usable backend.
+The adapter accepts no algorithm name from callers.  Backend construction verifies
+the pinned FFI contract, requires Botan 3.13 or newer in major version 3, and runs
+an independent known-answer gate before returning a usable backend.
 """
 
 import ctypes
@@ -21,7 +21,6 @@ from .secrets import SecretBuffer
 BOTAN_FFI_API_VERSION: Final[int] = 20_260_811
 _BOTAN_MAJOR_VERSION: Final[int] = 3
 _BOTAN_MINIMUM_MINOR_VERSION: Final[int] = 13
-_BACKEND_CONSTRUCTION_TOKEN: Final[object] = object()
 _TWOFISH_NAME: Final[bytes] = b"Twofish"
 _TWOFISH_BLOCK_BYTES: Final[int] = 16
 _TWOFISH_ZERO_KEY: Final[bytes] = bytes(16)
@@ -237,31 +236,13 @@ class BotanBackend:
 
 
 
-    #### Retain one library only through the private validated factory boundary.
+    #### Validate one bound library completely before construction can return.
     ####
-    #### The identity token prevents untyped callers from constructing a backend
-    #### around an arbitrary library and reaching key operations without open().
+    #### Direct and factory construction share this single ABI, version, and KAT
+    #### path, so no importable token or alternate entry can bypass the gate.
     ####
-    def __init__(self, library: _BotanLibrary, *, _token: object) -> None:
-        if _token is not _BACKEND_CONSTRUCTION_TOKEN:
-            raise TypeError("Botan backends must be created through open")
+    def __init__(self, library: _BotanLibrary) -> None:
         self._library = library
-
-
-
-    #### Load, bind, version-check, and self-test one Botan shared library.
-    ####
-    #### No backend escapes this factory until the independent Twofish vector passes.
-    #### Loader and ABI details are reduced to safe closed error categories.
-    ####
-    @classmethod
-    def open(cls, library_path: Path) -> Self:
-        loaded_library = _load_library(library_path)
-        if loaded_library is None:
-            raise CryptoBackendError(CryptoBackendReason.UNAVAILABLE)
-        library = _bind_library(loaded_library)
-        if library is None:
-            raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
 
         supported_api = _call(library.botan_ffi_supports_api, BOTAN_FFI_API_VERSION)
         major = _call(library.botan_version_major)
@@ -271,10 +252,24 @@ class BotanBackend:
             raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
         if patch is None:
             raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
+        self.self_test()
 
-        backend = cls(library, _token=_BACKEND_CONSTRUCTION_TOKEN)
-        backend.self_test()
-        return backend
+
+
+    #### Load and bind one library before delegating to validated construction.
+    ####
+    #### Loader and symbol-binding details are reduced to safe closed error
+    #### categories; the constructor owns the only version and KAT gate.
+    ####
+    @classmethod
+    def open(cls, library_path: Path) -> Self:
+        loaded_library = _load_library(library_path)
+        if loaded_library is None:
+            raise CryptoBackendError(CryptoBackendReason.UNAVAILABLE)
+        library = _bind_library(loaded_library)
+        if library is None:
+            raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
+        return cls(library)
 
 
 
