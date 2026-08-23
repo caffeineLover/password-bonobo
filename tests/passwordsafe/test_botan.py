@@ -73,6 +73,8 @@ class _FakeBotanLibrary:
     botan_block_cipher_encrypt_blocks: _FakeFunction
     botan_block_cipher_decrypt_blocks: _FakeFunction
     algorithm_names: list[bytes]
+    block_buffers: list[tuple[object, object]]
+    key_addresses: list[int]
 
 
 
@@ -86,10 +88,14 @@ class _FakeBotanLibrary:
         patch: int = 0,
         statuses: dict[str, int] | None = None,
         valid_vector: bool = True,
+        raised_operations: set[str] | None = None,
     ) -> None:
         self._statuses = statuses or {}
         self._valid_vector = valid_vector
+        self.raised_operations = raised_operations or set()
         self.algorithm_names = []
+        self.block_buffers = []
+        self.key_addresses = []
         self.botan_ffi_supports_api = _FakeFunction(
             lambda arguments: self._status("supports_api") if arguments == (BOTAN_FFI_API_VERSION,) else -1,
         )
@@ -130,7 +136,11 @@ class _FakeBotanLibrary:
         if status != 0:
             return status
         key_length = cast(int, arguments[2])
-        key = ctypes.string_at(cast(ctypes.c_void_p, arguments[1]), key_length)
+        key_pointer = ctypes.cast(cast(ctypes.c_void_p, arguments[1]), ctypes.c_void_p)
+        if key_pointer.value is None:
+            return -1
+        self.key_addresses.append(key_pointer.value)
+        key = ctypes.string_at(key_pointer, key_length)
         return 0 if key == TWOFISH_ZERO_KEY else -1
 
 
@@ -138,6 +148,9 @@ class _FakeBotanLibrary:
     #### Emit the independent official ciphertext unless corruption is requested.
     ####
     def _encrypt(self, arguments: tuple[object, ...]) -> int:
+        self.block_buffers.append((arguments[1], arguments[2]))
+        if "encrypt" in self.raised_operations:
+            raise RuntimeError("fabricated encrypt call detail")
         status = self._status("encrypt")
         if status != 0:
             return status
@@ -150,6 +163,9 @@ class _FakeBotanLibrary:
     #### Emit the official vector's zero plaintext for the reverse KAT operation.
     ####
     def _decrypt(self, arguments: tuple[object, ...]) -> int:
+        self.block_buffers.append((arguments[1], arguments[2]))
+        if "decrypt" in self.raised_operations:
+            raise RuntimeError("fabricated decrypt call detail")
         status = self._status("decrypt")
         if status != 0:
             return status
@@ -158,15 +174,90 @@ class _FakeBotanLibrary:
 
 
 
-#### Resolve the built host library while allowing a CI-provided explicit path.
+#### Raise arbitrary caller text while Python converts an otherwise valid path.
+####
+class _ExplodingPath(Path):
+
+
+
+    #### Refuse path conversion through an exception outside ordinary OS failures.
+    ####
+    def __fspath__(self) -> str:
+        raise RuntimeError("E:/fabricated/path/fabricated-platform-detail")
+
+
+
+#### Raise arbitrary native detail when the adapter first reads a required symbol.
+####
+class _ExplodingSymbolLibrary:
+
+
+
+    #### Model a hostile dynamic symbol resolver rather than an absent attribute.
+    ####
+    @property
+    def botan_ffi_supports_api(self) -> _FakeFunction:
+        raise RuntimeError("E:/fabricated/path/fabricated-symbol-detail")
+
+
+
+#### Resolve either the required CI artifact or an optional local developer build.
+####
+def _resolve_botan_library(default_library: Path = _DEFAULT_BOTAN_LIBRARY) -> Path:
+    configured = os.environ.get("BONOBO_TEST_BOTAN_LIBRARY")
+    if configured is not None:
+        library = Path(configured)
+        if not library.is_file():
+            pytest.fail("configured Botan test library is not available")
+        return library
+    if not default_library.is_file():
+        pytest.skip("verified Botan host library is not available")
+    return default_library
+
+
+
+#### Supply the real native artifact selected by explicit qualification policy.
 ####
 @pytest.fixture
 def botan_library() -> Path:
-    configured = os.environ.get("BONOBO_BOTAN_LIBRARY")
-    library = Path(configured) if configured is not None else _DEFAULT_BOTAN_LIBRARY
-    if not library.is_file():
-        pytest.skip("verified Botan host library is not available")
-    return library
+    return _resolve_botan_library()
+
+
+
+#### Use the approved CI library variable as a required qualification artifact.
+####
+def test_botan_fixture_uses_planned_ci_library(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ci_library = tmp_path / "botan-test-library"
+    ci_library.write_bytes(b"fabricated native artifact")
+    monkeypatch.setenv("BONOBO_TEST_BOTAN_LIBRARY", os.fspath(ci_library))
+
+    assert _resolve_botan_library(tmp_path / "missing-local-library") == ci_library
+
+
+
+#### Fail release qualification when its explicitly built native artifact is absent.
+####
+def test_botan_fixture_fails_for_missing_required_ci_library(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("BONOBO_TEST_BOTAN_LIBRARY", os.fspath(tmp_path / "missing-ci-library"))
+
+    with pytest.raises(pytest.fail.Exception, match="configured Botan test library is not available"):
+        _resolve_botan_library(tmp_path / "missing-local-library")
+
+
+
+#### Skip only a local developer run that has no explicit qualification artifact.
+####
+def test_botan_fixture_skips_missing_optional_local_library(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("BONOBO_TEST_BOTAN_LIBRARY", raising=False)
+
+    with pytest.raises(pytest.skip.Exception, match="verified Botan host library is not available"):
+        _resolve_botan_library(tmp_path / "missing-local-library")
 
 
 
@@ -181,6 +272,36 @@ def _install_fake_library(monkeypatch: pytest.MonkeyPatch, library: _FakeBotanLi
 ####
 def _reject_library_load(_path: object) -> ctypes.CDLL:
     raise OSError("fabricated loader detail")
+
+
+
+#### Raise an arbitrary loader exception outside the original narrow catch family.
+####
+def _raise_arbitrary_library_error(_path: object) -> ctypes.CDLL:
+    raise RuntimeError("E:/fabricated/path/fabricated-loader-detail")
+
+
+
+#### Assert that a native-boundary failure carries only the closed safe taxonomy.
+####
+def _assert_safe_backend_error(error: CryptoBackendError, reason: CryptoBackendReason) -> None:
+    assert error.reason == reason.value
+    assert str(error) == "cryptographic backend is unavailable"
+    assert "fabricated" not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+
+
+
+#### Assert and release the fake's short-lived references to native block buffers.
+####
+def _assert_last_block_buffers_zero(library: _FakeBotanLibrary) -> None:
+    input_buffer, output_buffer = library.block_buffers[-1]
+    try:
+        assert ctypes.string_at(cast(ctypes.c_void_p, input_buffer), 16) == bytes(16)
+        assert ctypes.string_at(cast(ctypes.c_void_p, output_buffer), 16) == bytes(16)
+    finally:
+        library.block_buffers.clear()
 
 
 
@@ -233,6 +354,22 @@ def test_botan_binds_exact_ffi_signatures_and_fixed_algorithm(monkeypatch: pytes
 
 
 
+#### Prevent direct construction from bypassing the opening validation and KAT gate.
+####
+def test_botan_backend_requires_private_validated_construction(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary()
+    _install_fake_library(monkeypatch, library)
+    unsafe_constructor = cast(Callable[..., BotanBackend], BotanBackend)
+
+    with pytest.raises(TypeError):
+        unsafe_constructor(cast(_BotanLibrary, library))
+    with pytest.raises(TypeError):
+        unsafe_constructor(cast(_BotanLibrary, library), _token=object())
+
+    assert library.botan_block_cipher_init.calls == []
+
+
+
 #### Reject libraries that cannot load without exposing loader diagnostics.
 ####
 def test_botan_maps_loader_failure_to_safe_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -244,6 +381,41 @@ def test_botan_maps_loader_failure_to_safe_typed_error(monkeypatch: pytest.Monke
     assert caught.value.reason == CryptoBackendReason.UNAVAILABLE.value
     assert "fabricated" not in str(caught.value)
     assert caught.value.__context__ is None
+
+
+
+#### Contain arbitrary exceptions raised while converting a type-valid path.
+####
+def test_botan_contains_arbitrary_path_conversion_exception() -> None:
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend.open(_ExplodingPath("fabricated-botan-library"))
+
+    _assert_safe_backend_error(caught.value, CryptoBackendReason.UNAVAILABLE)
+
+
+
+#### Contain arbitrary exceptions raised by the ctypes library loader.
+####
+def test_botan_contains_arbitrary_ctypes_loader_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ctypes, "CDLL", _raise_arbitrary_library_error)
+
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend.open(Path("fabricated-botan-library"))
+
+    _assert_safe_backend_error(caught.value, CryptoBackendReason.UNAVAILABLE)
+
+
+
+#### Contain arbitrary exceptions raised during required symbol resolution.
+####
+def test_botan_contains_arbitrary_symbol_access_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _ExplodingSymbolLibrary()
+    monkeypatch.setattr(ctypes, "CDLL", lambda _path: cast(ctypes.CDLL, library))
+
+    with pytest.raises(CryptoBackendError) as caught:
+        BotanBackend.open(Path("fabricated-botan-library"))
+
+    _assert_safe_backend_error(caught.value, CryptoBackendReason.INVALID_ABI)
 
 
 
@@ -301,6 +473,79 @@ def test_botan_key_setup_failure_releases_initialized_handle(monkeypatch: pytest
 
     assert len(library.botan_block_cipher_init.calls) == 1
     assert len(library.botan_block_cipher_destroy.calls) == 1
+
+
+
+#### Pass the SecretBuffer owner's storage directly to Botan without a key copy.
+####
+def test_botan_set_key_pointer_aliases_secret_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary()
+    _install_fake_library(monkeypatch, library)
+    backend = BotanBackend.open(Path("fabricated-botan-library"))
+    source_storage = bytearray(TWOFISH_ZERO_KEY)
+    source_probe = (ctypes.c_uint8 * len(source_storage)).from_buffer(source_storage)
+    source_address = ctypes.addressof(source_probe)
+    del source_probe
+
+    with SecretBuffer.take_ownership(source_storage) as key_material, backend.key(key_material):
+        assert library.key_addresses[-1] == source_address
+
+    assert source_storage == bytearray(len(source_storage))
+
+
+
+#### Wipe temporary native block buffers after a successful operation.
+####
+def test_botan_wipes_block_buffers_after_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary()
+    _install_fake_library(monkeypatch, library)
+    backend = BotanBackend.open(Path("fabricated-botan-library"))
+    library.block_buffers.clear()
+
+    with SecretBuffer.from_bytes(TWOFISH_ZERO_KEY) as key_material, backend.key(key_material) as key:
+        key.encrypt_block(bytes(range(16)))
+
+    _assert_last_block_buffers_zero(library)
+
+
+
+#### Wipe temporary native block buffers after a nonzero operation status.
+####
+def test_botan_wipes_block_buffers_after_nonzero_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary()
+    _install_fake_library(monkeypatch, library)
+    backend = BotanBackend.open(Path("fabricated-botan-library"))
+    library.block_buffers.clear()
+    library._statuses["encrypt"] = -1
+
+    with (
+        SecretBuffer.from_bytes(TWOFISH_ZERO_KEY) as key_material,
+        backend.key(key_material) as key,
+        pytest.raises(CryptoBackendError),
+    ):
+        key.encrypt_block(bytes(range(16)))
+
+    _assert_last_block_buffers_zero(library)
+
+
+
+#### Wipe temporary native block buffers when a dynamic call raises internally.
+####
+def test_botan_wipes_block_buffers_after_raised_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    library = _FakeBotanLibrary()
+    _install_fake_library(monkeypatch, library)
+    backend = BotanBackend.open(Path("fabricated-botan-library"))
+    library.block_buffers.clear()
+    library.raised_operations.add("encrypt")
+
+    with (
+        SecretBuffer.from_bytes(TWOFISH_ZERO_KEY) as key_material,
+        backend.key(key_material) as key,
+        pytest.raises(CryptoBackendError),
+    ):
+        key.encrypt_block(bytes(range(16)))
+
+    _assert_last_block_buffers_zero(library)
 
 
 

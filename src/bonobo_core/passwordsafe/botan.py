@@ -21,6 +21,7 @@ from .secrets import SecretBuffer
 BOTAN_FFI_API_VERSION: Final[int] = 20_260_811
 _BOTAN_MAJOR_VERSION: Final[int] = 3
 _BOTAN_MINIMUM_MINOR_VERSION: Final[int] = 13
+_BACKEND_CONSTRUCTION_TOKEN: Final[object] = object()
 _TWOFISH_NAME: Final[bytes] = b"Twofish"
 _TWOFISH_BLOCK_BYTES: Final[int] = 16
 _TWOFISH_ZERO_KEY: Final[bytes] = bytes(16)
@@ -70,7 +71,7 @@ class _BotanLibrary(Protocol):
 def _load_library(library_path: Path) -> ctypes.CDLL | None:
     try:
         return ctypes.CDLL(os.fspath(library_path))
-    except (OSError, TypeError, ValueError):
+    except Exception:
         return None
 
 
@@ -102,7 +103,7 @@ def _bind_library(loaded_library: ctypes.CDLL) -> _BotanLibrary | None:
         library.botan_block_cipher_decrypt_blocks.argtypes = block_arguments
         library.botan_block_cipher_decrypt_blocks.restype = ctypes.c_int
         return library
-    except (AttributeError, TypeError, ValueError):
+    except Exception:
         return None
 
 
@@ -236,9 +237,14 @@ class BotanBackend:
 
 
 
-    #### Retain one already-bound library after ABI, version, and KAT validation.
+    #### Retain one library only through the private validated factory boundary.
     ####
-    def __init__(self, library: _BotanLibrary) -> None:
+    #### The identity token prevents untyped callers from constructing a backend
+    #### around an arbitrary library and reaching key operations without open().
+    ####
+    def __init__(self, library: _BotanLibrary, *, _token: object) -> None:
+        if _token is not _BACKEND_CONSTRUCTION_TOKEN:
+            raise TypeError("Botan backends must be created through open")
         self._library = library
 
 
@@ -266,7 +272,7 @@ class BotanBackend:
         if patch is None:
             raise CryptoBackendError(CryptoBackendReason.INVALID_ABI)
 
-        backend = cls(library)
+        backend = cls(library, _token=_BACKEND_CONSTRUCTION_TOKEN)
         backend.self_test()
         return backend
 
