@@ -5,7 +5,9 @@ only to make independently calculated CBC framing observable in these tests.
 """
 
 import copy
+import gc
 import pickle
+import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Protocol, cast
@@ -116,27 +118,21 @@ class _RecordingSnapshot:
 
 #### Inject one partial or failed final inline wipe before allowing retry.
 ####
-class _RetryWipeBuffer(bytearray):
+class _RejectingSliceBuffer(bytearray):
 
 
 
-    #### Retain one failure that triggers only on the first full zeroing slice.
+    #### Retain bytes while refusing every overridable Python slice wipe.
     ####
-    def __init__(self, data: bytes, failure: BaseException) -> None:
+    def __init__(self, data: bytes) -> None:
         super().__init__(data)
-        self._failure: BaseException | None = failure
 
 
 
-    #### Partially wipe, raise once, then permit the retry to finish zeroing.
+    #### Prove cleanup does not dispatch through this overridable method.
     ####
-    def __setitem__(self, key: int | slice, value: int | bytes) -> None:  # type: ignore[override]
-        if isinstance(key, slice) and self._failure is not None:
-            failure = self._failure
-            self._failure = None
-            super().__setitem__(slice(0, 3), b"\0\0\0")
-            raise failure
-        super().__setitem__(key, value)  # type: ignore[index, assignment]
+    def __setitem__(self, _key: int | slice, _value: int | bytes) -> None:  # type: ignore[override]
+        raise KeyboardInterrupt("overridable slice wipe was called")
 
 
 
@@ -334,11 +330,31 @@ def test_inline_payload_retain_wipes_only_after_last_lease() -> None:
 #### Keep the final inline lease pending and unusable until a failed wipe retries.
 ####
 @pytest.mark.parametrize("failure", [ValueError("wipe failed"), KeyboardInterrupt("wipe interrupted")])
-def test_inline_payload_final_wipe_is_retryable_after_partial_failure(failure: BaseException) -> None:
-    storage = _RetryWipeBuffer(b"fabricated-secret", failure)
+def test_inline_payload_final_wipe_is_retryable_after_partial_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
+    from bonobo_core.passwordsafe import payloads
+
+    storage = bytearray(b"fabricated-secret")
     first = InlinePayload.take_ownership(storage)
     final = first.retain()
     first.close()
+    original = payloads._wipe_mutable_buffer
+    attempts = 0
+
+
+
+    #### Fail the primitive boundary once, then perform its real fixed-address wipe.
+    ####
+    def fail_once(buffer: bytearray) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise failure
+        original(buffer)
+
+    monkeypatch.setattr(payloads, "_wipe_mutable_buffer", fail_once)
 
     with pytest.raises(type(failure)) as caught:
         final.close()
@@ -346,7 +362,6 @@ def test_inline_payload_final_wipe_is_retryable_after_partial_failure(failure: B
     assert caught.value is failure
     pending_after_failure = final.closed
     assert not pending_after_failure
-    assert storage[:3] == b"\0\0\0"
     with pytest.raises(PayloadClosedError, match="field payload is closed"):
         tuple(final.iter_chunks(4))
     with pytest.raises(PayloadClosedError, match="field payload is closed"):
@@ -359,21 +374,17 @@ def test_inline_payload_final_wipe_is_retryable_after_partial_failure(failure: B
 
 
 
-#### Finalization suppresses a partial wipe failure while retaining retry state.
+#### One automatic finalizer bypasses subclass slice overrides and wipes storage.
 ####
-def test_inline_payload_finalizer_retries_pending_wipe() -> None:
-    storage = _RetryWipeBuffer(b"fabricated-secret", KeyboardInterrupt("wipe interrupted"))
-    first = InlinePayload.take_ownership(storage)
-    final = first.retain()
-    first.close()
+def test_inline_payload_real_finalizer_wipes_subclass_once() -> None:
+    storage = _RejectingSliceBuffer(b"fabricated-secret")
+    payload = InlinePayload.take_ownership(storage)
+    payload_reference = weakref.ref(payload)
 
-    final.__del__()
-    pending_after_failure = final.closed
-    assert not pending_after_failure
+    del payload
+    gc.collect()
 
-    final.__del__()
-    closed_after_retry = final.closed
-    assert closed_after_retry
+    assert payload_reference() is None
     assert storage == bytearray(17)
 
 
@@ -439,9 +450,16 @@ def test_encrypted_span_close_is_exhaustive_and_retryable(
 
 
 
-#### Deferred finalization exhausts later iterators before suppressing one failure.
+#### One automatic deferred finalizer severs a failed iterator for its own retry.
 ####
-def test_encrypted_span_finalizer_is_exhaustive_and_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "failure",
+    [ValueError("iterator finalizer failure"), KeyboardInterrupt("iterator finalizer interruption")],
+)
+def test_encrypted_span_real_finalizer_severs_failed_iterators(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
     from bonobo_core.passwordsafe import payloads
 
     payload, _snapshot, key, _span = _deferred_payload(bytes(range(32)))
@@ -458,20 +476,18 @@ def test_encrypted_span_finalizer_is_exhaustive_and_retryable(monkeypatch: pytes
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise KeyboardInterrupt("iterator finalizer interruption")
+            raise failure
         original(iterator)
 
     monkeypatch.setattr(payloads._EncryptedSpanIterator, "_close_from_owner", fail_first)
 
-    payload.__del__()
-    assert attempts == 2
-    pending_after_failure = payload.closed
-    assert not pending_after_failure
+    payload_reference = weakref.ref(payload)
+    del iterators
+    del payload
+    gc.collect()
 
-    payload.__del__()
-    assert attempts == 3
-    closed_after_retry = payload.closed
-    assert closed_after_retry
+    assert attempts == 4
+    assert payload_reference() is None
     for view in views:
         with pytest.raises(ValueError, match="released memoryview"):
             bytes(view)

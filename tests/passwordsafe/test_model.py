@@ -5,8 +5,10 @@ Manifest hashes are tested separately from final byte-for-byte stream equality.
 """
 
 import copy
+import gc
 import hashlib
 import pickle
+import weakref
 from collections.abc import Iterator
 
 import pytest
@@ -209,6 +211,46 @@ class _RetryClosePayload(_ScriptedPayload):
 
 
 
+#### Fail parent cleanup once, then expose child-finalizer lifecycle evidence.
+####
+class _FinalizerClosePayload(_RetryClosePayload):
+
+
+
+    #### Retain adopted storage and an external finalizer observation sink.
+    ####
+    def __init__(
+        self,
+        failure: BaseException,
+        storage: bytearray,
+        observations: list[bool],
+        close_attempts: list[str],
+        label: str,
+    ) -> None:
+        super().__init__([failure])
+        self.storage = storage
+        self.observations = observations
+        self.close_attempts = close_attempts
+        self.label = label
+
+
+
+    #### Record the parent's sole cleanup attempt before raising once.
+    ####
+    def close(self) -> None:
+        self.close_attempts.append(self.label)
+        super().close()
+
+
+
+    #### Record child finalization and wipe adopted storage when released.
+    ####
+    def __del__(self) -> None:
+        self.observations.append(True)
+        self.storage[:] = bytes(len(self.storage))
+
+
+
 #### Build one document around a caller-selected raw header field sequence.
 ####
 def _header_document(fields: tuple[RawField, ...]) -> VaultDocument:
@@ -405,12 +447,16 @@ def test_document_retain_survives_original_finalizer() -> None:
         (RawField(0xE0, InlinePayload.take_ownership(storage), 0, FieldClassification.UNKNOWN),),
     )
     retained = original.retain()
+    original_reference = weakref.ref(original)
 
-    original.__del__()
+    del original
+    gc.collect()
 
+    assert original_reference() is None
     assert retained.semantic_manifest().field_count == 1
     assert storage == bytearray(b"fabricated-secret")
-    retained.__del__()
+    del retained
+    gc.collect()
     assert storage == bytearray(17)
 
 
@@ -597,27 +643,49 @@ def test_document_close_is_exhaustive_and_retryable(
 
 
 
-#### Finalization exhausts all payloads and suppresses failures until a retry.
+#### One automatic finalizer terminals the parent and releases failing children.
 ####
-def test_document_finalizer_is_exhaustive_and_retryable() -> None:
-    first = _RetryClosePayload([ValueError("first finalizer failure")])
-    second = _RetryClosePayload([KeyboardInterrupt("second finalizer failure")])
+def test_document_real_finalizer_severs_all_failed_children_once() -> None:
+    observations: list[bool] = []
+    close_attempts: list[str] = []
+    first_storage = bytearray(b"first-secret")
+    second_storage = bytearray(b"second-secret")
+    first = _FinalizerClosePayload(
+        ValueError("first finalizer failure"),
+        first_storage,
+        observations,
+        close_attempts,
+        "first",
+    )
+    second = _FinalizerClosePayload(
+        KeyboardInterrupt("second finalizer failure"),
+        second_storage,
+        observations,
+        close_attempts,
+        "second",
+    )
     document = _header_document(
         (
             RawField(0xE0, first, 0, FieldClassification.UNKNOWN),
             RawField(0xE1, second, 1, FieldClassification.UNKNOWN),
         ),
     )
+    document_reference = weakref.ref(document)
+    first_reference = weakref.ref(first)
+    second_reference = weakref.ref(second)
 
-    document.__del__()
-    assert [first.close_calls, second.close_calls] == [1, 1]
-    pending_after_failure = document.closed
-    assert not pending_after_failure
+    del first
+    del second
+    del document
+    gc.collect()
 
-    document.__del__()
-    closed_after_retry = document.closed
-    assert closed_after_retry
-    assert [first.close_calls, second.close_calls] == [2, 2]
+    assert document_reference() is None
+    assert first_reference() is None
+    assert second_reference() is None
+    assert close_attempts == ["first", "second"]
+    assert observations == [True, True]
+    assert first_storage == bytearray(len(first_storage))
+    assert second_storage == bytearray(len(second_storage))
 
 
 

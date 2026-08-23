@@ -3,7 +3,6 @@
 import ctypes
 import msvcrt
 import os
-from contextlib import suppress
 from ctypes import wintypes
 from pathlib import Path
 from typing import Final
@@ -39,6 +38,7 @@ _OPEN_EXISTING: Final[int] = 3
 _FILE_CREATE: Final[int] = 2
 _FILE_SYNCHRONOUS_IO_NONALERT: Final[int] = 0x00000020
 _FILE_NON_DIRECTORY_FILE: Final[int] = 0x00000040
+_FILE_DELETE_ON_CLOSE: Final[int] = 0x00001000
 _FILE_ATTRIBUTE_NORMAL: Final[int] = 0x00000080
 _FILE_ATTRIBUTE_DIRECTORY: Final[int] = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT: Final[int] = 0x00000400
@@ -502,7 +502,10 @@ def _nt_create_relative(
             _FILE_ATTRIBUTE_NORMAL,
             _FILE_SHARE_READ | _FILE_SHARE_DELETE,
             _FILE_CREATE,
-            _FILE_SYNCHRONOUS_IO_NONALERT | _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+            _FILE_SYNCHRONOUS_IO_NONALERT
+            | _FILE_NON_DIRECTORY_FILE
+            | _FILE_DELETE_ON_CLOSE
+            | _FILE_FLAG_OPEN_REPARSE_POINT,
             None,
             0,
         )
@@ -515,6 +518,22 @@ def _nt_create_relative(
 
 
 #### Verify and mark the exact still-open artifact handle for deletion.
+####
+def _set_handle_disposition(handle: wintypes.HANDLE, *, delete: bool) -> bool:
+    disposition = _FileDispositionInfo(True)
+    disposition.DeleteFile = delete
+    return bool(
+        _KERNEL32.SetFileInformationByHandle(
+            handle,
+            _FILE_DISPOSITION_INFO_CLASS,
+            ctypes.byref(disposition),
+            ctypes.sizeof(disposition),
+        )
+    )
+
+
+
+#### Verify and mark the exact still-open published artifact for deletion.
 ####
 def _delete_handle_if_same(handle: wintypes.HANDLE, identity: tuple[int, int]) -> bool:
     information = _ByHandleFileInformation()
@@ -529,15 +548,7 @@ def _delete_handle_if_same(handle: wintypes.HANDLE, identity: tuple[int, int]) -
     _before_handle_delete()
     if _file_identity(handle) != identity:
         return False
-    disposition = _FileDispositionInfo(True)
-    return bool(
-        _KERNEL32.SetFileInformationByHandle(
-            handle,
-            _FILE_DISPOSITION_INFO_CLASS,
-            ctypes.byref(disposition),
-            ctypes.sizeof(disposition),
-        )
-    )
+    return _set_handle_disposition(handle, delete=True)
 
 
 
@@ -594,22 +605,19 @@ class WindowsDirectoryAnchor:
 
     #### Create one child with an explicit protected owner-only DACL and verify it.
     ####
-    def create(self, name: str) -> tuple[int, tuple[int, int]] | None:
+    def create(self, name: str) -> tuple[int, tuple[int, int], str | None] | None:
         if not self._stable() or Path(name).name != name:
             return None
         descriptor = _new_security_descriptor()
         if descriptor is None:
             return None
         handle: wintypes.HANDLE | None = None
-        created_identity: tuple[int, int] | None = None
-        transferred = False
         try:
             _before_relative_create()
             handle = _nt_create_relative(self._handle, name, descriptor)
             if handle is None:
                 return None
             identity = _file_identity(handle)
-            created_identity = identity
             information = _ByHandleFileInformation()
             if (
                 identity is None
@@ -619,18 +627,25 @@ class WindowsDirectoryAnchor:
                 or not self._stable()
             ):
                 return None
+            if not _set_handle_disposition(handle, delete=False):
+                return None
             raw_handle = _handle_value(handle)
             file_descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDWR | os.O_BINARY)
             handle = None
-            transferred = True
-            return file_descriptor, identity
+            return file_descriptor, identity, name
         finally:
             _KERNEL32.LocalFree(descriptor)
             if handle is not None:
-                if not transferred and created_identity is not None:
-                    with suppress(Exception):
-                        _delete_handle_if_same(handle, created_identity)
-                _close_handle(handle)
+                try:
+                    disposed = _set_handle_disposition(handle, delete=True)
+                except BaseException:
+                    disposed = False
+                try:
+                    closed = _close_handle(handle)
+                except BaseException:
+                    closed = False
+                if not disposed or not closed:
+                    raise OSError
 
 
 

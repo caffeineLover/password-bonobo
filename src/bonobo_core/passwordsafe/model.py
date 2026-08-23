@@ -294,7 +294,7 @@ class SemanticManifest:
 #### construct explicit revisions and keep shared owners under one session lifetime;
 #### generic copying and serialization are prohibited.
 ####
-@dataclass(eq=False, frozen=True, slots=True)
+@dataclass(eq=False, frozen=True, slots=True, weakref_slot=True)
 class VaultDocument:
     version: FormatVersion
     header_fields: tuple[RawField, ...]
@@ -477,6 +477,12 @@ class VaultDocument:
     def __del__(self) -> None:
         with suppress(BaseException):
             self.close()
+        with suppress(BaseException):
+            object.__setattr__(self, "_closed", True)
+            object.__setattr__(self, "_closing", False)
+            object.__setattr__(self, "_pending_payloads", ())
+            object.__setattr__(self, "header_fields", ())
+            object.__setattr__(self, "records", ())
 
 
 

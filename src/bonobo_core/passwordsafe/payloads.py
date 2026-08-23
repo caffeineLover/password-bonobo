@@ -5,6 +5,7 @@ immutable encrypted snapshot and authenticated content key, retain only copied C
 metadata, and materialize no plaintext larger than a caller-approved chunk.
 """
 
+import ctypes
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -19,6 +20,15 @@ from .secrets import SecretBuffer
 
 
 _MAX_FIELD_PAYLOAD_BYTES = 0xFFFF_FFFF
+
+
+
+#### Wipe one adopted mutable buffer without dispatching to subclass methods.
+####
+def _wipe_mutable_buffer(buffer: bytearray) -> None:
+    if buffer:
+        address = ctypes.addressof(ctypes.c_ubyte.from_buffer(buffer))
+        ctypes.memset(address, 0, len(buffer))
 
 
 
@@ -192,7 +202,7 @@ class _InlineStorage:
                 self._leases -= 1
                 return
             self._closing = True
-            self._data[:] = bytes(len(self._data))
+            _wipe_mutable_buffer(self._data)
             self._leases = 0
             self._closing = False
 
@@ -204,7 +214,7 @@ class _InlineStorage:
 #### All yielded views borrow this storage and become unusable after close wipes it.
 ####
 class InlinePayload(_ExclusivePayloadOwner):
-    __slots__ = ("_closed", "_closing", "_lock", "_storage")
+    __slots__ = ("__weakref__", "_closed", "_closing", "_lock", "_storage")
 
     _closed: bool
     _storage: _InlineStorage
@@ -218,7 +228,7 @@ class InlinePayload(_ExclusivePayloadOwner):
             raise TypeError("inline payload ownership requires a bytearray")
         if hasattr(self, "_storage"):
             if data is not self._storage._data:
-                data[:] = bytes(len(data))
+                _wipe_mutable_buffer(data)
             raise TypeError("inline payload cannot be reinitialized")
         self._storage = _InlineStorage(data)
         self._lock = RLock()
@@ -448,6 +458,7 @@ class EncryptedSpan:
 ####
 class EncryptedSpanPayload(_ExclusivePayloadOwner):
     __slots__ = (
+        "__weakref__",
         "_backend",
         "_ciphertext_length",
         "_ciphertext_offset",
@@ -643,6 +654,11 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
     def __del__(self) -> None:
         with suppress(BaseException):
             self.close()
+        with suppress(BaseException), self._lock:
+            self._previous[:] = bytes(len(self._previous))
+            self._closed = True
+            self._closing = False
+            self._iterators.clear()
 
 
 

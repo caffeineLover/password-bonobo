@@ -6,12 +6,13 @@ sensitive-looking so failures and representations prove they do not retain it.
 
 import copy
 import ctypes
+import gc
 import io
 import os
 import pickle
-import secrets
 import stat
 import struct
+import weakref
 from ctypes import wintypes
 from pathlib import Path
 from typing import cast
@@ -66,6 +67,93 @@ def test_snapshot_file_has_protected_owner_only_windows_dacl(tmp_path: Path) -> 
 
     assert _windows_path_is_private(artifact)
     snapshot.close()
+
+
+
+#### Delete every exclusively created child when post-create verification fails.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows owned-handle cleanup")
+def test_windows_post_create_verifier_failure_leaks_no_retry_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _windows_security, snapshots
+
+    directory = _private_directory(tmp_path)
+    anchor = _windows_security.WindowsDirectoryAnchor.open(directory)
+    assert anchor is not None
+    verifier_calls = 0
+
+
+
+    #### Fail only child privacy verification after the directory anchor is open.
+    ####
+    def fail_child_verifier(_handle: wintypes.HANDLE) -> bool:
+        nonlocal verifier_calls
+        verifier_calls += 1
+        return False
+
+    monkeypatch.setattr(snapshots, "_validate_private_directory", lambda _directory: anchor)
+    monkeypatch.setattr(_windows_security, "_handle_is_private", fail_child_verifier)
+
+    with pytest.raises(StorageError) as caught:
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    assert verifier_calls == 32
+    assert tuple(directory.iterdir()) == ()
+    assert caught.value.__context__ is None
+
+
+
+#### Keep disposition failure path-free while close-on-failure removes the child.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows owned-handle cleanup")
+@pytest.mark.parametrize("disposition_failure", [None, KeyboardInterrupt("disposition interrupted")])
+def test_windows_post_create_disposition_failure_is_closed_and_leak_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    disposition_failure: BaseException | None,
+) -> None:
+    from bonobo_core.passwordsafe import _windows_security, snapshots
+
+    directory = _private_directory(tmp_path)
+    anchor = _windows_security.WindowsDirectoryAnchor.open(directory)
+    assert anchor is not None
+    stable_calls = 0
+    disposition_calls = 0
+
+
+
+    #### Pass the pre-create stability check and fail the post-create check once.
+    ####
+    def fail_post_create_stability(_anchor: _windows_security.WindowsDirectoryAnchor) -> bool:
+        nonlocal stable_calls
+        stable_calls += 1
+        return stable_calls == 1
+
+
+
+    #### Refuse the explicit cleanup disposition so create-on-close is exercised.
+    ####
+    def fail_disposition(*_arguments: object) -> bool:
+        nonlocal disposition_calls
+        disposition_calls += 1
+        if disposition_failure is not None:
+            raise disposition_failure
+        ctypes.set_last_error(5)
+        return False
+
+    monkeypatch.setattr(snapshots, "_validate_private_directory", lambda _directory: anchor)
+    monkeypatch.setattr(_windows_security.WindowsDirectoryAnchor, "_stable", fail_post_create_stability)
+    monkeypatch.setattr(_windows_security._KERNEL32, "SetFileInformationByHandle", fail_disposition)
+
+    with pytest.raises(StorageError) as caught:
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    assert disposition_calls == 1
+    assert tuple(directory.iterdir()) == ()
+    assert caught.value.__context__ is None
+    assert "private" not in repr(caught.value)
 
 
 
@@ -182,7 +270,8 @@ def test_snapshot_close_is_idempotent_and_terminal(tmp_path: Path) -> None:
     directory = _private_directory(tmp_path)
     snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
 
-    assert len(tuple(directory.iterdir())) == 1
+    expected_entries = 1 if os.name == "nt" else 0
+    assert len(tuple(directory.iterdir())) == expected_entries
     snapshot.close()
     snapshot.close()
 
@@ -247,10 +336,118 @@ def test_snapshot_rejects_nonprivate_directory(tmp_path: Path) -> None:
 def test_snapshot_file_is_owner_only_while_open(tmp_path: Path) -> None:
     directory = _private_directory(tmp_path)
     snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
-    artifact = next(directory.iterdir())
 
-    assert stat.S_IMODE(artifact.stat().st_mode) == 0o600
+    assert stat.S_IMODE(os.fstat(snapshot._fd).st_mode) == 0o600
+    assert tuple(directory.iterdir()) == ()
     snapshot.close()
+
+
+
+#### Keep POSIX snapshots anonymous for their entire readable lifetime.
+####
+@pytest.mark.skipif(os.name == "nt", reason="POSIX anonymous-file lifecycle")
+def test_posix_snapshot_has_no_directory_entry_while_live(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    assert tuple(directory.iterdir()) == ()
+    assert snapshot.read_at(0, 9) == b"encrypted"
+    snapshot.close()
+    assert tuple(directory.iterdir()) == ()
+
+
+
+#### Immediately unlink a POSIX fallback child before returning its live fd.
+####
+def test_posix_anchor_fallback_returns_only_an_unlinked_descriptor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import snapshots
+
+    anchor_identity = (5, 6)
+    file_identity = (7, 8)
+    unlinked = False
+
+
+
+    #### Supply directory or file metadata with the current link count.
+    ####
+    class Metadata:
+
+
+
+        #### Retain the requested identity and regular-file link state.
+        ####
+        def __init__(self, identity: tuple[int, int], *, links: int) -> None:
+            self.st_mode = stat.S_IFREG | 0o600
+            self.st_dev, self.st_ino = identity
+            self.st_nlink = links
+
+
+
+    #### Report the created fd as anonymous only after its anchored unlink.
+    ####
+    def fake_fstat(descriptor: int) -> Metadata:
+        if descriptor == 10:
+            return Metadata(anchor_identity, links=1)
+        return Metadata(file_identity, links=0 if unlinked else 1)
+
+
+
+    #### Remove the one exact fallback directory entry.
+    ####
+    def fake_unlink(name: str, **_arguments: object) -> None:
+        nonlocal unlinked
+        assert name == "snapshot-fixed"
+        unlinked = True
+
+    monkeypatch.setattr(snapshots, "_O_TMPFILE", 0, raising=False)
+    monkeypatch.setattr(os, "fstat", fake_fstat)
+    monkeypatch.setattr(os, "open", lambda *_arguments, **_keywords: 99)
+    monkeypatch.setattr(os, "stat", lambda *_arguments, **_keywords: Metadata(file_identity, links=1))
+    monkeypatch.setattr(os, "unlink", fake_unlink)
+    monkeypatch.setattr(snapshots._PosixDirectoryAnchor, "_stable", lambda _anchor: True)
+    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 10)
+
+    created = anchor.create("snapshot-fixed")
+
+    assert created == (99, file_identity, None)
+    assert unlinked
+
+
+
+#### Abort a POSIX fallback swap without deleting or writing either identity.
+####
+@pytest.mark.skipif(os.name == "nt", reason="POSIX anchored fallback substitution")
+def test_posix_fallback_swap_preserves_replacement_and_owned_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import snapshots
+
+    directory = _private_directory(tmp_path)
+    moved = directory / "owned-created"
+    replacement = b"substituted"
+
+
+
+    #### Replace the exclusive name immediately before its anchored unlink.
+    ####
+    def swap_before_unlink() -> None:
+        artifact = next(directory.iterdir())
+        artifact.replace(moved)
+        artifact.write_bytes(replacement)
+
+    monkeypatch.setattr(snapshots, "_O_TMPFILE", 0, raising=False)
+    monkeypatch.setattr(snapshots, "_before_posix_unlink", swap_before_unlink, raising=False)
+
+    with pytest.raises(StorageError):
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+
+    remaining = tuple(directory.iterdir())
+    assert len(remaining) == 2
+    assert next(path for path in remaining if path != moved).read_bytes() == replacement
+    assert moved.read_bytes() == b""
 
 
 
@@ -323,16 +520,17 @@ def test_snapshot_rejects_directory_swap_during_creation(
 
 
 
-#### Suppress cleanup failures from defensive finalization while becoming terminal.
+#### Release one forgotten snapshot through its actual automatic finalizer.
 ####
-def test_snapshot_finalizer_is_idempotent(tmp_path: Path) -> None:
+def test_snapshot_real_finalizer_releases_artifact(tmp_path: Path) -> None:
     directory = _private_directory(tmp_path)
     snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
+    snapshot_reference = weakref.ref(snapshot)
 
-    snapshot.__del__()
-    snapshot.__del__()
+    del snapshot
+    gc.collect()
 
-    assert snapshot.closed
+    assert snapshot_reference() is None
     assert tuple(directory.iterdir()) == ()
 
 
@@ -357,6 +555,8 @@ def test_snapshot_close_retries_transient_cleanup_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if os.name != "nt":
+        pytest.skip("POSIX anonymous snapshots have no cleanup pathname")
     directory = _private_directory(tmp_path)
     snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
     from bonobo_core.passwordsafe import snapshots
@@ -537,132 +737,6 @@ def test_windows_nt_create_failure_cleans_only_live_handle(
 
     assert created is None
     assert close_calls == expected_closes
-
-
-
-#### Restore a POSIX substitution from quarantine without deleting either file.
-####
-@pytest.mark.skipif(os.name == "nt", reason="POSIX dir-fd quarantine behavior")
-def test_snapshot_posix_quarantine_restores_interleaved_substitution(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from bonobo_core.passwordsafe import snapshots
-
-    directory = _private_directory(tmp_path)
-    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
-    artifact = next(directory.iterdir())
-    owned = directory / "owned-moved"
-    swapped = False
-
-
-
-    #### Swap the verified name immediately before its anchored quarantine rename.
-    ####
-    def substitute_before_quarantine() -> None:
-        nonlocal swapped
-        artifact.replace(owned)
-        artifact.write_bytes(b"substituted")
-        swapped = True
-
-    monkeypatch.setattr(snapshots, "_before_posix_quarantine", substitute_before_quarantine)
-
-    with pytest.raises(StorageError):
-        snapshot.close()
-
-    assert swapped
-    assert artifact.read_bytes() == b"substituted"
-    assert owned.read_bytes() == b"encrypted"
-    monkeypatch.setattr(snapshots, "_before_posix_quarantine", lambda: None)
-    artifact.unlink()
-    owned.replace(artifact)
-    snapshot.close()
-    assert snapshot.closed
-
-
-
-#### Retain a renamed POSIX quarantine identity across transient unlink failure.
-####
-def test_posix_anchor_retries_quarantine_unlink_after_rename(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from bonobo_core.passwordsafe import snapshots
-
-    identity = (7, 9)
-    entries = {"artifact": identity}
-    unlink_calls = 0
-
-
-
-    #### Supply only regular-file metadata needed by the anchored state machine.
-    ####
-    class Metadata:
-        st_mode = stat.S_IFREG | 0o600
-        st_dev = identity[0]
-        st_ino = identity[1]
-
-
-
-    #### Resolve the in-memory child table or report the expected missing name.
-    ####
-    def fake_stat(name: str, **_arguments: object) -> Metadata:
-        if name not in entries:
-            raise FileNotFoundError
-        return Metadata()
-
-
-
-    #### Move one child name atomically within the fake anchored directory.
-    ####
-    def fake_rename(source: str, destination: str, **_arguments: object) -> None:
-        entries[destination] = entries.pop(source)
-
-
-
-    #### Fail the first quarantine unlink, then remove that exact retained name.
-    ####
-    def fake_unlink(name: str, **_arguments: object) -> None:
-        nonlocal unlink_calls
-        unlink_calls += 1
-        if unlink_calls == 1:
-            raise OSError("transient unlink failure")
-        entries.pop(name)
-
-    monkeypatch.setattr(os, "fstat", lambda _descriptor: Metadata())
-    monkeypatch.setattr(os, "stat", fake_stat)
-    monkeypatch.setattr(os, "rename", fake_rename)
-    monkeypatch.setattr(os, "unlink", fake_unlink)
-    monkeypatch.setattr(secrets, "token_hex", lambda _length: "fixed")
-    anchor = snapshots._PosixDirectoryAnchor(Path("unused"), 99)
-
-    with pytest.raises(OSError):
-        anchor.remove_if_same(99, "artifact", identity)
-    assert entries == {"quarantine-fixed": identity}
-
-    assert anchor.remove_if_same(99, "artifact", identity)
-    assert entries == {}
-
-
-
-#### Keep a missing POSIX target pending until its exact identity is restored.
-####
-@pytest.mark.skipif(os.name == "nt", reason="POSIX dir-fd missing-target behavior")
-def test_snapshot_posix_missing_target_remains_retryable(tmp_path: Path) -> None:
-    directory = _private_directory(tmp_path)
-    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory)
-    artifact = next(directory.iterdir())
-    moved = directory / "owned-moved"
-    artifact.replace(moved)
-
-    with pytest.raises(StorageError):
-        snapshot.close()
-
-    assert not snapshot.closed
-    assert moved.read_bytes() == b"encrypted"
-    moved.replace(artifact)
-    snapshot.close()
-    assert tuple(directory.iterdir()) == ()
-    assert snapshot.closed
 
 
 
