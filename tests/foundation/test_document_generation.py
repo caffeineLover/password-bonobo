@@ -38,6 +38,54 @@ def test_document_manifest_discovers_every_pair(tmp_path: Path) -> None:
 
 
 
+#### Honor Git's document boundary while retaining non-ignored untracked authoring input.
+####
+def test_document_manifest_honors_git_document_boundary(tmp_path: Path) -> None:
+    subprocess.run(("git", "init", "--quiet", str(tmp_path)), check=True)
+    docs_root = tmp_path / "docs"
+    prompt_root = docs_root / "prompts"
+    prompt_root.mkdir(parents=True)
+    (tmp_path / ".gitignore").write_text("/docs/prompts/\n", encoding="utf-8")
+    tracked_markdown = docs_root / "owned.md"
+    tracked_markdown.write_text("# Owned\n", encoding="utf-8")
+    tracked_markdown.with_suffix(".tex").write_text("generated\n", encoding="utf-8")
+    (prompt_root / "local-standard.md").write_text("# Ignored local standard\n", encoding="utf-8")
+    ignored_markdown_peer = prompt_root / "tracked-tex.md"
+    ignored_markdown_peer.write_text("# Ignored Markdown peer\n", encoding="utf-8")
+    tracked_tex = ignored_markdown_peer.with_suffix(".tex")
+    tracked_tex.write_text("tracked TeX\n", encoding="utf-8")
+    (docs_root / "draft.md").write_text("# Untracked draft\n", encoding="utf-8")
+    subprocess.run(
+        (
+            "git",
+            "-C",
+            str(tmp_path),
+            "add",
+            ".gitignore",
+            "docs/owned.md",
+            "docs/owned.tex",
+        ),
+        check=True,
+    )
+    subprocess.run(
+        ("git", "-C", str(tmp_path), "add", "--force", "docs/prompts/tracked-tex.tex"),
+        check=True,
+    )
+
+    violations = check_document_coverage(tmp_path)
+    specs = discover_document_specs(tmp_path)
+
+    assert tuple((violation.path.as_posix(), violation.message) for violation in violations) == (
+        ("docs/draft.md", "Markdown document has no same-basename tracked LaTeX source"),
+        ("docs/prompts/tracked-tex.tex", "LaTeX document has no same-basename Markdown source"),
+    )
+    assert tuple(spec.markdown_relative_path.as_posix() for spec in specs) == (
+        "docs/draft.md",
+        "docs/owned.md",
+    )
+
+
+
 #### Report each unpaired Markdown or LaTeX document instead of silently omitting it.
 ####
 def test_document_manifest_rejects_unpaired_sources(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess  # nosec B404
@@ -77,19 +78,84 @@ def _is_document_tex(relative_path: Path) -> bool:
 
 
 
+#### Return Git-owned and non-ignored untracked document paths, or None outside an exact repository root.
+####
+def _git_document_source_paths(repository_root: Path) -> tuple[Path, ...] | None:
+    try:
+        root_result = subprocess.run(  # nosec B603 B607
+            ("git", "-C", str(repository_root), "rev-parse", "--show-toplevel"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
+    if root_result.returncode != 0:
+        return None
+    discovered_root = Path(os.fsdecode(root_result.stdout).strip()).resolve()
+    if discovered_root != repository_root.resolve():
+        return None
+    path_result = subprocess.run(  # nosec B603 B607
+        (
+            "git",
+            "-C",
+            str(repository_root),
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            "docs",
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if path_result.returncode != 0:
+        raise RuntimeError("Git document discovery failed")
+    relative_paths = (
+        Path(os.fsdecode(raw_path))
+        for raw_path in path_result.stdout.split(b"\0")
+        if raw_path
+    )
+    return tuple(
+        repository_root / relative_path
+        for relative_path in sorted(relative_paths)
+        if relative_path.suffix in {".md", ".tex"}
+    )
+
+
+
+#### Return document source paths through Git when available, with a synthetic-repository filesystem fallback.
+####
+def _document_source_paths(repository_root: Path) -> tuple[Path, ...]:
+    git_paths = _git_document_source_paths(repository_root)
+    if git_paths is not None:
+        return git_paths
+    docs_root = repository_root / "docs"
+    if not docs_root.is_dir():
+        return ()
+    return tuple(sorted((*docs_root.rglob("*.md"), *docs_root.rglob("*.tex"))))
+
+
+
 #### Return every unpaired substantive Markdown or LaTeX path below docs.
 ####
 def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, ...]:
-    docs_root = repository_root / "docs"
     violations: list[DocumentViolation] = []
-    markdown_paths = tuple(sorted(docs_root.rglob("*.md"))) if docs_root.is_dir() else ()
+    source_paths = _document_source_paths(repository_root)
+    markdown_paths = tuple(path for path in source_paths if path.suffix == ".md")
     tex_paths = tuple(
         path
-        for path in sorted(docs_root.rglob("*.tex"))
+        for path in source_paths
+        if path.suffix == ".tex"
         if _is_document_tex(path.relative_to(repository_root))
-    ) if docs_root.is_dir() else ()
+    )
+    markdown_path_set = frozenset(markdown_paths)
+    tex_path_set = frozenset(tex_paths)
     for markdown_path in markdown_paths:
-        if not markdown_path.with_suffix(".tex").is_file():
+        if markdown_path.with_suffix(".tex") not in tex_path_set:
             violations.append(
                 DocumentViolation(
                     markdown_path.relative_to(repository_root),
@@ -97,7 +163,7 @@ def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, .
                 )
             )
     for tex_path in tex_paths:
-        if not tex_path.with_suffix(".md").is_file():
+        if tex_path.with_suffix(".md") not in markdown_path_set:
             violations.append(
                 DocumentViolation(
                     tex_path.relative_to(repository_root),
@@ -112,7 +178,9 @@ def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, .
 ####
 def discover_document_specs(repository_root: Path) -> tuple[DocumentSpec, ...]:
     specs: list[DocumentSpec] = []
-    for markdown_path in sorted((repository_root / "docs").rglob("*.md")):
+    for markdown_path in _document_source_paths(repository_root):
+        if markdown_path.suffix != ".md":
+            continue
         tex_path = markdown_path.with_suffix(".tex")
         first_line = markdown_path.read_text(encoding="utf-8").splitlines()[0]
         title = re.sub(r"^#\s+", "", first_line)
