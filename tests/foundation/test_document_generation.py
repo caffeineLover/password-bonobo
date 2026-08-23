@@ -76,13 +76,75 @@ def test_document_manifest_honors_git_document_boundary(tmp_path: Path) -> None:
     specs = discover_document_specs(tmp_path)
 
     assert tuple((violation.path.as_posix(), violation.message) for violation in violations) == (
-        ("docs/draft.md", "Markdown document has no same-basename tracked LaTeX source"),
-        ("docs/prompts/tracked-tex.tex", "LaTeX document has no same-basename Markdown source"),
+        ("docs/draft.md", "Markdown document has no same-basename repository-owned LaTeX source"),
+        ("docs/prompts/tracked-tex.tex", "LaTeX document has no same-basename repository-owned Markdown source"),
     )
     assert tuple(spec.markdown_relative_path.as_posix() for spec in specs) == (
         "docs/draft.md",
         "docs/owned.md",
     )
+
+
+
+#### Fail closed when a repository has a Git directory but the Git executable is unavailable.
+####
+def test_document_manifest_requires_git_for_repository_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subprocess.run(("git", "init", "--quiet", str(tmp_path)), check=True)
+    monkeypatch.setenv("PATH", "")
+
+    with pytest.raises(RuntimeError) as captured:
+        check_document_coverage(tmp_path)
+
+    message = str(captured.value)
+    assert "Git executable is unavailable" in message
+    assert str(tmp_path) in message
+    assert "filesystem fallback is disabled" in message
+
+
+
+#### Fail closed when exact-root discovery fails for a linked worktree with Git-file metadata.
+####
+def test_document_manifest_rejects_failed_exact_root_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_root = tmp_path / "repository"
+    linked_root = tmp_path / "linked-root"
+    subprocess.run(("git", "init", "--quiet", str(repository_root)), check=True)
+    subprocess.run(
+        (
+            "git",
+            "-C",
+            str(repository_root),
+            "-c",
+            "user.name=Document Test",
+            "-c",
+            "user.email=document-test@example.invalid",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "baseline",
+        ),
+        check=True,
+    )
+    subprocess.run(
+        ("git", "-C", str(repository_root), "worktree", "add", "--quiet", "--detach", str(linked_root), "HEAD"),
+        check=True,
+    )
+    assert (linked_root / ".git").is_file()
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "missing-git-directory"))
+
+    with pytest.raises(RuntimeError) as captured:
+        discover_document_specs(linked_root)
+
+    message = str(captured.value)
+    assert "Git could not confirm the exact repository root" in message
+    assert str(linked_root) in message
+    assert "filesystem fallback is disabled" in message
 
 
 
@@ -96,8 +158,8 @@ def test_document_manifest_rejects_unpaired_sources(tmp_path: Path) -> None:
     messages = frozenset(violation.message for violation in check_document_coverage(tmp_path))
 
     assert messages == frozenset({
-        "Markdown document has no same-basename tracked LaTeX source",
-        "LaTeX document has no same-basename Markdown source",
+        "Markdown document has no same-basename repository-owned LaTeX source",
+        "LaTeX document has no same-basename repository-owned Markdown source",
     })
 
 

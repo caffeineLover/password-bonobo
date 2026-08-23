@@ -32,6 +32,8 @@ LATEX_WARNING = re.compile(
     r"Label\(s\) may\s+have changed",
     re.IGNORECASE,
 )
+MISSING_TEX_MESSAGE = "Markdown document has no same-basename repository-owned LaTeX source"
+MISSING_MARKDOWN_MESSAGE = "LaTeX document has no same-basename repository-owned Markdown source"
 
 
 
@@ -78,9 +80,11 @@ def _is_document_tex(relative_path: Path) -> bool:
 
 
 
-#### Return Git-owned and non-ignored untracked document paths, or None outside an exact repository root.
+#### Return Git-owned and non-ignored untracked paths, failing closed when repository metadata requires Git.
 ####
 def _git_document_source_paths(repository_root: Path) -> tuple[Path, ...] | None:
+    git_metadata_path = repository_root / ".git"
+    has_git_metadata = git_metadata_path.is_file() or git_metadata_path.is_dir()
     try:
         root_result = subprocess.run(  # nosec B603 B607
             ("git", "-C", str(repository_root), "rev-parse", "--show-toplevel"),
@@ -88,32 +92,58 @@ def _git_document_source_paths(repository_root: Path) -> tuple[Path, ...] | None
             stderr=subprocess.DEVNULL,
             check=False,
         )
-    except FileNotFoundError:
+    except OSError as error:
+        if has_git_metadata:
+            raise RuntimeError(
+                f"Git executable is unavailable for repository document discovery at {repository_root}; "
+                ".git metadata is present, so filesystem fallback is disabled.  Install Git or repair PATH."
+            ) from error
         return None
     if root_result.returncode != 0:
+        if has_git_metadata:
+            raise RuntimeError(
+                f"Git could not confirm the exact repository root at {repository_root} "
+                f"(rev-parse status {root_result.returncode}); .git metadata is present, so filesystem fallback is "
+                "disabled.  Repair the repository metadata or Git configuration."
+            )
         return None
     discovered_root = Path(os.fsdecode(root_result.stdout).strip()).resolve()
     if discovered_root != repository_root.resolve():
+        if has_git_metadata:
+            raise RuntimeError(
+                f"Git resolved {discovered_root} instead of the supplied repository root {repository_root}; "
+                ".git metadata is present, so filesystem fallback is disabled.  Repair the repository metadata "
+                "or Git configuration."
+            )
         return None
-    path_result = subprocess.run(  # nosec B603 B607
-        (
-            "git",
-            "-C",
-            str(repository_root),
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "-z",
-            "--",
-            "docs",
-        ),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
+    try:
+        path_result = subprocess.run(  # nosec B603 B607
+            (
+                "git",
+                "-C",
+                str(repository_root),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+                "--",
+                "docs",
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError as error:
+        raise RuntimeError(
+            f"Git executable is unavailable while listing repository-owned documents at {repository_root}; "
+            "filesystem fallback is disabled for a confirmed Git repository.  Restore Git and retry."
+        ) from error
     if path_result.returncode != 0:
-        raise RuntimeError("Git document discovery failed")
+        raise RuntimeError(
+            f"Git could not list repository-owned documents at {repository_root} "
+            f"(ls-files status {path_result.returncode}); repair the repository or Git configuration and retry."
+        )
     relative_paths = (
         Path(os.fsdecode(raw_path))
         for raw_path in path_result.stdout.split(b"\0")
@@ -127,7 +157,7 @@ def _git_document_source_paths(repository_root: Path) -> tuple[Path, ...] | None
 
 
 
-#### Return document source paths through Git when available, with a synthetic-repository filesystem fallback.
+#### Return document source paths through Git, with filesystem fallback only for metadata-free synthetic roots.
 ####
 def _document_source_paths(repository_root: Path) -> tuple[Path, ...]:
     git_paths = _git_document_source_paths(repository_root)
@@ -159,7 +189,7 @@ def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, .
             violations.append(
                 DocumentViolation(
                     markdown_path.relative_to(repository_root),
-                    "Markdown document has no same-basename tracked LaTeX source",
+                    MISSING_TEX_MESSAGE,
                 )
             )
     for tex_path in tex_paths:
@@ -167,7 +197,7 @@ def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, .
             violations.append(
                 DocumentViolation(
                     tex_path.relative_to(repository_root),
-                    "LaTeX document has no same-basename Markdown source",
+                    MISSING_MARKDOWN_MESSAGE,
                 )
             )
     return tuple(sorted(violations, key=lambda violation: violation.path.as_posix()))
@@ -333,7 +363,7 @@ def generate_documents(
         coverage_violations = tuple(
             violation
             for violation in coverage_violations
-            if violation.message != "Markdown document has no same-basename tracked LaTeX source"
+            if violation.message != MISSING_TEX_MESSAGE
         )
     if coverage_violations:
         details = "; ".join(f"{item.path}: {item.message}" for item in coverage_violations)
