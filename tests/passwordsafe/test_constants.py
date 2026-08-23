@@ -106,3 +106,76 @@ def test_resource_limits_have_approved_immutable_defaults() -> None:
     assert limits.io_chunk_bytes == 65_536
     with pytest.raises(FrozenInstanceError):
         limits.__setattr__("max_records", 1)
+
+
+
+#### Accept a caller policy only when every value stays within the approved ceiling.
+####
+#### A caller may narrow all budgets at once, but the exact defaults remain the
+#### widest valid policy and therefore establish each construction boundary.
+####
+def test_resource_limits_accept_exact_approved_ceilings() -> None:
+    limits = ResourceLimits(
+        max_iterations=10_000_000,
+        max_records=1_000_000,
+        max_fields=2_000_000,
+        max_inline_payload_bytes=1_048_576,
+        max_decoded_text_bytes=16_777_216,
+        io_chunk_bytes=65_536,
+    )
+
+    assert limits == ResourceLimits()
+
+
+
+#### Reject nonpositive and widened iteration budgets at the construction boundary.
+####
+def test_resource_limits_reject_invalid_iteration_budget() -> None:
+    for value in (0, -1, 10_000_001):
+        with pytest.raises(ValueError, match="max_iterations"):
+            ResourceLimits(max_iterations=value)
+
+
+
+#### Reject nonpositive and widened record budgets at the construction boundary.
+####
+def test_resource_limits_reject_invalid_record_budget() -> None:
+    for value in (0, -1, 1_000_001):
+        with pytest.raises(ValueError, match="max_records"):
+            ResourceLimits(max_records=value)
+
+
+
+#### Reject nonpositive and widened field budgets at the construction boundary.
+####
+def test_resource_limits_reject_invalid_field_budget() -> None:
+    for value in (0, -1, 2_000_001):
+        with pytest.raises(ValueError, match="max_fields"):
+            ResourceLimits(max_fields=value)
+
+
+
+#### Reject nonpositive and widened inline payload budgets at construction.
+####
+def test_resource_limits_reject_invalid_inline_payload_budget() -> None:
+    for value in (0, -1, 1_048_577):
+        with pytest.raises(ValueError, match="max_inline_payload_bytes"):
+            ResourceLimits(max_inline_payload_bytes=value)
+
+
+
+#### Reject nonpositive and widened decoded-text budgets at construction.
+####
+def test_resource_limits_reject_invalid_decoded_text_budget() -> None:
+    for value in (0, -1, 16_777_217):
+        with pytest.raises(ValueError, match="max_decoded_text_bytes"):
+            ResourceLimits(max_decoded_text_bytes=value)
+
+
+
+#### Reject nonpositive and widened chunk budgets so streaming always progresses.
+####
+def test_resource_limits_reject_invalid_io_chunk_budget() -> None:
+    for value in (0, -1, 65_537):
+        with pytest.raises(ValueError, match="io_chunk_bytes"):
+            ResourceLimits(io_chunk_bytes=value)

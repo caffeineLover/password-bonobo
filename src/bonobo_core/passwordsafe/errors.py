@@ -118,6 +118,49 @@ class StorageReason(FailureReason):
 
 
 
+_FAILURE_MESSAGES: dict[FailureReason, str] = {
+    AuthenticationReason.PASSWORD_CHECK_FAILED: "vault authentication failed",
+    AuthenticationReason.INVALID_PASSWORD_CHECK: "vault authentication failed",
+    IntegrityReason.HMAC_MISMATCH: "vault integrity validation failed",
+    IntegrityReason.UNEXPECTED_EOF: "vault integrity validation failed",
+    MalformedReason.INVALID_FIELD: "vault content is malformed",
+    MalformedReason.MISSING_MANDATORY_FIELD: "vault content is malformed",
+    MalformedReason.INVALID_ENVELOPE: "vault content is malformed",
+    UnsupportedFormatReason.UNSUPPORTED_VERSION: "vault format is unsupported",
+    UnsupportedFormatReason.UNSUPPORTED_MANDATORY_CONTENT: "vault format is unsupported",
+    IncompatibleExportReason.UNREPRESENTABLE_FIELD: "vault export is incompatible",
+    IncompatibleExportReason.TARGET_VERSION_UNSUPPORTED: "vault export is incompatible",
+    ResourceLimitReason.MAX_ITERATIONS: "vault resource limit exceeded",
+    ResourceLimitReason.MAX_RECORDS: "vault resource limit exceeded",
+    ResourceLimitReason.MAX_FIELDS: "vault resource limit exceeded",
+    ResourceLimitReason.MAX_INLINE_PAYLOAD_BYTES: "vault resource limit exceeded",
+    ResourceLimitReason.MAX_DECODED_TEXT_BYTES: "vault resource limit exceeded",
+    CryptoBackendReason.UNAVAILABLE: "cryptographic backend is unavailable",
+    CryptoBackendReason.INVALID_ABI: "cryptographic backend is unavailable",
+    CryptoBackendReason.SELF_TEST_FAILED: "cryptographic backend is unavailable",
+    OperationReason.PROTECTED_RECORD: "record is protected",
+    OperationReason.STALE_REVISION: "vault revision is stale",
+    OperationReason.UNSAVED_CHANGES: "vault has unsaved changes",
+    OperationReason.EXTERNAL_MODIFICATION: "vault changed externally",
+    OperationReason.RECOVERY_AVAILABLE: "encrypted recovery is available",
+    StorageReason.PREPARATION_FAILED: "vault storage operation failed",
+    StorageReason.PUBLICATION_FAILED: "vault storage operation failed",
+    StorageReason.VERIFICATION_FAILED: "vault storage operation failed",
+}
+
+
+
+#### Validate that a leaf receives only its designated closed reason family.
+####
+#### Runtime checks protect untyped callers and deserialized adapters, whose values
+#### bypass static annotations and must not select another leaf's remediation code.
+####
+def _require_reason(reason: FailureReason, expected: type[FailureReason], label: str) -> None:
+    if not isinstance(reason, expected):
+        raise TypeError(f"{label} reason must use its designated reason enum")
+
+
+
 #### Carry safe stage and reason metadata for all PasswordSafe core failures.
 ####
 #### The generic message is selected only by leaf classes.  Callers supply their
@@ -130,13 +173,20 @@ class PasswordSafeError(Exception):
 
 
 
-    #### Initialize one safe failure without retaining arbitrary diagnostic data.
+    #### Initialize one safe failure from closed stage and reason taxonomy values.
     ####
-    def __init__(self, stage: FailureStage, reason: FailureReason, message: str) -> None:
+    #### Direct construction remains safe for framework boundaries because callers
+    #### cannot supply a message; the stored text is selected only from the map.
+    ####
+    def __init__(self, stage: FailureStage, reason: FailureReason) -> None:
+        if not isinstance(stage, FailureStage):
+            raise TypeError("failure stage must use the FailureStage enum")
+        if not isinstance(reason, FailureReason):
+            raise TypeError("failure reason must use a closed reason enum")
         self.stage = stage
         self.reason = reason.value
-        self._message = message
-        super().__init__(message)
+        self._message = _FAILURE_MESSAGES[reason]
+        super().__init__(self._message)
 
 
 
@@ -156,7 +206,8 @@ class AuthenticationError(PasswordSafeError):
     #### Initialize an authentication failure at the fixed authentication stage.
     ####
     def __init__(self, reason: AuthenticationReason) -> None:
-        super().__init__(FailureStage.AUTHENTICATE, reason, "vault authentication failed")
+        _require_reason(reason, AuthenticationReason, "authentication")
+        super().__init__(FailureStage.AUTHENTICATE, reason)
 
 
 
@@ -169,7 +220,8 @@ class IntegrityError(PasswordSafeError):
     #### Initialize an integrity failure at the fixed authentication stage.
     ####
     def __init__(self, reason: IntegrityReason) -> None:
-        super().__init__(FailureStage.AUTHENTICATE, reason, "vault integrity validation failed")
+        _require_reason(reason, IntegrityReason, "integrity")
+        super().__init__(FailureStage.AUTHENTICATE, reason)
 
 
 
@@ -182,7 +234,8 @@ class MalformedVaultError(PasswordSafeError):
     #### Initialize a malformed-content failure at the validation stage.
     ####
     def __init__(self, reason: MalformedReason) -> None:
-        super().__init__(FailureStage.VALIDATE, reason, "vault content is malformed")
+        _require_reason(reason, MalformedReason, "malformed vault")
+        super().__init__(FailureStage.VALIDATE, reason)
 
 
 
@@ -195,7 +248,8 @@ class UnsupportedFormatError(PasswordSafeError):
     #### Initialize an unsupported-format failure at the validation stage.
     ####
     def __init__(self, reason: UnsupportedFormatReason) -> None:
-        super().__init__(FailureStage.VALIDATE, reason, "vault format is unsupported")
+        _require_reason(reason, UnsupportedFormatReason, "unsupported format")
+        super().__init__(FailureStage.VALIDATE, reason)
 
 
 
@@ -208,7 +262,8 @@ class IncompatibleExportError(PasswordSafeError):
     #### Initialize an incompatible-export failure at the serialization stage.
     ####
     def __init__(self, reason: IncompatibleExportReason) -> None:
-        super().__init__(FailureStage.SERIALIZE, reason, "vault export is incompatible")
+        _require_reason(reason, IncompatibleExportReason, "incompatible export")
+        super().__init__(FailureStage.SERIALIZE, reason)
 
 
 
@@ -221,7 +276,8 @@ class ResourceLimitError(PasswordSafeError):
     #### Initialize a resource-limit failure at the fixed envelope stage.
     ####
     def __init__(self, reason: ResourceLimitReason) -> None:
-        super().__init__(FailureStage.ENVELOPE, reason, "vault resource limit exceeded")
+        _require_reason(reason, ResourceLimitReason, "resource limit")
+        super().__init__(FailureStage.ENVELOPE, reason)
 
 
 
@@ -234,7 +290,8 @@ class CryptoBackendError(PasswordSafeError):
     #### Initialize a crypto-backend failure at the authentication stage.
     ####
     def __init__(self, reason: CryptoBackendReason) -> None:
-        super().__init__(FailureStage.AUTHENTICATE, reason, "cryptographic backend is unavailable")
+        _require_reason(reason, CryptoBackendReason, "crypto backend")
+        super().__init__(FailureStage.AUTHENTICATE, reason)
 
 
 
@@ -247,7 +304,7 @@ class ProtectedRecordError(PasswordSafeError):
     #### Initialize the fixed protected-record mutation failure.
     ####
     def __init__(self) -> None:
-        super().__init__(FailureStage.MUTATE, OperationReason.PROTECTED_RECORD, "record is protected")
+        super().__init__(FailureStage.MUTATE, OperationReason.PROTECTED_RECORD)
 
 
 
@@ -260,7 +317,7 @@ class StaleRevisionError(PasswordSafeError):
     #### Initialize the fixed stale-revision mutation failure.
     ####
     def __init__(self) -> None:
-        super().__init__(FailureStage.MUTATE, OperationReason.STALE_REVISION, "vault revision is stale")
+        super().__init__(FailureStage.MUTATE, OperationReason.STALE_REVISION)
 
 
 
@@ -273,7 +330,7 @@ class UnsavedChangesError(PasswordSafeError):
     #### Initialize the fixed unsaved-changes lock failure.
     ####
     def __init__(self) -> None:
-        super().__init__(FailureStage.LOCK, OperationReason.UNSAVED_CHANGES, "vault has unsaved changes")
+        super().__init__(FailureStage.LOCK, OperationReason.UNSAVED_CHANGES)
 
 
 
@@ -286,7 +343,7 @@ class ExternalModificationError(PasswordSafeError):
     #### Initialize the fixed external-modification publication failure.
     ####
     def __init__(self) -> None:
-        super().__init__(FailureStage.PUBLISH, OperationReason.EXTERNAL_MODIFICATION, "vault changed externally")
+        super().__init__(FailureStage.PUBLISH, OperationReason.EXTERNAL_MODIFICATION)
 
 
 
@@ -299,7 +356,8 @@ class StorageError(PasswordSafeError):
     #### Initialize a storage failure at the fixed publication stage.
     ####
     def __init__(self, reason: StorageReason) -> None:
-        super().__init__(FailureStage.PUBLISH, reason, "vault storage operation failed")
+        _require_reason(reason, StorageReason, "storage")
+        super().__init__(FailureStage.PUBLISH, reason)
 
 
 
@@ -312,4 +370,4 @@ class RecoveryAvailableError(PasswordSafeError):
     #### Initialize the fixed recovery-availability notification category.
     ####
     def __init__(self) -> None:
-        super().__init__(FailureStage.RECOVER, OperationReason.RECOVERY_AVAILABLE, "encrypted recovery is available")
+        super().__init__(FailureStage.RECOVER, OperationReason.RECOVERY_AVAILABLE)

@@ -4,6 +4,12 @@ Failures are intentionally structured for callers while avoiding decrypted data,
 paths, record identities, and platform exception text.
 """
 
+from collections.abc import Callable
+from typing import cast
+
+import pytest
+
+import bonobo_core.passwordsafe as passwordsafe
 from bonobo_core.passwordsafe.errors import (
     AuthenticationError,
     AuthenticationReason,
@@ -17,6 +23,7 @@ from bonobo_core.passwordsafe.errors import (
     IntegrityReason,
     MalformedReason,
     MalformedVaultError,
+    PasswordSafeError,
     ProtectedRecordError,
     RecoveryAvailableError,
     ResourceLimitError,
@@ -55,23 +62,81 @@ def test_integrity_error_is_typed_and_safe() -> None:
 ####
 def test_leaf_failures_expose_stable_safe_metadata() -> None:
     errors = (
-        AuthenticationError(AuthenticationReason.PASSWORD_CHECK_FAILED),
-        MalformedVaultError(MalformedReason.INVALID_FIELD),
-        UnsupportedFormatError(UnsupportedFormatReason.UNSUPPORTED_VERSION),
-        IncompatibleExportError(IncompatibleExportReason.UNREPRESENTABLE_FIELD),
-        ResourceLimitError(ResourceLimitReason.MAX_ITERATIONS),
-        CryptoBackendError(CryptoBackendReason.UNAVAILABLE),
-        ProtectedRecordError(),
-        StaleRevisionError(),
-        UnsavedChangesError(),
-        ExternalModificationError(),
-        StorageError(StorageReason.PUBLICATION_FAILED),
-        RecoveryAvailableError(),
+        (AuthenticationError(AuthenticationReason.PASSWORD_CHECK_FAILED), FailureStage.AUTHENTICATE,
+         "password-check-failed", "vault authentication failed"),
+        (IntegrityError(IntegrityReason.HMAC_MISMATCH), FailureStage.AUTHENTICATE, "hmac-mismatch",
+         "vault integrity validation failed"),
+        (MalformedVaultError(MalformedReason.INVALID_FIELD), FailureStage.VALIDATE, "invalid-field",
+         "vault content is malformed"),
+        (UnsupportedFormatError(UnsupportedFormatReason.UNSUPPORTED_VERSION), FailureStage.VALIDATE,
+         "unsupported-version", "vault format is unsupported"),
+        (IncompatibleExportError(IncompatibleExportReason.UNREPRESENTABLE_FIELD), FailureStage.SERIALIZE,
+         "unrepresentable-field", "vault export is incompatible"),
+        (ResourceLimitError(ResourceLimitReason.MAX_ITERATIONS), FailureStage.ENVELOPE, "max-iterations",
+         "vault resource limit exceeded"),
+        (CryptoBackendError(CryptoBackendReason.UNAVAILABLE), FailureStage.AUTHENTICATE, "unavailable",
+         "cryptographic backend is unavailable"),
+        (ProtectedRecordError(), FailureStage.MUTATE, "protected-record", "record is protected"),
+        (StaleRevisionError(), FailureStage.MUTATE, "stale-revision", "vault revision is stale"),
+        (UnsavedChangesError(), FailureStage.LOCK, "unsaved-changes", "vault has unsaved changes"),
+        (ExternalModificationError(), FailureStage.PUBLISH, "external-modification", "vault changed externally"),
+        (StorageError(StorageReason.PUBLICATION_FAILED), FailureStage.PUBLISH, "publication-failed",
+         "vault storage operation failed"),
+        (RecoveryAvailableError(), FailureStage.RECOVER, "recovery-available", "encrypted recovery is available"),
     )
 
-    for error in errors:
-        assert isinstance(error.stage, FailureStage)
-        assert error.reason
-        assert str(error)
+    for error, stage, reason, message in errors:
+        assert error.stage is stage
+        assert error.reason == reason
+        assert str(error) == message
         assert "fabricated-secret" not in str(error)
         assert "fabricated-secret" not in repr(error)
+
+
+
+#### Refuse a reason enum from the wrong leaf family at the runtime boundary.
+####
+def test_leaf_failures_reject_wrong_reason_family() -> None:
+    wrong_reason = cast(AuthenticationReason, IntegrityReason.HMAC_MISMATCH)
+
+    with pytest.raises(TypeError, match="authentication reason"):
+        AuthenticationError(wrong_reason)
+
+
+
+#### Keep arbitrary constructor text out of a base error's args, str, and repr.
+####
+#### The dynamic call intentionally models an untyped caller attempting to pass a
+#### path and secret as a legacy message argument; that call must be rejected.
+####
+def test_base_error_rejects_arbitrary_message_and_remains_safe() -> None:
+    fabricated_text = "E:/fabricated/path/fabricated-secret"
+    unsafe_constructor = cast(Callable[..., PasswordSafeError], PasswordSafeError)
+
+    with pytest.raises(TypeError) as caught:
+        unsafe_constructor(FailureStage.PARSE, IntegrityReason.HMAC_MISMATCH, fabricated_text)
+
+    base_error = PasswordSafeError(FailureStage.PARSE, IntegrityReason.HMAC_MISMATCH)
+
+    assert fabricated_text not in str(caught.value)
+    assert fabricated_text not in repr(caught.value)
+    assert fabricated_text not in str(base_error)
+    assert fabricated_text not in repr(base_error)
+    assert all(fabricated_text not in str(argument) for argument in base_error.args)
+
+
+
+#### Export all stage and reason types required to construct public leaf failures.
+####
+def test_public_package_exports_the_closed_failure_taxonomy() -> None:
+    error = passwordsafe.AuthenticationError(passwordsafe.AuthenticationReason.PASSWORD_CHECK_FAILED)
+
+    assert error.stage is passwordsafe.FailureStage.AUTHENTICATE
+    assert passwordsafe.IntegrityReason.HMAC_MISMATCH.value == "hmac-mismatch"
+    assert passwordsafe.MalformedReason.INVALID_FIELD.value == "invalid-field"
+    assert passwordsafe.UnsupportedFormatReason.UNSUPPORTED_VERSION.value == "unsupported-version"
+    assert passwordsafe.IncompatibleExportReason.UNREPRESENTABLE_FIELD.value == "unrepresentable-field"
+    assert passwordsafe.ResourceLimitReason.MAX_FIELDS.value == "max-fields"
+    assert passwordsafe.CryptoBackendReason.UNAVAILABLE.value == "unavailable"
+    assert passwordsafe.OperationReason.STALE_REVISION.value == "stale-revision"
+    assert passwordsafe.StorageReason.PUBLICATION_FAILED.value == "publication-failed"

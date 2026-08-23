@@ -4,6 +4,9 @@ CPython cannot guarantee physical zeroization of every temporary immutable
 object, so these owners minimize copies and wipe their mutable storage.
 """
 
+from collections.abc import Callable
+from typing import cast
+
 import pytest
 
 from bonobo_core.passwordsafe.secrets import SecretBuffer, SecretClosedError, SecretLease
@@ -91,3 +94,43 @@ def test_secret_lease_has_independent_bounded_lifetime() -> None:
 def test_secret_lease_enforces_its_explicit_bound() -> None:
     with pytest.raises(ValueError, match="secret lease exceeds its byte limit"):
         SecretLease.from_bytes(b"fabricated-secret", max_bytes=1)
+
+
+
+#### Keep source storage intact when a separately owned lease closes.
+####
+#### This uses an adopted bytearray rather than only a borrowed value so the test
+#### proves a lease close cannot wipe the source owner's exact mutable storage.
+####
+def test_secret_lease_close_does_not_wipe_source_storage() -> None:
+    source_storage = bytearray(b"fabricated-secret")
+    source = SecretBuffer.take_ownership(source_storage)
+    lease = SecretLease.copy_of(source, max_bytes=64)
+
+    lease.close()
+
+    assert source_storage == bytearray(b"fabricated-secret")
+    assert bytes(source.borrow()) == b"fabricated-secret"
+    source.close()
+
+
+
+#### Disallow direct construction so callers cannot adopt shared or unbounded storage.
+####
+def test_secret_lease_constructor_cannot_bypass_copy_or_bound() -> None:
+    shared_storage = bytearray(b"fabricated-secret")
+    unsafe_constructor = cast(Callable[..., SecretLease], SecretLease)
+
+    with pytest.raises(TypeError):
+        unsafe_constructor(shared_storage)
+
+    assert shared_storage == bytearray(b"fabricated-secret")
+
+
+
+#### Reject zero, negative, and noninteger lease maxima before copying secret data.
+####
+def test_secret_lease_requires_a_finite_positive_maximum() -> None:
+    for maximum in (0, -1, 1.5, 1_048_577):
+        with pytest.raises(ValueError, match="secret lease byte limit"):
+            SecretLease.from_bytes(b"fabricated-secret", max_bytes=maximum)  # type: ignore[arg-type]

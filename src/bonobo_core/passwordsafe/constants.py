@@ -25,6 +25,12 @@ FIELD_TYPE_BYTES: Final[int] = 1
 FIELD_HEADER_BYTES: Final[int] = FIELD_LENGTH_BYTES + FIELD_TYPE_BYTES
 FIELD_FIRST_BLOCK_DATA_BYTES: Final[int] = BLOCK_BYTES - FIELD_HEADER_BYTES
 MINIMUM_ITERATIONS: Final[int] = 262_144
+MAX_ITERATIONS: Final[int] = 10_000_000
+MAX_RECORDS: Final[int] = 1_000_000
+MAX_FIELDS: Final[int] = 2_000_000
+MAX_INLINE_PAYLOAD_BYTES: Final[int] = 1_048_576
+MAX_DECODED_TEXT_BYTES: Final[int] = 16_777_216
+MAX_IO_CHUNK_BYTES: Final[int] = 65_536
 
 
 
@@ -86,12 +92,32 @@ CURRENT_FORMAT_VERSION: Final[FormatVersion] = FormatVersion.from_uint16(0x0311)
 ####
 @dataclass(frozen=True, slots=True)
 class ResourceLimits:
-    max_iterations: int = 10_000_000
-    max_records: int = 1_000_000
-    max_fields: int = 2_000_000
-    max_inline_payload_bytes: int = 1_048_576
-    max_decoded_text_bytes: int = 16_777_216
-    io_chunk_bytes: int = 65_536
+    max_iterations: int = MAX_ITERATIONS
+    max_records: int = MAX_RECORDS
+    max_fields: int = MAX_FIELDS
+    max_inline_payload_bytes: int = MAX_INLINE_PAYLOAD_BYTES
+    max_decoded_text_bytes: int = MAX_DECODED_TEXT_BYTES
+    io_chunk_bytes: int = MAX_IO_CHUNK_BYTES
+
+
+
+    #### Reject budgets that would disable progress or weaken approved resource ceilings.
+    ####
+    #### Parser callers may supply lower limits, but none may replace a structural
+    #### ceiling with zero, a negative number, or a value beyond the reviewed default.
+    ####
+    def __post_init__(self) -> None:
+        limits: tuple[tuple[str, int, int], ...] = (
+            ("max_iterations", self.max_iterations, MAX_ITERATIONS),
+            ("max_records", self.max_records, MAX_RECORDS),
+            ("max_fields", self.max_fields, MAX_FIELDS),
+            ("max_inline_payload_bytes", self.max_inline_payload_bytes, MAX_INLINE_PAYLOAD_BYTES),
+            ("max_decoded_text_bytes", self.max_decoded_text_bytes, MAX_DECODED_TEXT_BYTES),
+            ("io_chunk_bytes", self.io_chunk_bytes, MAX_IO_CHUNK_BYTES),
+        )
+        for name, value, ceiling in limits:
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 < value <= ceiling:
+                raise ValueError(f"{name} must be a positive integer no greater than {ceiling}")
 
 
 

@@ -5,7 +5,23 @@ guarantee physical zeroization of immutable temporary values or allocator copies
 """
 
 from types import TracebackType
-from typing import Self
+from typing import Final, Self
+
+
+
+MAX_SECRET_LEASE_BYTES: Final[int] = 1_048_576
+_LEASE_CONSTRUCTION_TOKEN: Final[object] = object()
+
+
+
+#### Validate a lease bound before reading or copying a source secret.
+####
+#### A caller can request a shorter lease but cannot turn this explicit access API
+#### into an unbounded materialization path by supplying an oversized maximum.
+####
+def _validate_lease_bound(max_bytes: int) -> None:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 0 < max_bytes <= MAX_SECRET_LEASE_BYTES:
+        raise ValueError("secret lease byte limit must be a positive approved integer")
 
 
 
@@ -140,12 +156,14 @@ class SecretLease:
 
 
 
-    #### Initialize a lease by adopting its distinct mutable secret storage.
+    #### Initialize a lease from a factory-created distinct mutable secret copy.
     ####
-    #### This narrow constructor prevents a lease from sharing a session owner's
-    #### buffer.  Public constructors create the required separate copy first.
+    #### The unforgeable module token keeps direct construction outside the public
+    #### API, preventing callers from adopting shared or unbounded secret storage.
     ####
-    def __init__(self, data: bytearray) -> None:
+    def __init__(self, data: bytearray, *, _token: object) -> None:
+        if _token is not _LEASE_CONSTRUCTION_TOKEN:
+            raise TypeError("secret leases must be created through bounded factories")
         self._secret = SecretBuffer.take_ownership(data)
 
 
@@ -157,11 +175,10 @@ class SecretLease:
     ####
     @classmethod
     def from_bytes(cls, data: bytes, *, max_bytes: int = 1_048_576) -> Self:
-        if max_bytes < 0:
-            raise ValueError("secret lease byte limit must be nonnegative")
+        _validate_lease_bound(max_bytes)
         if len(data) > max_bytes:
             raise ValueError("secret lease exceeds its byte limit")
-        return cls(bytearray(data))
+        return cls(bytearray(data), _token=_LEASE_CONSTRUCTION_TOKEN)
 
 
 
@@ -172,12 +189,11 @@ class SecretLease:
     ####
     @classmethod
     def copy_of(cls, source: SecretBuffer, *, max_bytes: int = 1_048_576) -> Self:
+        _validate_lease_bound(max_bytes)
         data = source.borrow()
-        if max_bytes < 0:
-            raise ValueError("secret lease byte limit must be nonnegative")
         if len(data) > max_bytes:
             raise ValueError("secret lease exceeds its byte limit")
-        return cls(bytearray(data))
+        return cls(bytearray(data), _token=_LEASE_CONSTRUCTION_TOKEN)
 
 
 
