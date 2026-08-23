@@ -302,6 +302,8 @@ class VaultDocument:
     revision: RevisionToken = field(repr=False, compare=False)
     warnings: tuple[PreservationWarning, ...]
     _closed: bool = field(default=False, init=False, repr=False, compare=False)
+    _closing: bool = field(default=False, init=False, repr=False, compare=False)
+    _pending_payloads: tuple[FieldPayload, ...] = field(default=(), init=False, repr=False, compare=False)
 
 
 
@@ -322,6 +324,10 @@ class VaultDocument:
             isinstance(item, PreservationWarning) for item in self.warnings
         ):
             raise TypeError("warnings must be an immutable PreservationWarning tuple")
+        distinct_payloads: dict[int, FieldPayload] = {}
+        for raw_field in _iter_fields(self):
+            distinct_payloads.setdefault(id(raw_field.payload), raw_field.payload)
+        object.__setattr__(self, "_pending_payloads", tuple(distinct_payloads.values()))
 
 
 
@@ -419,18 +425,20 @@ class VaultDocument:
     def close(self) -> None:
         if self._closed:
             return
-        object.__setattr__(self, "_closed", True)
-        closed_payloads: set[int] = set()
+        object.__setattr__(self, "_closing", True)
+        pending_payloads: list[FieldPayload] = []
         first_failure: BaseException | None = None
-        for raw_field in _iter_fields(self):
-            identity = id(raw_field.payload)
-            if identity not in closed_payloads:
-                closed_payloads.add(identity)
-                try:
-                    raw_field.payload.close()
-                except BaseException as error:
-                    if first_failure is None:
-                        first_failure = error
+        for payload in self._pending_payloads:
+            try:
+                payload.close()
+            except BaseException as error:
+                pending_payloads.append(payload)
+                if first_failure is None:
+                    first_failure = error
+        object.__setattr__(self, "_pending_payloads", tuple(pending_payloads))
+        if not pending_payloads:
+            object.__setattr__(self, "_closed", True)
+            object.__setattr__(self, "_closing", False)
         if first_failure is not None:
             raise first_failure
 
@@ -439,7 +447,7 @@ class VaultDocument:
     #### Reject operations after document-owned payloads may have been wiped.
     ####
     def _require_open(self) -> None:
-        if self._closed:
+        if self._closed or self._closing:
             raise PayloadClosedError()
 
 
@@ -640,52 +648,70 @@ def _payloads_equal(first: FieldPayload, second: FieldPayload, chunk_size: int) 
     second_done = False
     first_observed = 0
     second_observed = 0
+    equal = True
     try:
-        while True:
+        while not (first_done and second_done):
             if first_offset == len(first_buffer) and not first_done:
                 try:
                     chunk = next(first_iterator)
                 except StopIteration:
                     first_done = True
                 else:
-                    if not 0 < len(chunk) <= chunk_size:
-                        return False
-                    first_observed += len(chunk)
-                    if first_observed > first.length:
-                        return False
-                    first_buffer = bytes(chunk)
-                    first_offset = 0
+                    chunk_length = len(chunk)
+                    if not 0 < chunk_length <= chunk_size:
+                        equal = False
+                        first_done = True
+                    else:
+                        first_observed += chunk_length
+                        if first_observed > first.length:
+                            equal = False
+                        if first_observed > first.length + chunk_size:
+                            first_done = True
+                        else:
+                            first_buffer = bytes(chunk)
+                            first_offset = 0
             if second_offset == len(second_buffer) and not second_done:
                 try:
                     chunk = next(second_iterator)
                 except StopIteration:
                     second_done = True
                 else:
-                    if not 0 < len(chunk) <= chunk_size:
-                        return False
-                    second_observed += len(chunk)
-                    if second_observed > second.length:
-                        return False
-                    second_buffer = bytes(chunk)
-                    second_offset = 0
-            if first_done or second_done:
-                return (
-                    first_done
-                    and second_done
-                    and first_offset == len(first_buffer)
-                    and second_offset == len(second_buffer)
-                    and first_observed == first.length
-                    and second_observed == second.length
-                )
-            compared = min(len(first_buffer) - first_offset, len(second_buffer) - second_offset)
-            if compared <= 0:
-                return False
-            if first_buffer[first_offset:first_offset + compared] != second_buffer[
-                second_offset:second_offset + compared
-            ]:
-                return False
-            first_offset += compared
-            second_offset += compared
+                    chunk_length = len(chunk)
+                    if not 0 < chunk_length <= chunk_size:
+                        equal = False
+                        second_done = True
+                    else:
+                        second_observed += chunk_length
+                        if second_observed > second.length:
+                            equal = False
+                        if second_observed > second.length + chunk_size:
+                            second_done = True
+                        else:
+                            second_buffer = bytes(chunk)
+                            second_offset = 0
+            first_available = len(first_buffer) - first_offset
+            second_available = len(second_buffer) - second_offset
+            if first_available and second_available:
+                compared = min(first_available, second_available)
+                if first_buffer[first_offset:first_offset + compared] != second_buffer[
+                    second_offset:second_offset + compared
+                ]:
+                    equal = False
+                first_offset += compared
+                second_offset += compared
+            elif first_available and second_done:
+                equal = False
+                first_offset = len(first_buffer)
+            elif second_available and first_done:
+                equal = False
+                second_offset = len(second_buffer)
+        return (
+            equal
+            and first_observed == first.length
+            and second_observed == second.length
+            and first_offset == len(first_buffer)
+            and second_offset == len(second_buffer)
+        )
     finally:
         _close_iterator(first_iterator)
         _close_iterator(second_iterator)

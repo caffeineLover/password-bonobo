@@ -140,7 +140,7 @@ class _ExclusivePayloadOwner:
 #### operations never copy plaintext and cannot race the final deterministic wipe.
 ####
 class _InlineStorage:
-    __slots__ = ("_data", "_leases", "_lock")
+    __slots__ = ("_closing", "_data", "_leases", "_lock")
 
 
 
@@ -149,6 +149,7 @@ class _InlineStorage:
     def __init__(self, data: bytearray) -> None:
         self._data = data
         self._leases = 1
+        self._closing = False
         self._lock = RLock()
 
 
@@ -165,7 +166,7 @@ class _InlineStorage:
     ####
     def retain(self) -> None:
         with self._lock:
-            if self._leases == 0:
+            if self._leases == 0 or self._closing:
                 raise PayloadClosedError()
             self._leases += 1
 
@@ -175,7 +176,7 @@ class _InlineStorage:
     ####
     def borrow(self) -> memoryview[int]:
         with self._lock:
-            if self._leases == 0:
+            if self._leases == 0 or self._closing:
                 raise PayloadClosedError()
             return memoryview(self._data).toreadonly()
 
@@ -187,9 +188,13 @@ class _InlineStorage:
         with self._lock:
             if self._leases <= 0:
                 return
-            self._leases -= 1
-            if self._leases == 0:
-                self._data[:] = bytes(len(self._data))
+            if self._leases > 1:
+                self._leases -= 1
+                return
+            self._closing = True
+            self._data[:] = bytes(len(self._data))
+            self._leases = 0
+            self._closing = False
 
 
 
@@ -199,7 +204,7 @@ class _InlineStorage:
 #### All yielded views borrow this storage and become unusable after close wipes it.
 ####
 class InlinePayload(_ExclusivePayloadOwner):
-    __slots__ = ("_closed", "_lock", "_storage")
+    __slots__ = ("_closed", "_closing", "_lock", "_storage")
 
     _closed: bool
     _storage: _InlineStorage
@@ -218,6 +223,7 @@ class InlinePayload(_ExclusivePayloadOwner):
         self._storage = _InlineStorage(data)
         self._lock = RLock()
         self._closed = False
+        self._closing = False
 
 
 
@@ -229,6 +235,7 @@ class InlinePayload(_ExclusivePayloadOwner):
         instance._storage = storage
         instance._lock = RLock()
         instance._closed = False
+        instance._closing = False
         return instance
 
 
@@ -296,7 +303,7 @@ class InlinePayload(_ExclusivePayloadOwner):
     #### Reject access after deterministic wipe with one safe fixed error.
     ####
     def _require_open(self) -> None:
-        if self._closed:
+        if self._closed or self._closing:
             raise PayloadClosedError()
 
 
@@ -305,9 +312,12 @@ class InlinePayload(_ExclusivePayloadOwner):
     ####
     def close(self) -> None:
         with self._lock:
-            if not self._closed:
-                self._closed = True
-                self._storage.release()
+            if self._closed:
+                return
+            self._closing = True
+            self._storage.release()
+            self._closed = True
+            self._closing = False
 
 
 
@@ -442,6 +452,7 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
         "_ciphertext_length",
         "_ciphertext_offset",
         "_closed",
+        "_closing",
         "_content_key",
         "_frame_offset",
         "_iterators",
@@ -471,6 +482,7 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
         self._lock = RLock()
         self._iterators: set[_EncryptedSpanIterator] = set()
         self._closed = False
+        self._closing = False
 
 
 
@@ -576,7 +588,7 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
     #### Reject use after close without inspecting borrowed dependencies.
     ####
     def _require_open(self) -> None:
-        if self._closed:
+        if self._closed or self._closing:
             raise PayloadClosedError()
 
 
@@ -587,11 +599,22 @@ class EncryptedSpanPayload(_ExclusivePayloadOwner):
         with self._lock:
             if self._closed:
                 return
+            self._closing = True
             self._previous[:] = bytes(len(self._previous))
-            self._closed = True
             iterators = tuple(self._iterators)
+        first_failure: BaseException | None = None
         for iterator in iterators:
-            iterator._close_from_owner()
+            try:
+                iterator._close_from_owner()
+            except BaseException as error:
+                if first_failure is None:
+                    first_failure = error
+        with self._lock:
+            if not self._iterators:
+                self._closed = True
+                self._closing = False
+        if first_failure is not None:
+            raise first_failure
 
 
 
@@ -661,8 +684,7 @@ class _EncryptedSpanIterator:
     ####
     def __next__(self) -> memoryview[int]:
         with self._lock:
-            if self._owner.closed:
-                raise PayloadClosedError()
+            self._owner._require_open()
             if self._closed:
                 raise StopIteration
             try:

@@ -114,6 +114,32 @@ class _RecordingSnapshot:
 
 
 
+#### Inject one partial or failed final inline wipe before allowing retry.
+####
+class _RetryWipeBuffer(bytearray):
+
+
+
+    #### Retain one failure that triggers only on the first full zeroing slice.
+    ####
+    def __init__(self, data: bytes, failure: BaseException) -> None:
+        super().__init__(data)
+        self._failure: BaseException | None = failure
+
+
+
+    #### Partially wipe, raise once, then permit the retry to finish zeroing.
+    ####
+    def __setitem__(self, key: int | slice, value: int | bytes) -> None:  # type: ignore[override]
+        if isinstance(key, slice) and self._failure is not None:
+            failure = self._failure
+            self._failure = None
+            super().__setitem__(slice(0, 3), b"\0\0\0")
+            raise failure
+        super().__setitem__(key, value)  # type: ignore[index, assignment]
+
+
+
 #### Independently encrypt field plaintext under identity-block CBC.
 ####
 def _cbc_ciphertext(plaintext: bytes, initial: bytes) -> bytes:
@@ -302,6 +328,154 @@ def test_inline_payload_retain_wipes_only_after_last_lease() -> None:
     assert b"".join(bytes(chunk) for chunk in second.iter_chunks(5)) == b"fabricated-secret"
     second.close()
     assert storage == bytearray(17)
+
+
+
+#### Keep the final inline lease pending and unusable until a failed wipe retries.
+####
+@pytest.mark.parametrize("failure", [ValueError("wipe failed"), KeyboardInterrupt("wipe interrupted")])
+def test_inline_payload_final_wipe_is_retryable_after_partial_failure(failure: BaseException) -> None:
+    storage = _RetryWipeBuffer(b"fabricated-secret", failure)
+    first = InlinePayload.take_ownership(storage)
+    final = first.retain()
+    first.close()
+
+    with pytest.raises(type(failure)) as caught:
+        final.close()
+
+    assert caught.value is failure
+    pending_after_failure = final.closed
+    assert not pending_after_failure
+    assert storage[:3] == b"\0\0\0"
+    with pytest.raises(PayloadClosedError, match="field payload is closed"):
+        tuple(final.iter_chunks(4))
+    with pytest.raises(PayloadClosedError, match="field payload is closed"):
+        final.retain()
+
+    final.close()
+    closed_after_retry = final.closed
+    assert closed_after_retry
+    assert storage == bytearray(17)
+
+
+
+#### Finalization suppresses a partial wipe failure while retaining retry state.
+####
+def test_inline_payload_finalizer_retries_pending_wipe() -> None:
+    storage = _RetryWipeBuffer(b"fabricated-secret", KeyboardInterrupt("wipe interrupted"))
+    first = InlinePayload.take_ownership(storage)
+    final = first.retain()
+    first.close()
+
+    final.__del__()
+    pending_after_failure = final.closed
+    assert not pending_after_failure
+
+    final.__del__()
+    closed_after_retry = final.closed
+    assert closed_after_retry
+    assert storage == bytearray(17)
+
+
+
+#### Exhaust every suspended iterator before re-raising and retry only failures.
+####
+@pytest.mark.parametrize(
+    ("first_failure", "last_failure"),
+    [
+        (ValueError("first iterator failure"), KeyboardInterrupt("last iterator failure")),
+        (KeyboardInterrupt("first iterator interruption"), ValueError("last iterator failure")),
+    ],
+)
+def test_encrypted_span_close_is_exhaustive_and_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+    first_failure: BaseException,
+    last_failure: BaseException,
+) -> None:
+    from bonobo_core.passwordsafe import payloads
+
+    payload, _snapshot, key, _span = _deferred_payload(bytes(range(48)))
+    iterators = [payload.iter_chunks(4) for _index in range(3)]
+    yielded = [next(iterator) for iterator in iterators]
+    original = payloads._EncryptedSpanIterator._close_from_owner
+    attempts: list[payloads._EncryptedSpanIterator] = []
+
+
+
+    #### Fail the first and last initial close calls while the middle cleans up.
+    ####
+    def fail_edges(iterator: payloads._EncryptedSpanIterator) -> None:
+        attempts.append(iterator)
+        if len(attempts) == 1:
+            raise first_failure
+        if len(attempts) == 3:
+            raise last_failure
+        original(iterator)
+
+    monkeypatch.setattr(payloads._EncryptedSpanIterator, "_close_from_owner", fail_edges)
+
+    with pytest.raises(type(first_failure)) as caught:
+        payload.close()
+
+    assert caught.value is first_failure
+    first_attempt_count = len(attempts)
+    assert first_attempt_count == 3
+    pending_after_failure = payload.closed
+    assert not pending_after_failure
+    for iterator in iterators:
+        with pytest.raises(PayloadClosedError, match="field payload is closed"):
+            next(iterator)
+
+    payload.close()
+
+    closed_after_retry = payload.closed
+    assert closed_after_retry
+    final_attempt_count = len(attempts)
+    assert final_attempt_count == 5
+    for view in yielded:
+        with pytest.raises(ValueError, match="released memoryview"):
+            bytes(view)
+    key.close()
+
+
+
+#### Deferred finalization exhausts later iterators before suppressing one failure.
+####
+def test_encrypted_span_finalizer_is_exhaustive_and_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from bonobo_core.passwordsafe import payloads
+
+    payload, _snapshot, key, _span = _deferred_payload(bytes(range(32)))
+    iterators = [payload.iter_chunks(4) for _index in range(2)]
+    views = [next(iterator) for iterator in iterators]
+    original = payloads._EncryptedSpanIterator._close_from_owner
+    attempts = 0
+
+
+
+    #### Fail the first close call once and clean every later/retried iterator.
+    ####
+    def fail_first(iterator: payloads._EncryptedSpanIterator) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise KeyboardInterrupt("iterator finalizer interruption")
+        original(iterator)
+
+    monkeypatch.setattr(payloads._EncryptedSpanIterator, "_close_from_owner", fail_first)
+
+    payload.__del__()
+    assert attempts == 2
+    pending_after_failure = payload.closed
+    assert not pending_after_failure
+
+    payload.__del__()
+    assert attempts == 3
+    closed_after_retry = payload.closed
+    assert closed_after_retry
+    for view in views:
+        with pytest.raises(ValueError, match="released memoryview"):
+            bytes(view)
+    key.close()
 
 
 

@@ -153,6 +153,62 @@ class _ScriptedPayload:
 
 
 
+#### Record complete streamed observation independently from comparison results.
+####
+class _ObservedPayload(_ScriptedPayload):
+
+
+
+    #### Retain an initially empty observation buffer beside scripted chunks.
+    ####
+    def __init__(self, length: int, chunks: tuple[bytes, ...]) -> None:
+        super().__init__(length, chunks)
+        self.observed = bytearray()
+
+
+
+    #### Record every yielded byte so early comparison exit is directly visible.
+    ####
+    def iter_chunks(self, chunk_size: int) -> Iterator[memoryview[int]]:
+        for chunk in self._chunks:
+            self.observed.extend(chunk)
+            yield memoryview(chunk)
+
+
+
+#### Fail selected close attempts before becoming terminal on a later retry.
+####
+class _RetryClosePayload(_ScriptedPayload):
+
+
+
+    #### Retain ordered synthetic failures and cleanup attempt evidence.
+    ####
+    def __init__(self, failures: list[BaseException]) -> None:
+        super().__init__(1, (b"x",))
+        self.failures = failures
+        self.close_calls = 0
+        self.closed = False
+
+
+
+    #### Raise the next failure or commit this synthetic payload terminal.
+    ####
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.failures:
+            raise self.failures.pop(0)
+        self.closed = True
+
+
+
+    #### Fork an independent successful lease for retained revision tests.
+    ####
+    def retain(self) -> _RetryClosePayload:
+        return _RetryClosePayload([])
+
+
+
 #### Build one document around a caller-selected raw header field sequence.
 ####
 def _header_document(fields: tuple[RawField, ...]) -> VaultDocument:
@@ -294,7 +350,8 @@ def test_document_close_attempts_all_payloads_after_failure() -> None:
     with pytest.raises(KeyboardInterrupt, match="synthetic payload cleanup failure"):
         document.close()
 
-    assert document.closed
+    pending_after_failure = document.closed
+    assert not pending_after_failure
     assert failing.close_calls == 1
     assert retained.closed
 
@@ -456,3 +513,127 @@ def test_exact_comparison_propagates_payload_exception() -> None:
     assert caught.value is failure
     first.close()
     second.close()
+
+
+
+#### Drain both entered streams even when one underflows and the other overflows.
+####
+def test_exact_comparison_fully_counts_both_invalid_streams() -> None:
+    underflow = _ObservedPayload(2, (b"a",))
+    overflow = _ObservedPayload(2, (b"ab", b"c"))
+    first = _header_document((RawField(0xE0, underflow, 0, FieldClassification.UNKNOWN),))
+    second = _header_document((RawField(0xE0, overflow, 0, FieldClassification.UNKNOWN),))
+
+    assert not documents_equal_exact(first, second, chunk_size=2)
+    assert underflow.observed == b"a"
+    assert overflow.observed == b"abc"
+
+    first.close()
+    second.close()
+
+
+
+#### Continue bounded validation after an early byte mismatch exposes later overflow.
+####
+def test_exact_comparison_drains_after_early_byte_mismatch() -> None:
+    first_payload = _ObservedPayload(2, (b"a", b"b"))
+    second_payload = _ObservedPayload(2, (b"x", b"yz"))
+    first = _header_document((RawField(0xE0, first_payload, 0, FieldClassification.UNKNOWN),))
+    second = _header_document((RawField(0xE0, second_payload, 0, FieldClassification.UNKNOWN),))
+
+    assert not documents_equal_exact(first, second, chunk_size=2)
+    assert first_payload.observed == b"ab"
+    assert second_payload.observed == b"xyz"
+
+    first.close()
+    second.close()
+
+
+
+#### Retry only failed document payloads after exhausting every distinct owner.
+####
+@pytest.mark.parametrize(
+    ("first_error", "last_error"),
+    [
+        (ValueError("first close failure"), KeyboardInterrupt("last close interruption")),
+        (KeyboardInterrupt("first close interruption"), ValueError("last close failure")),
+    ],
+)
+def test_document_close_is_exhaustive_and_retryable(
+    first_error: BaseException,
+    last_error: BaseException,
+) -> None:
+    first_payload = _RetryClosePayload([first_error])
+    middle_payload = _RetryClosePayload([])
+    last_payload = _RetryClosePayload([last_error])
+    first_field = RawField(0xE0, first_payload, 0, FieldClassification.UNKNOWN)
+    document = _header_document(
+        (
+            first_field,
+            RawField(0xE1, middle_payload, 1, FieldClassification.UNKNOWN),
+            first_field,
+            RawField(0xE2, last_payload, 2, FieldClassification.UNKNOWN),
+        ),
+    )
+
+    with pytest.raises(type(first_error)) as caught:
+        document.close()
+
+    assert caught.value is first_error
+    initial_close_calls = [first_payload.close_calls, middle_payload.close_calls, last_payload.close_calls]
+    assert initial_close_calls == [1, 1, 1]
+    pending_after_failure = document.closed
+    assert not pending_after_failure
+    with pytest.raises(PayloadClosedError, match="field payload is closed"):
+        document.semantic_manifest()
+
+    document.close()
+
+    closed_after_retry = document.closed
+    assert closed_after_retry
+    final_close_calls = [first_payload.close_calls, middle_payload.close_calls, last_payload.close_calls]
+    assert final_close_calls == [2, 1, 2]
+    assert first_payload.closed and middle_payload.closed and last_payload.closed
+
+
+
+#### Finalization exhausts all payloads and suppresses failures until a retry.
+####
+def test_document_finalizer_is_exhaustive_and_retryable() -> None:
+    first = _RetryClosePayload([ValueError("first finalizer failure")])
+    second = _RetryClosePayload([KeyboardInterrupt("second finalizer failure")])
+    document = _header_document(
+        (
+            RawField(0xE0, first, 0, FieldClassification.UNKNOWN),
+            RawField(0xE1, second, 1, FieldClassification.UNKNOWN),
+        ),
+    )
+
+    document.__del__()
+    assert [first.close_calls, second.close_calls] == [1, 1]
+    pending_after_failure = document.closed
+    assert not pending_after_failure
+
+    document.__del__()
+    closed_after_retry = document.closed
+    assert closed_after_retry
+    assert [first.close_calls, second.close_calls] == [2, 2]
+
+
+
+#### A failed original revision close never invalidates its retained revision.
+####
+def test_document_retryable_close_preserves_retained_revision() -> None:
+    failure = ValueError("original revision close failure")
+    payload = _RetryClosePayload([failure])
+    original = _header_document((RawField(0xE0, payload, 0, FieldClassification.UNKNOWN),))
+    retained = original.retain()
+
+    with pytest.raises(ValueError) as caught:
+        original.close()
+
+    assert caught.value is failure
+    assert retained.semantic_manifest().field_count == 1
+    original.close()
+    retained.close()
+    assert original.closed and retained.closed

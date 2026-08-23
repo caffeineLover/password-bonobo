@@ -12,6 +12,7 @@ from typing import Final
 
 _ADVAPI32 = ctypes.WinDLL("advapi32", use_last_error=True)
 _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_NTDLL = ctypes.WinDLL("ntdll")
 
 _TOKEN_QUERY: Final[int] = 0x0008
 _TOKEN_USER: Final[int] = 1
@@ -25,20 +26,41 @@ _ACL_SIZE_INFORMATION_CLASS: Final[int] = 2
 _FILE_ALL_ACCESS: Final[int] = 0x001F01FF
 _GENERIC_READ: Final[int] = 0x80000000
 _GENERIC_WRITE: Final[int] = 0x40000000
+_DELETE: Final[int] = 0x00010000
 _READ_CONTROL: Final[int] = 0x00020000
+_FILE_ADD_FILE: Final[int] = 0x00000002
+_FILE_TRAVERSE: Final[int] = 0x00000020
+_SYNCHRONIZE: Final[int] = 0x00100000
 _FILE_READ_ATTRIBUTES: Final[int] = 0x00000080
 _FILE_SHARE_READ: Final[int] = 0x00000001
 _FILE_SHARE_WRITE: Final[int] = 0x00000002
 _FILE_SHARE_DELETE: Final[int] = 0x00000004
-_CREATE_NEW: Final[int] = 1
 _OPEN_EXISTING: Final[int] = 3
+_FILE_CREATE: Final[int] = 2
+_FILE_SYNCHRONOUS_IO_NONALERT: Final[int] = 0x00000020
+_FILE_NON_DIRECTORY_FILE: Final[int] = 0x00000040
 _FILE_ATTRIBUTE_NORMAL: Final[int] = 0x00000080
 _FILE_ATTRIBUTE_DIRECTORY: Final[int] = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT: Final[int] = 0x00000400
 _FILE_FLAG_OPEN_REPARSE_POINT: Final[int] = 0x00200000
 _FILE_FLAG_BACKUP_SEMANTICS: Final[int] = 0x02000000
 _INVALID_FILE_ATTRIBUTES: Final[int] = 0xFFFFFFFF
-_INVALID_HANDLE_VALUE: Final[int] = -1
+_FILE_DISPOSITION_INFO_CLASS: Final[int] = 4
+_INVALID_HANDLE_VALUE: Final[int] = int(ctypes.c_void_p(-1).value or 0)
+
+
+
+#### Provide one deterministic no-op seam immediately before relative creation.
+####
+def _before_relative_create() -> None:
+    return None
+
+
+
+#### Provide one deterministic no-op seam immediately before handle disposition.
+####
+def _before_handle_delete() -> None:
+    return None
 
 
 
@@ -114,6 +136,53 @@ class _ByHandleFileInformation(ctypes.Structure):
 
 
 
+#### Mirror UNICODE_STRING while its caller-owned name buffer stays alive.
+####
+class _UnicodeString(ctypes.Structure):
+    _fields_ = [
+        ("Length", wintypes.WORD),
+        ("MaximumLength", wintypes.WORD),
+        ("Buffer", wintypes.LPWSTR),
+    ]
+
+
+
+#### Mirror OBJECT_ATTRIBUTES for one RootDirectory-relative child name.
+####
+class _ObjectAttributes(ctypes.Structure):
+    _fields_ = [
+        ("Length", wintypes.ULONG),
+        ("RootDirectory", wintypes.HANDLE),
+        ("ObjectName", ctypes.POINTER(_UnicodeString)),
+        ("Attributes", wintypes.ULONG),
+        ("SecurityDescriptor", wintypes.LPVOID),
+        ("SecurityQualityOfService", wintypes.LPVOID),
+    ]
+
+
+
+#### Mirror the pointer-sized status union in IO_STATUS_BLOCK.
+####
+class _IoStatusValue(ctypes.Union):
+    _fields_ = [("Status", ctypes.c_long), ("Pointer", wintypes.LPVOID)]
+
+
+
+#### Mirror IO_STATUS_BLOCK output without interpreting filesystem details.
+####
+class _IoStatusBlock(ctypes.Structure):
+    _anonymous_ = ("value",)
+    _fields_ = [("value", _IoStatusValue), ("Information", ctypes.c_size_t)]
+
+
+
+#### Mirror FILE_DISPOSITION_INFO for same-handle deletion marking.
+####
+class _FileDispositionInfo(ctypes.Structure):
+    _fields_ = [("DeleteFile", wintypes.BOOLEAN)]
+
+
+
 _ADVAPI32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
 _ADVAPI32.OpenProcessToken.restype = wintypes.BOOL
 _ADVAPI32.GetTokenInformation.argtypes = [
@@ -178,6 +247,27 @@ _KERNEL32.GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
 _KERNEL32.GetFileAttributesW.restype = wintypes.DWORD
 _KERNEL32.GetFileInformationByHandle.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation)]
 _KERNEL32.GetFileInformationByHandle.restype = wintypes.BOOL
+_KERNEL32.SetFileInformationByHandle.argtypes = [
+    wintypes.HANDLE,
+    ctypes.c_int,
+    wintypes.LPVOID,
+    wintypes.DWORD,
+]
+_KERNEL32.SetFileInformationByHandle.restype = wintypes.BOOL
+_NTDLL.NtCreateFile.argtypes = [
+    ctypes.POINTER(wintypes.HANDLE),
+    wintypes.DWORD,
+    ctypes.POINTER(_ObjectAttributes),
+    ctypes.POINTER(_IoStatusBlock),
+    wintypes.LPVOID,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    wintypes.LPVOID,
+    wintypes.ULONG,
+]
+_NTDLL.NtCreateFile.restype = ctypes.c_long
 
 
 
@@ -185,15 +275,21 @@ _KERNEL32.GetFileInformationByHandle.restype = wintypes.BOOL
 ####
 def _handle_value(handle: wintypes.HANDLE) -> int:
     value = ctypes.cast(handle, ctypes.c_void_p).value
-    return -1 if value is None else value
+    return 0 if value is None else value
+
+
+
+#### Recognize null and pointer-width all-ones without truncating the HANDLE ABI.
+####
+def _is_invalid_handle(handle: wintypes.HANDLE) -> bool:
+    return _handle_value(handle) in (0, _INVALID_HANDLE_VALUE)
 
 
 
 #### Close one valid native handle while ignoring best-effort cleanup status.
 ####
-def _close_handle(handle: wintypes.HANDLE) -> None:
-    if _handle_value(handle) != _INVALID_HANDLE_VALUE:
-        _KERNEL32.CloseHandle(handle)
+def _close_handle(handle: wintypes.HANDLE) -> bool:
+    return _is_invalid_handle(handle) or bool(_KERNEL32.CloseHandle(handle))
 
 
 
@@ -373,6 +469,78 @@ def _new_security_descriptor() -> wintypes.LPVOID | None:
 
 
 
+#### Create one exclusive child relative to a retained directory HANDLE.
+####
+#### NTSTATUS never crosses this boundary: every negative result maps to no
+#### ownership, with any anomalously returned live handle closed immediately.
+####
+def _nt_create_relative(
+    root_directory: wintypes.HANDLE,
+    name: str,
+    security_descriptor: wintypes.LPVOID,
+) -> wintypes.HANDLE | None:
+    name_buffer = ctypes.create_unicode_buffer(name)
+    name_length = len(name.encode("utf-16le"))
+    unicode_name = _UnicodeString(name_length, name_length + 2, ctypes.cast(name_buffer, wintypes.LPWSTR))
+    attributes = _ObjectAttributes(
+        ctypes.sizeof(_ObjectAttributes),
+        root_directory,
+        ctypes.pointer(unicode_name),
+        0,
+        security_descriptor,
+        None,
+    )
+    io_status = _IoStatusBlock()
+    handle = wintypes.HANDLE(_INVALID_HANDLE_VALUE)
+    status = int(
+        _NTDLL.NtCreateFile(
+            ctypes.byref(handle),
+            _GENERIC_READ | _GENERIC_WRITE | _DELETE | _READ_CONTROL | _SYNCHRONIZE,
+            ctypes.byref(attributes),
+            ctypes.byref(io_status),
+            None,
+            _FILE_ATTRIBUTE_NORMAL,
+            _FILE_SHARE_READ | _FILE_SHARE_DELETE,
+            _FILE_CREATE,
+            _FILE_SYNCHRONOUS_IO_NONALERT | _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+            0,
+        )
+    )
+    if status < 0 or _is_invalid_handle(handle):
+        _close_handle(handle)
+        return None
+    return handle
+
+
+
+#### Verify and mark the exact still-open artifact handle for deletion.
+####
+def _delete_handle_if_same(handle: wintypes.HANDLE, identity: tuple[int, int]) -> bool:
+    information = _ByHandleFileInformation()
+    if (
+        _is_invalid_handle(handle)
+        or _file_identity(handle) != identity
+        or not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+        or information.dwFileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT
+        or not _handle_is_private(handle)
+    ):
+        return False
+    _before_handle_delete()
+    if _file_identity(handle) != identity:
+        return False
+    disposition = _FileDispositionInfo(True)
+    return bool(
+        _KERNEL32.SetFileInformationByHandle(
+            handle,
+            _FILE_DISPOSITION_INFO_CLASS,
+            ctypes.byref(disposition),
+            ctypes.sizeof(disposition),
+        )
+    )
+
+
+
 #### Hold a validated non-reparse directory handle and stable file identity.
 ####
 class WindowsDirectoryAnchor:
@@ -400,7 +568,11 @@ class WindowsDirectoryAnchor:
             absolute = path.absolute()
             if not _ancestry_is_plain_directory(absolute):
                 return None
-            handle = _open_path(absolute, directory=True, access=_READ_CONTROL | _FILE_READ_ATTRIBUTES)
+            handle = _open_path(
+                absolute,
+                directory=True,
+                access=_READ_CONTROL | _FILE_READ_ATTRIBUTES | _FILE_ADD_FILE | _FILE_TRAVERSE,
+            )
             if handle is None:
                 return None
             identity = _file_identity(handle)
@@ -428,21 +600,13 @@ class WindowsDirectoryAnchor:
         descriptor = _new_security_descriptor()
         if descriptor is None:
             return None
-        attributes = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), descriptor, False)
-        handle = wintypes.HANDLE()
+        handle: wintypes.HANDLE | None = None
         created_identity: tuple[int, int] | None = None
         transferred = False
         try:
-            handle = _KERNEL32.CreateFileW(
-                str(self._path / name),
-                _GENERIC_READ | _GENERIC_WRITE | _READ_CONTROL,
-                _FILE_SHARE_READ | _FILE_SHARE_DELETE,
-                ctypes.byref(attributes),
-                _CREATE_NEW,
-                _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
-                None,
-            )
-            if _handle_value(handle) == _INVALID_HANDLE_VALUE:
+            _before_relative_create()
+            handle = _nt_create_relative(self._handle, name, descriptor)
+            if handle is None:
                 return None
             identity = _file_identity(handle)
             created_identity = identity
@@ -457,34 +621,25 @@ class WindowsDirectoryAnchor:
                 return None
             raw_handle = _handle_value(handle)
             file_descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDWR | os.O_BINARY)
-            handle = wintypes.HANDLE(_INVALID_HANDLE_VALUE)
+            handle = None
             transferred = True
             return file_descriptor, identity
         finally:
             _KERNEL32.LocalFree(descriptor)
-            _close_handle(handle)
-            if not transferred and created_identity is not None:
-                with suppress(Exception):
-                    self.remove_if_same(name, created_identity)
+            if handle is not None:
+                if not transferred and created_identity is not None:
+                    with suppress(Exception):
+                        _delete_handle_if_same(handle, created_identity)
+                _close_handle(handle)
 
 
 
     #### Delete only an unchanged child under the still-stable directory identity.
     ####
-    def remove_if_same(self, name: str, identity: tuple[int, int]) -> bool:
-        if not self._stable():
-            raise OSError
-        path = self._path / name
-        handle = _open_path(path, directory=False, access=_FILE_READ_ATTRIBUTES | _READ_CONTROL)
-        if handle is None:
-            return True
-        try:
-            if _file_identity(handle) != identity:
-                return True
-        finally:
-            _close_handle(handle)
-        path.unlink()
-        return True
+    def remove_if_same(self, descriptor: int, _name: str, identity: tuple[int, int]) -> bool:
+        raw_handle = msvcrt.get_osfhandle(descriptor)
+        handle = wintypes.HANDLE(raw_handle)
+        return _delete_handle_if_same(handle, identity)
 
 
 
@@ -507,8 +662,11 @@ class WindowsDirectoryAnchor:
     ####
     def close(self) -> None:
         handle = self._handle
+        if _is_invalid_handle(handle):
+            return
+        if not _close_handle(handle):
+            raise OSError
         self._handle = wintypes.HANDLE(_INVALID_HANDLE_VALUE)
-        _close_handle(handle)
 
 
 

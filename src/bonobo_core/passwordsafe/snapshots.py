@@ -32,6 +32,13 @@ _OWNER_DIRECTORY_MASK: Final[int] = 0o077
 
 
 
+#### Provide one deterministic no-op seam before anchored quarantine rename.
+####
+def _before_posix_quarantine() -> None:
+    return None
+
+
+
 #### Describe the bounded binary-source operation used during capture.
 ####
 class ReadableBinary(Protocol):
@@ -60,7 +67,7 @@ class _DirectoryAnchor(Protocol):
 
     #### Remove only the child whose stable identity still matches.
     ####
-    def remove_if_same(self, name: str, identity: tuple[int, int]) -> bool:
+    def remove_if_same(self, descriptor: int, name: str, identity: tuple[int, int]) -> bool:
         raise NotImplementedError
 
 
@@ -127,7 +134,7 @@ def _validate_private_directory(directory: Path) -> _DirectoryAnchor | None:
 #### Hold a POSIX directory descriptor for relative create, verify, and unlink.
 ####
 class _PosixDirectoryAnchor:
-    __slots__ = ("_fd", "_identity", "_path")
+    __slots__ = ("_fd", "_identity", "_path", "_quarantine")
 
 
 
@@ -138,6 +145,7 @@ class _PosixDirectoryAnchor:
         self._fd = descriptor
         metadata = os.fstat(descriptor)
         self._identity = (metadata.st_dev, metadata.st_ino)
+        self._quarantine: str | None = None
 
 
 
@@ -153,32 +161,68 @@ class _PosixDirectoryAnchor:
             descriptor = os.open(name, flags, _OWNER_FILE_MODE, dir_fd=self._fd)
         except Exception:
             return None
+        identity: tuple[int, int] | None = None
         try:
             metadata = os.fstat(descriptor)
+            identity = (metadata.st_dev, metadata.st_ino)
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
                 raise OSError
             if stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE:
                 raise OSError
             if not self._stable():
                 raise OSError
-            return descriptor, (metadata.st_dev, metadata.st_ino)
+            return descriptor, identity
         except Exception:
+            if identity is not None:
+                with suppress(BaseException):
+                    self.remove_if_same(descriptor, name, identity)
             with suppress(BaseException):
                 os.close(descriptor)
-            with suppress(BaseException):
-                os.unlink(name, dir_fd=self._fd)
             return None
 
 
 
     #### Unlink only the same non-link regular child through the held directory.
     ####
-    def remove_if_same(self, name: str, identity: tuple[int, int]) -> bool:
-        metadata = os.stat(name, dir_fd=self._fd, follow_symlinks=False)
-        if not stat.S_ISREG(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != identity:
+    def remove_if_same(self, descriptor: int, name: str, identity: tuple[int, int]) -> bool:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != identity:
+            return False
+        quarantine = self._quarantine
+        if quarantine is None:
+            metadata = os.stat(name, dir_fd=self._fd, follow_symlinks=False)
+            if not stat.S_ISREG(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != identity:
+                return False
+            quarantine = f"quarantine-{secrets.token_hex(16)}"
+            try:
+                os.stat(quarantine, dir_fd=self._fd, follow_symlinks=False)
+                return False
+            except FileNotFoundError:
+                pass
+            _before_posix_quarantine()
+            os.rename(name, quarantine, src_dir_fd=self._fd, dst_dir_fd=self._fd)
+            self._quarantine = quarantine
+        quarantined = os.stat(quarantine, dir_fd=self._fd, follow_symlinks=False)
+        if stat.S_ISREG(quarantined.st_mode) and (quarantined.st_dev, quarantined.st_ino) == identity:
+            os.unlink(quarantine, dir_fd=self._fd)
+            self._quarantine = None
             return True
-        os.unlink(name, dir_fd=self._fd)
-        return True
+        try:
+            named = os.stat(name, dir_fd=self._fd, follow_symlinks=False)
+        except FileNotFoundError:
+            os.link(
+                quarantine,
+                name,
+                src_dir_fd=self._fd,
+                dst_dir_fd=self._fd,
+                follow_symlinks=False,
+            )
+        else:
+            if (named.st_dev, named.st_ino) != (quarantined.st_dev, quarantined.st_ino):
+                return False
+        os.unlink(quarantine, dir_fd=self._fd)
+        self._quarantine = None
+        return False
 
 
 
@@ -195,8 +239,8 @@ class _PosixDirectoryAnchor:
     def close(self) -> None:
         descriptor = self._fd
         if descriptor >= 0:
-            self._fd = -1
             os.close(descriptor)
+            self._fd = -1
 
 
 
@@ -264,8 +308,14 @@ def _copy_and_synchronize(
 
 #### Remove only the exact regular artifact originally created by this owner.
 ####
-def _unlink_if_same(anchor: _DirectoryAnchor, name: str, identity: tuple[int, int]) -> None:
-    anchor.remove_if_same(name, identity)
+def _unlink_if_same(
+    anchor: _DirectoryAnchor,
+    descriptor: int,
+    name: str,
+    identity: tuple[int, int],
+) -> None:
+    if not anchor.remove_if_same(descriptor, name, identity):
+        raise OSError
 
 
 
@@ -284,7 +334,18 @@ def _windows_path_is_private(path: Path) -> bool:
 #### removes only the unchanged encrypted artifact created during capture.
 ####
 class EncryptedSnapshot:
-    __slots__ = ("_anchor", "_cleanup_pending", "_fd", "_identity", "_lock", "_name", "_sha256", "_size")
+    __slots__ = (
+        "_anchor",
+        "_anchor_closed",
+        "_artifact_removed",
+        "_cleanup_pending",
+        "_fd",
+        "_identity",
+        "_lock",
+        "_name",
+        "_sha256",
+        "_size",
+    )
 
     _sha256: str
     _size: int
@@ -310,6 +371,8 @@ class EncryptedSnapshot:
         self._identity = identity
         self._lock = RLock()
         self._cleanup_pending = True
+        self._artifact_removed = False
+        self._anchor_closed = False
         self._size = size
         self._sha256 = digest
 
@@ -370,12 +433,12 @@ class EncryptedSnapshot:
             view.release()
             buffer[:] = bytes(len(buffer))
             if not published:
+                if descriptor >= 0 and name is not None and identity is not None:
+                    with suppress(BaseException):
+                        _unlink_if_same(anchor, descriptor, name, identity)
                 if descriptor >= 0:
                     with suppress(BaseException):
                         os.close(descriptor)
-                if name is not None and identity is not None:
-                    with suppress(BaseException):
-                        _unlink_if_same(anchor, name, identity)
                 with suppress(BaseException):
                     anchor.close()
 
@@ -452,13 +515,17 @@ class EncryptedSnapshot:
                 return
             failed = False
             try:
-                if descriptor >= 0:
+                if not self._artifact_removed:
+                    if descriptor < 0:
+                        raise OSError
+                    _unlink_if_same(self._anchor, descriptor, self._name, self._identity)
+                    self._artifact_removed = True
+                if self._fd >= 0:
                     os.close(descriptor)
                     self._fd = -1
-                _unlink_if_same(self._anchor, self._name, self._identity)
-                self._anchor.close()
-            except FileNotFoundError:
-                pass
+                if not self._anchor_closed:
+                    self._anchor.close()
+                    self._anchor_closed = True
             except BaseException as error:
                 if not isinstance(error, Exception):
                     raise
