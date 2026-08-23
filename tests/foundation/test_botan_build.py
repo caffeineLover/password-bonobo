@@ -18,6 +18,7 @@ from tools.build_botan import (
     configure_command,
     extract_fresh_verified_source,
     extract_verified_archive,
+    find_shared_library,
     load_source_pin,
     main,
     windows_toolchain_path,
@@ -209,6 +210,79 @@ def test_build_reports_output_creation_failure(tmp_path: Path, monkeypatch: pyte
 
     with pytest.raises(BotanBuildError, match="Botan output directory preparation failed"):
         build_botan("linux", output_directory, cache_directory)
+
+
+
+#### Select the installed library when the generated build tree retains an identical staging copy.
+####
+#### Botan installs the Windows deliverable below `bin` but leaves a byte-identical
+#### build-stage DLL below `work`.  Discovery must select the installed deliverable
+#### deterministically rather than treating normal build output as ambiguous.
+####
+def test_find_shared_library_prefers_installed_library_over_staging_copy(tmp_path: Path) -> None:
+    output_directory = tmp_path / "botan-output"
+    final_library = output_directory / "bin" / "botan-3.dll"
+    staging_library = output_directory / "work" / "botan-3.dll"
+    final_library.parent.mkdir(parents=True)
+    staging_library.parent.mkdir(parents=True)
+    final_library.write_bytes(b"installed")
+    staging_library.write_bytes(b"staging")
+
+    assert find_shared_library(output_directory) == final_library
+
+
+
+#### Refuse an ambiguous installed-library tier instead of choosing a final file by traversal order.
+####
+#### An output with two matching files below `bin` is corrupt or incomplete.  The
+#### staging exclusion must not weaken the original ambiguity rejection contract.
+####
+def test_find_shared_library_rejects_ambiguous_installed_tier(tmp_path: Path) -> None:
+    bin_directory = tmp_path / "botan-output" / "bin"
+    bin_directory.mkdir(parents=True)
+    (bin_directory / "botan-3.dll").write_bytes(b"first")
+    (bin_directory / "libbotan-3.dll").write_bytes(b"second")
+
+    with pytest.raises(BotanBuildError, match="Botan shared library was not produced"):
+        find_shared_library(bin_directory.parent)
+
+
+
+#### Keep caller-controlled paths inside the CLI's typed failure boundary during resolution.
+####
+#### A resolving filesystem error contains the rejected input path.  The command
+#### must instead emit a concise build error without a traceback or that path.
+####
+def test_main_hides_output_resolution_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_path = tmp_path / "unresolvable output"
+    original_resolve = Path.resolve
+
+
+
+    #### Raise the platform-style error only for the caller-controlled output path.
+    ####
+    #### Other path resolutions use the original standard-library implementation so
+    #### this regression isolates the command boundary under test.
+    ####
+    def reject_output_resolution(path: Path, strict: bool = False) -> Path:
+        if path == output_path:
+            raise OSError(f"cannot resolve {path}")
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", reject_output_resolution)
+
+    result = main(["--target", "host", "--output", str(output_path)])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert captured.out == ""
+    assert captured.err == "Botan path preparation failed\n"
+    assert str(output_path) not in captured.err
+    assert "Traceback" not in captured.err
 
 
 

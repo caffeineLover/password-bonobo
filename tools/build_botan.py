@@ -34,6 +34,10 @@ TARGET_PROFILES: dict[str, tuple[str, ...]] = {
     "android": ("--cc=clang", "--os=android", "--cpu=arm64"),
     "ios": ("--cc=clang", "--os=ios", "--cpu=arm64"),
 }
+FINAL_LIBRARY_LOCATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("bin", ("botan-3.dll", "libbotan-3.dll")),
+    ("lib", ("libbotan-3.dylib", "libbotan-3.so*")),
+)
 
 
 
@@ -274,17 +278,19 @@ def build_command(target: str, build_directory: Path) -> tuple[str, ...]:
 
 
 
-#### Locate the installed shared library without guessing at an arbitrary native file.
+#### Locate the installed shared library without guessing at a generated staging file.
 ####
-#### Botan's supported platform names vary by suffix and ABI suffix.  The search is deliberately limited to the selected
-#### output directory and rejects an absent or ambiguous result instead of returning an unrelated library.
+#### Botan's supported platform names vary by suffix and ABI suffix.  The search is deliberately restricted to the
+#### installer's `bin` and `lib` tiers, excluding its generated `work` staging tree.  An absent or ambiguous final-tier
+#### result remains an error rather than selecting an arbitrary library.
 ####
 def find_shared_library(output_directory: Path) -> Path:
     try:
         candidates = tuple(
             path
-            for pattern in ("botan-3.dll", "libbotan-3.dll", "libbotan-3.dylib", "libbotan-3.so*")
-            for path in output_directory.rglob(pattern)
+            for directory, patterns in FINAL_LIBRARY_LOCATIONS
+            for pattern in patterns
+            for path in (output_directory / directory).glob(pattern)
             if path.is_file()
         )
     except OSError as error:
@@ -292,6 +298,19 @@ def find_shared_library(output_directory: Path) -> Path:
     if len(candidates) != 1:
         raise BotanBuildError("Botan shared library was not produced")
     return candidates[0]
+
+
+
+#### Resolve caller-controlled CLI paths without leaking filesystem exceptions at the command boundary.
+####
+#### Path resolution can itself fail before the build starts.  Preserve the operating-system error as the typed cause
+#### while exposing only one stable message to the command-line caller.
+####
+def resolve_cli_paths(output_directory: Path, cache_directory: Path) -> tuple[Path, Path]:
+    try:
+        return output_directory.resolve(), cache_directory.resolve()
+    except OSError as error:
+        raise BotanBuildError("Botan path preparation failed") from error
 
 
 
@@ -347,13 +366,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=Path(".cache/botan"))
     arguments = parser.parse_args(argv)
-    target_argument = cast(str, arguments.target)
-    target = host_target() if target_argument == "host" else target_argument
     try:
+        target_argument = cast(str, arguments.target)
+        target = host_target() if target_argument == "host" else target_argument
+        output_directory, cache_directory = resolve_cli_paths(
+            cast(Path, arguments.output),
+            cast(Path, arguments.cache),
+        )
         library_path = build_botan(
             target,
-            cast(Path, arguments.output).resolve(),
-            cast(Path, arguments.cache).resolve(),
+            output_directory,
+            cache_directory,
         )
     except BotanBuildError as error:
         print(error, file=sys.stderr)
