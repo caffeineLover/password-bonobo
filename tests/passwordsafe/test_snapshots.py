@@ -6,6 +6,7 @@ sensitive-looking so failures and representations prove they do not retain it.
 
 import copy
 import ctypes
+import errno
 import gc
 import io
 import os
@@ -16,7 +17,7 @@ import sys
 import weakref
 from ctypes import wintypes
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 import pytest
 
@@ -397,6 +398,13 @@ def test_linux_anchor_never_falls_back_to_a_named_file(
 
 
 
+#### Describe the ctypes by-reference cell supplied to the fake entry function.
+####
+class _CtypesOutput(Protocol):
+    _obj: object
+
+
+
 #### Emulate the three descriptor-only Darwin ACL calls and their errno state.
 ####
 class _FakeDarwinAclApi:
@@ -410,13 +418,15 @@ class _FakeDarwinAclApi:
         *,
         acl: int | None = 0x1234,
         entry_result: int = -1,
-        entry_errno: int = 0,
+        entry_errno: int = errno.EINVAL,
+        entry_pointer: int | None = None,
         entry_error: BaseException | None = None,
         free_result: int = 0,
     ) -> None:
         self.acl = acl
         self.entry_result = entry_result
         self.entry_errno = entry_errno
+        self.entry_pointer = entry_pointer
         self.entry_error = entry_error
         self.free_result = free_result
         self.get_calls: list[tuple[int, int]] = []
@@ -435,10 +445,13 @@ class _FakeDarwinAclApi:
 
     #### Return one first-entry status after setting the captured native errno.
     ####
-    def get_entry(self, acl: int, entry_id: int, _entry: object) -> int:
+    def get_entry(self, acl: int, entry_id: int, _entry: _CtypesOutput) -> int:
         self.entry_calls.append((acl, entry_id))
         if self.entry_error is not None:
             raise self.entry_error
+        if self.entry_pointer is not None:
+            output = cast(ctypes.c_void_p, _entry._obj)
+            output.value = self.entry_pointer
         ctypes.set_errno(self.entry_errno)
         return self.entry_result
 
@@ -477,7 +490,7 @@ def test_darwin_acl_helper_rejects_any_entry_and_frees_it(
 ) -> None:
     from bonobo_core.passwordsafe import _darwin_security
 
-    api = _FakeDarwinAclApi(entry_result=0)
+    api = _FakeDarwinAclApi(entry_result=0, entry_errno=0, entry_pointer=0x5678)
     monkeypatch.setattr(_darwin_security, "_ACL_API", api)
 
     with pytest.raises(StorageError) as caught:
@@ -529,12 +542,19 @@ def test_darwin_acl_helper_frees_after_every_entry_exception(
 #### Fail closed on nonempty errno and anomalous ACL/free return statuses.
 ####
 @pytest.mark.parametrize(
-    ("entry_result", "entry_errno", "free_result"),
-    [(-1, 5, 0), (1, 0, 0), (-1, 0, -1)],
+    ("entry_result", "entry_errno", "entry_pointer", "free_result"),
+    [
+        (-1, 0, None, 0),
+        (-1, errno.EIO, None, 0),
+        (1, errno.EINVAL, None, 0),
+        (0, 0, None, 0),
+        (-1, errno.EINVAL, None, -1),
+    ],
 )
 def test_darwin_acl_helper_rejects_native_api_anomalies(
     entry_result: int,
     entry_errno: int,
+    entry_pointer: int | None,
     free_result: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -543,6 +563,7 @@ def test_darwin_acl_helper_rejects_native_api_anomalies(
     api = _FakeDarwinAclApi(
         entry_result=entry_result,
         entry_errno=entry_errno,
+        entry_pointer=entry_pointer,
         free_result=free_result,
     )
     monkeypatch.setattr(_darwin_security, "_ACL_API", api)

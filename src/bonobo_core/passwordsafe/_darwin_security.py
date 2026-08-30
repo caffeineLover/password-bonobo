@@ -1,6 +1,7 @@
 """Reject descriptor-backed Darwin objects carrying any extended ACL entry."""
 
 import ctypes
+import errno
 import sys
 from typing import Final, Protocol, cast
 
@@ -129,7 +130,7 @@ _ACL_API: _AclApi | None = _load_acl_api()
 #### Require one open descriptor to have a successfully read, empty extended ACL.
 ####
 #### Every allocated acl_t is freed before the fixed safe failure is raised.
-#### An empty Darwin ACL reports no first entry as -1 without setting errno.
+#### Darwin reports a valid empty ACL as no first entry with errno EINVAL.
 ####
 def require_no_extended_acl(descriptor: int) -> None:
     api = _ACL_API
@@ -148,7 +149,7 @@ def require_no_extended_acl(descriptor: int) -> None:
             ctypes.set_errno(0)
             status = api.get_entry(acl, _ACL_FIRST_ENTRY, ctypes.byref(entry))
             entry_errno = ctypes.get_errno()
-            if status != -1 or entry_errno != 0:
+            if status != -1 or entry_errno != errno.EINVAL or entry.value is not None:
                 failed = True
     except BaseException:
         failed = True
