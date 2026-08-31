@@ -242,6 +242,33 @@ class VaultCryptoState(_ExclusiveOwner):
 
 
 
+    #### Return the iteration count selected for the next ordinary serialization.
+    ####
+    #### A weak source is upgraded only when unlock prepared matching derived
+    #### material while the caller's passphrase was still transiently available.
+    ####
+    @property
+    def serialization_iterations(self) -> int:
+        if self._closed or self._closing:
+            raise RuntimeError("vault crypto state is closed")
+        if self._hardened_derived_key is not None:
+            return MINIMUM_ITERATIONS
+        return self.iterations
+
+
+
+    #### Return the retained derived owner matching serialization iterations.
+    ####
+    @property
+    def serialization_derived_key(self) -> DerivedKey:
+        if self._closed or self._closing:
+            raise RuntimeError("vault crypto state is closed")
+        if self._hardened_derived_key is not None:
+            return self._hardened_derived_key
+        return self._derived_key
+
+
+
     #### Report whether every retained secret owner has been wiped.
     ####
     @property
@@ -666,6 +693,40 @@ class PasswordSafeReader(_ExclusiveOwner):
 
 
 
+    #### Reopen one encrypted candidate with authenticated retained wrapping state.
+    ####
+    #### Candidate verification accepts only the salt and iteration policy chosen
+    #### from the live source state.  It never needs or reconstructs a passphrase.
+    ####
+    def reopen_candidate(self, path: Path, crypto_state: VaultCryptoState) -> OpenedVault:
+        if not isinstance(path, Path):
+            raise TypeError("candidate path must be a Path")
+        if not isinstance(crypto_state, VaultCryptoState):
+            raise TypeError("candidate crypto state must use VaultCryptoState")
+        snapshot: EncryptedSnapshot | None = None
+        try:
+            try:
+                with path.open("rb") as source:
+                    snapshot = EncryptedSnapshot.capture(
+                        source,
+                        self._private_directory,
+                        chunk_size=self._limits.io_chunk_bytes,
+                        max_bytes=self._limits.max_encrypted_file_bytes,
+                    )
+            except PasswordSafeError:
+                raise
+            except Exception:
+                raise StorageError(StorageReason.PREPARATION_FAILED) from None
+            with self._lock:
+                opened = self._reopen_candidate_locked(snapshot, crypto_state)
+            snapshot = None
+            return opened
+        finally:
+            if snapshot is not None:
+                _cleanup_without_masking(snapshot)
+
+
+
     #### Authenticate a caller snapshot through the same quarantine used by open.
     ####
     #### Success transfers snapshot ownership to ``OpenedVault``.  Failure leaves
@@ -688,12 +749,6 @@ class PasswordSafeReader(_ExclusiveOwner):
     def _open_snapshot_locked(self, snapshot: EncryptedSnapshot, passphrase: SecretBuffer) -> OpenedVault:
         envelope: _Envelope | None = None
         derived_key: DerivedKey | None = None
-        hardened_key: DerivedKey | None = None
-        vault_keys: VaultKeys | None = None
-        builder: _QuarantinedBuilder | None = None
-        document: VaultDocument | None = None
-        crypto_state: VaultCryptoState | None = None
-        published = False
         self._has_quarantined_document = True
         try:
             envelope = _read_envelope(snapshot, self._limits)
@@ -706,6 +761,84 @@ class PasswordSafeReader(_ExclusiveOwner):
             calculated_check = hashlib.sha256(derived_key.borrow()).digest()
             if not hmac.compare_digest(calculated_check, envelope.password_check):
                 raise AuthenticationError(AuthenticationReason.PASSWORD_CHECK_FAILED)
+            transferred_derived = derived_key
+            derived_key = None
+            return self._publish_authenticated_snapshot(
+                snapshot,
+                envelope,
+                transferred_derived,
+                passphrase,
+            )
+        except PasswordSafeError as error:
+            raise error from None
+        except BaseException as error:
+            if not isinstance(error, Exception):
+                raise
+            raise MalformedVaultError(MalformedReason.INVALID_ENVELOPE) from None
+        finally:
+            self._has_quarantined_document = False
+            if derived_key is not None:
+                _cleanup_without_masking(derived_key)
+
+
+
+    #### Verify one candidate envelope against retained source-derived material.
+    ####
+    def _reopen_candidate_locked(
+        self,
+        snapshot: EncryptedSnapshot,
+        crypto_state: VaultCryptoState,
+    ) -> OpenedVault:
+        self._has_quarantined_document = True
+        derived_key: DerivedKey | None = None
+        try:
+            envelope = _read_envelope(snapshot, self._limits)
+            if (
+                envelope.salt != crypto_state.salt
+                or envelope.iterations != crypto_state.serialization_iterations
+            ):
+                raise MalformedVaultError(MalformedReason.INVALID_ENVELOPE)
+            selected = crypto_state.serialization_derived_key
+            calculated_check = hashlib.sha256(selected.borrow()).digest()
+            if not hmac.compare_digest(calculated_check, envelope.password_check):
+                raise IntegrityError(IntegrityReason.HMAC_MISMATCH)
+            derived_key = DerivedKey(bytearray(selected.borrow()))
+            transferred = derived_key
+            derived_key = None
+            return self._publish_authenticated_snapshot(snapshot, envelope, transferred, None)
+        except PasswordSafeError as error:
+            raise error from None
+        except BaseException as error:
+            if not isinstance(error, Exception):
+                raise
+            raise MalformedVaultError(MalformedReason.INVALID_ENVELOPE) from None
+        finally:
+            self._has_quarantined_document = False
+            if derived_key is not None:
+                _cleanup_without_masking(derived_key)
+
+
+
+    #### Publish one quarantined document while adopting supplied derived owners.
+    ####
+    #### This helper owns both supplied key objects on every success and failure.
+    #### The snapshot transfers only when a complete ``OpenedVault`` is returned.
+    ####
+    def _publish_authenticated_snapshot(
+        self,
+        snapshot: EncryptedSnapshot,
+        envelope: _Envelope,
+        derived_key: DerivedKey,
+        hardening_passphrase: SecretBuffer | None,
+    ) -> OpenedVault:
+        owned_derived: DerivedKey | None = derived_key
+        owned_hardened: DerivedKey | None = None
+        vault_keys: VaultKeys | None = None
+        builder: _QuarantinedBuilder | None = None
+        document: VaultDocument | None = None
+        crypto_state: VaultCryptoState | None = None
+        published = False
+        try:
             vault_keys = unwrap_vault_keys(self._backend, derived_key, envelope.wrapped_keys)
             builder, calculated_hmac = _decrypt_fields(
                 snapshot,
@@ -720,9 +853,13 @@ class PasswordSafeReader(_ExclusiveOwner):
             warnings = _validate_schema(builder, version, self._limits)
             document = builder.build(version, warnings)
             builder = None
-            if envelope.iterations < MINIMUM_ITERATIONS and self._limits.max_iterations >= MINIMUM_ITERATIONS:
-                hardened_key = stretch_passphrase(
-                    passphrase,
+            if (
+                hardening_passphrase is not None
+                and envelope.iterations < MINIMUM_ITERATIONS
+                and self._limits.max_iterations >= MINIMUM_ITERATIONS
+            ):
+                owned_hardened = stretch_passphrase(
+                    hardening_passphrase,
                     envelope.salt,
                     MINIMUM_ITERATIONS,
                     limits=self._limits,
@@ -733,12 +870,12 @@ class PasswordSafeReader(_ExclusiveOwner):
                 envelope.iv,
                 derived_key,
                 vault_keys,
-                hardened_key,
+                owned_hardened,
                 _token=_OWNER_CONSTRUCTION_TOKEN,
             )
-            derived_key = None
+            owned_derived = None
             vault_keys = None
-            hardened_key = None
+            owned_hardened = None
             manifest = document.semantic_manifest(chunk_size=self._limits.io_chunk_bytes)
             opened = OpenedVault(
                 document,
@@ -751,16 +888,9 @@ class PasswordSafeReader(_ExclusiveOwner):
             crypto_state = None
             published = True
             return opened
-        except PasswordSafeError as error:
-            raise error from None
-        except BaseException as error:
-            if not isinstance(error, Exception):
-                raise
-            raise MalformedVaultError(MalformedReason.INVALID_ENVELOPE) from None
         finally:
-            self._has_quarantined_document = False
             if not published:
-                for owner in (builder, document, crypto_state, vault_keys, hardened_key, derived_key):
+                for owner in (builder, document, crypto_state, vault_keys, owned_hardened, owned_derived):
                     if owner is not None:
                         _cleanup_without_masking(owner)
 
@@ -986,11 +1116,18 @@ def _consume_field_payload(
 #### Validate that Version is first, unique, exact-width, and currently supported.
 ####
 def _validate_version_first(builder: _QuarantinedBuilder, limits: ResourceLimits) -> FormatVersion:
-    if not builder.header or builder.header[0].type_code != HeaderFieldType.VERSION:
+    return _validate_version_fields(builder.header, limits)
+
+
+
+#### Validate Version against one borrowed field sequence without taking ownership.
+####
+def _validate_version_fields(fields: list[_BuilderField], limits: ResourceLimits) -> FormatVersion:
+    if not fields or fields[0].type_code != HeaderFieldType.VERSION:
         raise MalformedVaultError(MalformedReason.MISSING_MANDATORY_FIELD)
-    if sum(item.type_code == HeaderFieldType.VERSION for item in builder.header) != 1:
+    if sum(item.type_code == HeaderFieldType.VERSION for item in fields) != 1:
         raise MalformedVaultError(MalformedReason.INVALID_FIELD)
-    version_payload = builder.header[0].payload
+    version_payload = fields[0].payload
     if version_payload.length != 2:
         raise MalformedVaultError(MalformedReason.INVALID_FIELD)
     raw = _materialize_exact(version_payload, limits.io_chunk_bytes)
@@ -1011,12 +1148,24 @@ def _validate_schema(
     version: FormatVersion,
     limits: ResourceLimits,
 ) -> tuple[PreservationWarning, ...]:
-    if not builder.header or builder.header[-1].type_code != HeaderFieldType.END:
+    return _validate_schema_fields(builder.header, builder.records, version, limits)
+
+
+
+#### Validate borrowed header and record sequences through the shared schema rules.
+####
+def _validate_schema_fields(
+    header: list[_BuilderField],
+    records: list[list[_BuilderField]],
+    version: FormatVersion,
+    limits: ResourceLimits,
+) -> tuple[PreservationWarning, ...]:
+    if not header or header[-1].type_code != HeaderFieldType.END:
         raise MalformedVaultError(MalformedReason.MISSING_MANDATORY_FIELD)
     warnings: list[PreservationWarning] = []
     decoded_total = 0
     decoded_total = _validate_field_sequence(
-        builder.header,
+        header,
         section="header",
         record_ordinal=None,
         version=version,
@@ -1024,7 +1173,7 @@ def _validate_schema(
         warnings=warnings,
         decoded_total=decoded_total,
     )
-    for record_ordinal, fields in enumerate(builder.records):
+    for record_ordinal, fields in enumerate(records):
         if not fields or fields[-1].type_code != RecordFieldType.END:
             raise MalformedVaultError(MalformedReason.MISSING_MANDATORY_FIELD)
         decoded_total = _validate_field_sequence(
@@ -1039,6 +1188,56 @@ def _validate_schema(
         _validate_record_mandatory(fields)
         _validate_conditional_groups(fields)
     return tuple(warnings)
+
+
+
+#### Reapply authenticated schema and budget policy to an intended save revision.
+####
+#### Borrowed adapters permit exact reuse of reader validation without adopting or
+#### mutating the document's payload owners, classifications, or warning evidence.
+####
+def validate_document_for_serialization(document: VaultDocument, limits: ResourceLimits) -> None:
+    if not isinstance(document, VaultDocument):
+        raise TypeError("serialization document must use VaultDocument")
+    if not isinstance(limits, ResourceLimits):
+        raise TypeError("serialization limits must use ResourceLimits")
+    if len(document.records) > limits.max_records:
+        raise ResourceLimitError(ResourceLimitReason.MAX_RECORDS)
+    field_count = len(document.header_fields)
+    if field_count > limits.max_fields:
+        raise ResourceLimitError(ResourceLimitReason.MAX_FIELDS)
+    if any(field.ordinal != ordinal for ordinal, field in enumerate(document.header_fields)):
+        raise MalformedVaultError(MalformedReason.INVALID_FIELD)
+    for record_ordinal, record in enumerate(document.records):
+        if record.ordinal != record_ordinal:
+            raise MalformedVaultError(MalformedReason.INVALID_FIELD)
+        if any(field.ordinal != ordinal for ordinal, field in enumerate(record.fields)):
+            raise MalformedVaultError(MalformedReason.INVALID_FIELD)
+        if len(record.fields) > limits.max_fields - field_count:
+            raise ResourceLimitError(ResourceLimitReason.MAX_FIELDS)
+        field_count += len(record.fields)
+    header = [
+        _BuilderField(field.type_code, field.payload, field.ordinal)
+        for field in document.header_fields
+    ]
+    records = [
+        [_BuilderField(field.type_code, field.payload, field.ordinal) for field in record.fields]
+        for record in document.records
+    ]
+    version = _validate_version_fields(header, limits)
+    if version != document.version:
+        raise MalformedVaultError(MalformedReason.INVALID_FIELD)
+    warnings = _validate_schema_fields(header, records, version, limits)
+    borrowed_fields = (*header, *(field for record in records for field in record))
+    document_fields = (
+        *document.header_fields,
+        *(field for record in document.records for field in record.fields),
+    )
+    if any(
+        borrowed.classification is not existing.classification
+        for borrowed, existing in zip(borrowed_fields, document_fields, strict=True)
+    ) or warnings != document.warnings:
+        raise MalformedVaultError(MalformedReason.INVALID_FIELD)
 
 
 

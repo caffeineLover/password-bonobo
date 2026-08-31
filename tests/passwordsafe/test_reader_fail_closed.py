@@ -15,7 +15,8 @@ from helpers import DeterministicRandomSource, build_spec_vault
 
 import bonobo_core.passwordsafe.reader as reader_module
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType, ResourceLimits
-from bonobo_core.passwordsafe.crypto import TwofishKey
+from bonobo_core.passwordsafe.crypto import DerivedKey, TwofishKey
+from bonobo_core.passwordsafe.crypto import stretch_passphrase as production_stretch
 from bonobo_core.passwordsafe.errors import (
     AuthenticationError,
     IntegrityError,
@@ -255,6 +256,47 @@ def test_wrong_hmac_discards_quarantined_payloads(tmp_path: Path) -> None:
 
     assert not reader.has_quarantined_document
     assert tuple((tmp_path / "private").iterdir()) == ()
+
+
+
+#### Defer optional iteration hardening until stored-HMAC authentication succeeds.
+####
+def test_wrong_hmac_does_not_prepare_hardened_material(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = _XorBackend()
+    data = bytearray(_vault_bytes(backend, _base_fields()))
+    data[-1] ^= 1
+    reader = PasswordSafeReader(backend, _private_directory(tmp_path))
+    stretch_calls = 0
+
+
+
+    #### Permit unlock derivation but reject any preauthentication hardening pass.
+    ####
+    def reject_early_hardening(
+        passphrase: SecretBuffer,
+        salt: bytes,
+        iterations: int,
+        *,
+        limits: ResourceLimits,
+    ) -> DerivedKey:
+        nonlocal stretch_calls
+        stretch_calls += 1
+        if stretch_calls > 1:
+            raise AssertionError("hardening ran before stored-HMAC validation")
+        return production_stretch(passphrase, salt, iterations, limits=limits)
+
+
+
+    monkeypatch.setattr(reader_module, "stretch_passphrase", reject_early_hardening)
+
+    with pytest.raises(IntegrityError):
+        reader.open(_write_vault(tmp_path, bytes(data)), SecretBuffer.from_bytes(_PASSPHRASE))
+
+    assert stretch_calls == 1
+    assert not reader.has_quarantined_document
 
 
 

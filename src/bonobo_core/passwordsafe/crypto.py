@@ -11,10 +11,10 @@ zeroization of implementation-owned copies.
 import hashlib
 import hmac
 import secrets
-from collections.abc import Iterator
+from collections.abc import Buffer, Iterator
 from contextlib import AbstractContextManager, contextmanager, suppress
 from types import TracebackType
-from typing import NoReturn, Protocol, Self, SupportsIndex, runtime_checkable
+from typing import NoReturn, Protocol, Self, SupportsIndex, cast, runtime_checkable
 
 from .constants import BLOCK_BYTES, HMAC_BYTES, SALT_BYTES, WRAPPED_KEY_BYTES, ResourceLimits
 from .errors import ResourceLimitError, ResourceLimitReason
@@ -78,6 +78,23 @@ class TwofishBackend(Protocol):
     #### Verify the backend against the fixed official Twofish known answer.
     ####
     def self_test(self) -> None:
+        raise NotImplementedError
+
+
+
+#### Describe a source of independent bytes for keys, IVs, and field padding.
+####
+#### Production uses operating-system randomness.  Tests inject a deterministic
+#### finite stream without adding a fallback cryptographic implementation.
+####
+@runtime_checkable
+class RandomSource(Protocol):
+
+
+
+    #### Return exactly the requested number of independent random bytes.
+    ####
+    def bytes(self, length: int) -> bytes:
         raise NotImplementedError
 
 
@@ -691,8 +708,8 @@ class FieldAuthenticator(_ExclusiveCryptoOwner):
 
     #### Append one declared field-payload chunk in document traversal order.
     ####
-    def update(self, payload: bytes) -> None:
-        self._require_hmac().update(payload)
+    def update(self, payload: Buffer) -> None:
+        self._require_hmac().update(cast(bytes, payload))
 
 
 
