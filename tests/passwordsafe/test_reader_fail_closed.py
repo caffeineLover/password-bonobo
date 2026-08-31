@@ -22,6 +22,7 @@ from bonobo_core.passwordsafe.errors import (
     MalformedVaultError,
     PasswordSafeError,
     ResourceLimitError,
+    ResourceLimitReason,
     UnsupportedFormatError,
 )
 from bonobo_core.passwordsafe.payloads import FieldPayload
@@ -303,6 +304,97 @@ def test_iteration_limit_is_checked_before_large_work(tmp_path: Path) -> None:
 
 
 
+#### Accept a public-open source exactly at the caller's encrypted-file boundary.
+####
+def test_public_open_accepts_exact_encrypted_file_budget(tmp_path: Path) -> None:
+    backend = _XorBackend()
+    data = _vault_bytes(backend, _base_fields())
+    reader = PasswordSafeReader(
+        backend,
+        _private_directory(tmp_path),
+        limits=ResourceLimits(max_encrypted_file_bytes=len(data)),
+    )
+
+    with SecretBuffer.from_bytes(_PASSPHRASE) as passphrase, reader.open(
+        _write_vault(tmp_path, data),
+        passphrase,
+    ) as opened:
+        assert opened.source_snapshot.size == len(data)
+
+
+
+#### Reject public-open input while capture crosses the encrypted-file budget.
+####
+def test_public_open_rejects_encrypted_file_over_budget_and_cleans_snapshot(tmp_path: Path) -> None:
+    backend = _XorBackend()
+    data = _vault_bytes(backend, _base_fields())
+    backend.key_calls = 0
+    directory = _private_directory(tmp_path)
+    reader = PasswordSafeReader(
+        backend,
+        directory,
+        limits=ResourceLimits(max_encrypted_file_bytes=len(data) - 1, io_chunk_bytes=17),
+    )
+    passphrase = SecretBuffer.from_bytes(_PASSPHRASE)
+
+    with pytest.raises(ResourceLimitError) as caught:
+        reader.open(_write_vault(tmp_path, data), passphrase)
+
+    assert caught.value.reason == ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES
+    assert caught.value.__context__ is None
+    assert backend.key_calls == 0
+    assert not passphrase.closed
+    assert not reader.has_quarantined_document
+    assert tuple(directory.iterdir()) == ()
+    passphrase.close()
+
+
+
+#### Reject an oversized caller snapshot before any reader crypto or parser read.
+####
+def test_open_snapshot_rejects_encrypted_file_over_budget_before_crypto(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = _XorBackend()
+    data = _vault_bytes(backend, _base_fields())
+    directory = _private_directory(tmp_path)
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(data), directory)
+    backend.key_calls = 0
+    reader = PasswordSafeReader(
+        backend,
+        directory,
+        limits=ResourceLimits(max_encrypted_file_bytes=len(data) - 1),
+    )
+    read_calls = 0
+    original_read_at = EncryptedSnapshot.read_at
+
+
+
+    #### Count any forbidden reader access while preserving real snapshot behavior.
+    ####
+    def count_read(snapshot_owner: EncryptedSnapshot, offset: int, length: int) -> bytes:
+        nonlocal read_calls
+        read_calls += 1
+        return original_read_at(snapshot_owner, offset, length)
+
+
+
+    monkeypatch.setattr(EncryptedSnapshot, "read_at", count_read)
+
+    with SecretBuffer.from_bytes(_PASSPHRASE) as passphrase, pytest.raises(ResourceLimitError) as caught:
+        reader.open_snapshot(snapshot, passphrase)
+
+    assert caught.value.reason == ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES
+    assert caught.value.__context__ is None
+    assert backend.key_calls == 0
+    assert read_calls == 0
+    assert not snapshot.closed
+    assert not reader.has_quarantined_document
+    snapshot.close()
+
+
+
 #### Reject uint32 field-length overrun before allocating declared payload storage.
 ####
 def test_declared_uint32_length_overrun_fails_before_payload_allocation(tmp_path: Path) -> None:
@@ -351,6 +443,45 @@ def test_resource_counts_fail_closed(
         reader.open(_write_vault(tmp_path, _vault_bytes(backend, fields)), SecretBuffer.from_bytes(_PASSPHRASE))
 
     assert not reader.has_quarantined_document
+
+
+
+#### Reject an extra record before reading or processing its first large field.
+####
+def test_record_limit_precedes_any_over_budget_record_payload_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = _XorBackend()
+    fields = (*_base_fields(), (0xE0, b"Z" * 262_144), (RecordFieldType.END, b""))
+    data = _vault_bytes(backend, fields)
+    reader = PasswordSafeReader(
+        backend,
+        _private_directory(tmp_path),
+        limits=ResourceLimits(max_records=1),
+    )
+    read_offsets: list[int] = []
+    original_read_at = EncryptedSnapshot.read_at
+
+
+
+    #### Record real snapshot reads without changing their data or ownership effects.
+    ####
+    def record_read(snapshot: EncryptedSnapshot, offset: int, length: int) -> bytes:
+        read_offsets.append(offset)
+        return original_read_at(snapshot, offset, length)
+
+
+
+    monkeypatch.setattr(EncryptedSnapshot, "read_at", record_read)
+
+    with SecretBuffer.from_bytes(_PASSPHRASE) as passphrase, pytest.raises(ResourceLimitError) as caught:
+        reader.open(_write_vault(tmp_path, data), passphrase)
+
+    assert caught.value.reason == ResourceLimitReason.MAX_RECORDS
+    assert [offset for offset in read_offsets if 296 <= offset < len(data) - 48] == []
+    assert not reader.has_quarantined_document
+    assert tuple((tmp_path / "private").iterdir()) == ()
 
 
 

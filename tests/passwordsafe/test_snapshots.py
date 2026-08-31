@@ -21,7 +21,7 @@ from typing import Protocol, cast
 
 import pytest
 
-from bonobo_core.passwordsafe.errors import StorageError, StorageReason
+from bonobo_core.passwordsafe.errors import ResourceLimitError, ResourceLimitReason, StorageError, StorageReason
 from bonobo_core.passwordsafe.snapshots import (
     EncryptedSnapshot,
     SnapshotClosedError,
@@ -247,6 +247,36 @@ def test_snapshot_capture_records_identity_and_bounded_reads(tmp_path: Path) -> 
     assert b"".join(bytes(chunk) for chunk in snapshot.iter_chunks(11, 9000, 1024)) == ciphertext[11:9011]
     assert "private" not in repr(snapshot)
     snapshot.close()
+
+
+
+#### Enforce the encrypted-file byte boundary while streaming, before excess writes.
+####
+def test_snapshot_capture_enforces_streamed_byte_budget_and_cleans_artifact(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+    snapshot = EncryptedSnapshot.capture(io.BytesIO(b"123456789"), directory, chunk_size=4, max_bytes=9)
+
+    assert snapshot.size == 9
+    snapshot.close()
+
+    with pytest.raises(ResourceLimitError) as caught:
+        EncryptedSnapshot.capture(io.BytesIO(b"1234567890"), directory, chunk_size=4, max_bytes=9)
+
+    assert caught.value.reason == ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES
+    assert tuple(directory.iterdir()) == ()
+
+
+
+#### Reject capture bounds that disable or exceed the reviewed outer ceiling.
+####
+@pytest.mark.parametrize("max_bytes", [0, -1, 4_296_015_873, True])
+def test_snapshot_capture_rejects_invalid_byte_budget(tmp_path: Path, max_bytes: object) -> None:
+    directory = _private_directory(tmp_path)
+
+    with pytest.raises((TypeError, ValueError), match="maximum snapshot bytes"):
+        EncryptedSnapshot.capture(io.BytesIO(b"encrypted"), directory, max_bytes=cast(int, max_bytes))
+
+    assert tuple(directory.iterdir()) == ()
 
 
 

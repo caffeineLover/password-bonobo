@@ -651,6 +651,7 @@ class PasswordSafeReader(_ExclusiveOwner):
                         source,
                         self._private_directory,
                         chunk_size=self._limits.io_chunk_bytes,
+                        max_bytes=self._limits.max_encrypted_file_bytes,
                     )
             except PasswordSafeError:
                 raise
@@ -676,6 +677,8 @@ class PasswordSafeReader(_ExclusiveOwner):
         if not isinstance(passphrase, SecretBuffer):
             raise TypeError("reader passphrase must be SecretBuffer")
         with self._lock:
+            if snapshot.size > self._limits.max_encrypted_file_bytes:
+                raise ResourceLimitError(ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES)
             return self._open_snapshot_locked(snapshot, passphrase)
 
 
@@ -823,6 +826,8 @@ def _decrypt_fields(
     try:
         with CbcDecryptor(backend, vault_keys.content_key, envelope.iv) as decryptor:
             while ciphertext_position < envelope.encrypted_length:
+                if not header and record_ordinal >= limits.max_records:
+                    raise ResourceLimitError(ResourceLimitReason.MAX_RECORDS)
                 remaining_ciphertext = envelope.encrypted_length - ciphertext_position
                 if remaining_ciphertext < BLOCK_BYTES:
                     raise MalformedVaultError(MalformedReason.INVALID_FIELD)
@@ -909,26 +914,36 @@ def _consume_field_payload(
     try:
         first_count = min(payload_length, BLOCK_BYTES - FIELD_HEADER_BYTES)
         if first_count:
-            first_chunk = bytes(first_plaintext[FIELD_HEADER_BYTES:FIELD_HEADER_BYTES + first_count])
-            authenticator.update(first_chunk)
-            digest.update(first_chunk)
-            if inline is not None:
-                inline.extend(first_chunk)
+            first_view = memoryview(first_plaintext)
+            first_chunk = first_view[FIELD_HEADER_BYTES:FIELD_HEADER_BYTES + first_count]
+            try:
+                authenticator.update(cast(bytes, first_chunk))
+                digest.update(first_chunk)
+                if inline is not None:
+                    inline.extend(first_chunk)
+            finally:
+                first_chunk.release()
+                first_view.release()
             consumed = first_count
         block_offset = BLOCK_BYTES
         while block_offset < ciphertext_length:
             ciphertext = snapshot.read_at(ciphertext_offset + block_offset, BLOCK_BYTES)
             plaintext = bytearray(decryptor.transform(ciphertext))
+            plaintext_view = memoryview(plaintext)
             try:
                 payload_count = min(payload_length - consumed, BLOCK_BYTES)
                 if payload_count:
-                    chunk = bytes(plaintext[:payload_count])
-                    authenticator.update(chunk)
-                    digest.update(chunk)
-                    if inline is not None:
-                        inline.extend(chunk)
+                    chunk = plaintext_view[:payload_count]
+                    try:
+                        authenticator.update(cast(bytes, chunk))
+                        digest.update(chunk)
+                        if inline is not None:
+                            inline.extend(chunk)
+                    finally:
+                        chunk.release()
                     consumed += payload_count
             finally:
+                plaintext_view.release()
                 plaintext[:] = bytes(len(plaintext))
             block_offset += BLOCK_BYTES
         if consumed != payload_length:

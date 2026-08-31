@@ -84,6 +84,7 @@ class ResourceLimitReason(FailureReason):
     MAX_ITERATIONS = "max-iterations"
     MAX_RECORDS = "max-records"
     MAX_FIELDS = "max-fields"
+    MAX_ENCRYPTED_FILE_BYTES = "max-encrypted-file-bytes"
     MAX_INLINE_PAYLOAD_BYTES = "max-inline-payload-bytes"
     MAX_DECODED_TEXT_BYTES = "max-decoded-text-bytes"
 
@@ -133,6 +134,7 @@ _FAILURE_MESSAGES: dict[FailureReason, str] = {
     ResourceLimitReason.MAX_ITERATIONS: "vault resource limit exceeded",
     ResourceLimitReason.MAX_RECORDS: "vault resource limit exceeded",
     ResourceLimitReason.MAX_FIELDS: "vault resource limit exceeded",
+    ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES: "vault resource limit exceeded",
     ResourceLimitReason.MAX_INLINE_PAYLOAD_BYTES: "vault resource limit exceeded",
     ResourceLimitReason.MAX_DECODED_TEXT_BYTES: "vault resource limit exceeded",
     CryptoBackendReason.UNAVAILABLE: "cryptographic backend is unavailable",

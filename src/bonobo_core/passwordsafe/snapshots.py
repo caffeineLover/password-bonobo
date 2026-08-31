@@ -18,8 +18,8 @@ from types import TracebackType
 from typing import Final, NoReturn, Protocol, Self, SupportsIndex
 
 from ._darwin_security import require_no_extended_acl as _require_no_extended_acl
-from .constants import MAX_IO_CHUNK_BYTES
-from .errors import StorageError, StorageReason
+from .constants import MAX_ENCRYPTED_FILE_BYTES, MAX_IO_CHUNK_BYTES
+from .errors import ResourceLimitError, ResourceLimitReason, StorageError, StorageReason
 
 
 
@@ -290,6 +290,7 @@ def _copy_and_synchronize(
     buffer: bytearray,
     view: memoryview[int],
     chunk_size: int,
+    max_bytes: int,
 ) -> tuple[int, str] | None:
     digest = hashlib.sha256()
     size = 0
@@ -302,6 +303,8 @@ def _copy_and_synchronize(
                 raise OSError
             if count == 0:
                 break
+            if count > max_bytes - size:
+                raise ResourceLimitError(ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES)
             chunk = view[:count]
             digest.update(chunk)
             _write_all(descriptor, chunk, count)
@@ -311,6 +314,8 @@ def _copy_and_synchronize(
             raise OSError
         os.lseek(descriptor, 0, os.SEEK_SET)
         return size, digest.hexdigest()
+    except ResourceLimitError:
+        raise
     except Exception:
         return None
 
@@ -417,8 +422,10 @@ class EncryptedSnapshot:
         private_directory: Path,
         *,
         chunk_size: int = MAX_IO_CHUNK_BYTES,
+        max_bytes: int = MAX_ENCRYPTED_FILE_BYTES,
     ) -> Self:
         _validate_chunk_size(chunk_size)
+        _validate_max_bytes(max_bytes)
         anchor = _validate_private_directory(private_directory)
         if anchor is None:
             raise StorageError(StorageReason.PREPARATION_FAILED)
@@ -433,7 +440,7 @@ class EncryptedSnapshot:
             if created is None:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
             descriptor, name, identity = created
-            copied = _copy_and_synchronize(source, descriptor, buffer, view, chunk_size)
+            copied = _copy_and_synchronize(source, descriptor, buffer, view, chunk_size, max_bytes)
             if copied is None:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
             size, digest = copied
@@ -635,6 +642,16 @@ def _validate_chunk_size(chunk_size: int) -> None:
         raise TypeError("chunk size must be an integer")
     if not 0 < chunk_size <= MAX_IO_CHUNK_BYTES:
         raise ValueError("chunk size must be within the approved I/O bound")
+
+
+
+#### Validate a capture ceiling before creating or reading any encrypted artifact.
+####
+def _validate_max_bytes(max_bytes: int) -> None:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int):
+        raise TypeError("maximum snapshot bytes must be an integer")
+    if not 0 < max_bytes <= MAX_ENCRYPTED_FILE_BYTES:
+        raise ValueError("maximum snapshot bytes must be within the approved encrypted-file bound")
 
 
 

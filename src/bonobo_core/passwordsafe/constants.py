@@ -28,6 +28,9 @@ MINIMUM_ITERATIONS: Final[int] = 262_144
 MAX_ITERATIONS: Final[int] = 10_000_000
 MAX_RECORDS: Final[int] = 1_000_000
 MAX_FIELDS: Final[int] = 2_000_000
+# One maximum uint32 payload frame plus one MiB for the envelope, required
+# schema fields, and future-compatible bounded metadata.
+MAX_ENCRYPTED_FILE_BYTES: Final[int] = (1 << 32) + 1_048_576
 MAX_INLINE_PAYLOAD_BYTES: Final[int] = 1_048_576
 MAX_DECODED_TEXT_BYTES: Final[int] = 16_777_216
 MAX_IO_CHUNK_BYTES: Final[int] = 65_536
@@ -98,6 +101,7 @@ class ResourceLimits:
     max_inline_payload_bytes: int = MAX_INLINE_PAYLOAD_BYTES
     max_decoded_text_bytes: int = MAX_DECODED_TEXT_BYTES
     io_chunk_bytes: int = MAX_IO_CHUNK_BYTES
+    max_encrypted_file_bytes: int = MAX_ENCRYPTED_FILE_BYTES
 
 
 
@@ -114,6 +118,7 @@ class ResourceLimits:
             ("max_inline_payload_bytes", self.max_inline_payload_bytes, MAX_INLINE_PAYLOAD_BYTES),
             ("max_decoded_text_bytes", self.max_decoded_text_bytes, MAX_DECODED_TEXT_BYTES),
             ("io_chunk_bytes", self.io_chunk_bytes, MAX_IO_CHUNK_BYTES),
+            ("max_encrypted_file_bytes", self.max_encrypted_file_bytes, MAX_ENCRYPTED_FILE_BYTES),
         )
         for name, value, ceiling in limits:
             if isinstance(value, bool) or not isinstance(value, int) or not 0 < value <= ceiling:

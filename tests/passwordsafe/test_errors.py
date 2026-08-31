@@ -55,6 +55,17 @@ def test_integrity_error_is_typed_and_safe() -> None:
 
 
 
+#### Expose the outer encrypted-file budget through the closed resource taxonomy.
+####
+def test_encrypted_file_resource_error_is_typed_and_safe() -> None:
+    error = ResourceLimitError(ResourceLimitReason.MAX_ENCRYPTED_FILE_BYTES)
+
+    assert error.stage is FailureStage.ENVELOPE
+    assert error.reason == "max-encrypted-file-bytes"
+    assert str(error) == "vault resource limit exceeded"
+
+
+
 #### Keep every public leaf failure in the safe PasswordSafe hierarchy.
 ####
 #### Each constructor receives a closed set of reason codes rather than an

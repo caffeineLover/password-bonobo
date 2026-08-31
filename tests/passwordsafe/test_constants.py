@@ -101,6 +101,7 @@ def test_resource_limits_have_approved_immutable_defaults() -> None:
     assert limits.max_iterations == 10_000_000
     assert limits.max_records == 1_000_000
     assert limits.max_fields == 2_000_000
+    assert limits.max_encrypted_file_bytes == 4_296_015_872
     assert limits.max_inline_payload_bytes == 1_048_576
     assert limits.max_decoded_text_bytes == 16_777_216
     assert limits.io_chunk_bytes == 65_536
@@ -119,12 +120,28 @@ def test_resource_limits_accept_exact_approved_ceilings() -> None:
         max_iterations=10_000_000,
         max_records=1_000_000,
         max_fields=2_000_000,
+        max_encrypted_file_bytes=4_296_015_872,
         max_inline_payload_bytes=1_048_576,
         max_decoded_text_bytes=16_777_216,
         io_chunk_bytes=65_536,
     )
 
     assert limits == ResourceLimits()
+
+
+
+#### Append the new outer budget without remapping existing positional callers.
+####
+def test_resource_limits_preserve_existing_positional_parameter_order() -> None:
+    limits = ResourceLimits(1, 2, 3, 4, 5, 6)
+
+    assert limits.max_iterations == 1
+    assert limits.max_records == 2
+    assert limits.max_fields == 3
+    assert limits.max_inline_payload_bytes == 4
+    assert limits.max_decoded_text_bytes == 5
+    assert limits.io_chunk_bytes == 6
+    assert limits.max_encrypted_file_bytes == 4_296_015_872
 
 
 
@@ -152,6 +169,15 @@ def test_resource_limits_reject_invalid_field_budget() -> None:
     for value in (0, -1, 2_000_001):
         with pytest.raises(ValueError, match="max_fields"):
             ResourceLimits(max_fields=value)
+
+
+
+#### Reject disabled or widened encrypted-file budgets at construction.
+####
+def test_resource_limits_reject_invalid_encrypted_file_budget() -> None:
+    for value in (0, -1, 4_296_015_873):
+        with pytest.raises(ValueError, match="max_encrypted_file_bytes"):
+            ResourceLimits(max_encrypted_file_bytes=value)
 
 
 
