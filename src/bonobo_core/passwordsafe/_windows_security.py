@@ -36,6 +36,7 @@ _FILE_SHARE_WRITE: Final[int] = 0x00000002
 _FILE_SHARE_DELETE: Final[int] = 0x00000004
 _OPEN_EXISTING: Final[int] = 3
 _FILE_CREATE: Final[int] = 2
+_FILE_OPEN: Final[int] = 1
 _FILE_SYNCHRONOUS_IO_NONALERT: Final[int] = 0x00000020
 _FILE_NON_DIRECTORY_FILE: Final[int] = 0x00000040
 _FILE_DELETE_ON_CLOSE: Final[int] = 0x00001000
@@ -46,7 +47,10 @@ _FILE_FLAG_OPEN_REPARSE_POINT: Final[int] = 0x00200000
 _FILE_FLAG_BACKUP_SEMANTICS: Final[int] = 0x02000000
 _INVALID_FILE_ATTRIBUTES: Final[int] = 0xFFFFFFFF
 _FILE_DISPOSITION_INFO_CLASS: Final[int] = 4
+_NT_FILE_RENAME_INFORMATION_CLASS: Final[int] = 10
 _INVALID_HANDLE_VALUE: Final[int] = int(ctypes.c_void_p(-1).value or 0)
+_ERROR_FILE_NOT_FOUND: Final[int] = 2
+_ERROR_PATH_NOT_FOUND: Final[int] = 3
 
 
 
@@ -183,6 +187,18 @@ class _FileDispositionInfo(ctypes.Structure):
 
 
 
+#### Mirror the fixed prefix of variable-length FILE_RENAME_INFO.
+####
+class _FileRenameInfo(ctypes.Structure):
+    _fields_ = [
+        ("ReplaceIfExists", wintypes.BOOLEAN),
+        ("RootDirectory", wintypes.HANDLE),
+        ("FileNameLength", wintypes.DWORD),
+        ("FileName", wintypes.WCHAR * 1),
+    ]
+
+
+
 _ADVAPI32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
 _ADVAPI32.OpenProcessToken.restype = wintypes.BOOL
 _ADVAPI32.GetTokenInformation.argtypes = [
@@ -268,6 +284,14 @@ _NTDLL.NtCreateFile.argtypes = [
     wintypes.ULONG,
 ]
 _NTDLL.NtCreateFile.restype = ctypes.c_long
+_NTDLL.NtSetInformationFile.argtypes = [
+    wintypes.HANDLE,
+    ctypes.POINTER(_IoStatusBlock),
+    wintypes.LPVOID,
+    wintypes.ULONG,
+    ctypes.c_int,
+]
+_NTDLL.NtSetInformationFile.restype = ctypes.c_long
 
 
 
@@ -478,6 +502,8 @@ def _nt_create_relative(
     root_directory: wintypes.HANDLE,
     name: str,
     security_descriptor: wintypes.LPVOID,
+    *,
+    delete_on_close: bool = True,
 ) -> wintypes.HANDLE | None:
     name_buffer = ctypes.create_unicode_buffer(name)
     name_length = len(name.encode("utf-16le"))
@@ -504,7 +530,7 @@ def _nt_create_relative(
             _FILE_CREATE,
             _FILE_SYNCHRONOUS_IO_NONALERT
             | _FILE_NON_DIRECTORY_FILE
-            | _FILE_DELETE_ON_CLOSE
+            | (_FILE_DELETE_ON_CLOSE if delete_on_close else 0)
             | _FILE_FLAG_OPEN_REPARSE_POINT,
             None,
             0,
@@ -514,6 +540,77 @@ def _nt_create_relative(
         _close_handle(handle)
         return None
     return handle
+
+
+
+#### Open one existing non-reparse child relative to a retained directory handle.
+####
+def _nt_open_relative(
+    root_directory: wintypes.HANDLE,
+    name: str,
+    access: int,
+) -> wintypes.HANDLE | None:
+    name_buffer = ctypes.create_unicode_buffer(name)
+    name_length = len(name.encode("utf-16le"))
+    unicode_name = _UnicodeString(name_length, name_length + 2, ctypes.cast(name_buffer, wintypes.LPWSTR))
+    attributes = _ObjectAttributes(
+        ctypes.sizeof(_ObjectAttributes),
+        root_directory,
+        ctypes.pointer(unicode_name),
+        0,
+        None,
+        None,
+    )
+    io_status = _IoStatusBlock()
+    handle = wintypes.HANDLE(_INVALID_HANDLE_VALUE)
+    status = int(
+        _NTDLL.NtCreateFile(
+            ctypes.byref(handle),
+            access | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
+            ctypes.byref(attributes),
+            ctypes.byref(io_status),
+            None,
+            _FILE_ATTRIBUTE_NORMAL,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            _FILE_OPEN,
+            _FILE_SYNCHRONOUS_IO_NONALERT | _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+            0,
+        )
+    )
+    if status < 0 or _is_invalid_handle(handle):
+        _close_handle(handle)
+        return None
+    return handle
+
+
+
+#### Rename one retained file handle relative to one validated directory handle.
+####
+def _rename_handle_relative(
+    handle: wintypes.HANDLE,
+    root_directory: wintypes.HANDLE,
+    name: str,
+) -> bool:
+    encoded = name.encode("utf-16le")
+    size = _FileRenameInfo.FileName.offset + len(encoded)
+    buffer = ctypes.create_string_buffer(size)
+    information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
+    information.ReplaceIfExists = True
+    information.RootDirectory = root_directory
+    information.FileNameLength = len(encoded)
+    ctypes.memmove(ctypes.addressof(buffer) + _FileRenameInfo.FileName.offset, encoded, len(encoded))
+    io_status = _IoStatusBlock()
+    status = int(
+        _NTDLL.NtSetInformationFile(
+            handle,
+            ctypes.byref(io_status),
+            buffer,
+            size,
+            _NT_FILE_RENAME_INFORMATION_CLASS,
+        )
+    )
+    return status >= 0
 
 
 
@@ -574,6 +671,27 @@ class WindowsDirectoryAnchor:
     ####
     @classmethod
     def open(cls, path: Path) -> WindowsDirectoryAnchor | None:
+        return cls._open_validated(path, require_private=True)
+
+
+
+    #### Retain a non-reparse destination directory without requiring private ACLs.
+    ####
+    @classmethod
+    def open_public(cls, path: Path) -> WindowsDirectoryAnchor | None:
+        return cls._open_validated(path, require_private=False)
+
+
+
+    #### Open one stable directory with optional current-owner-only ACL checks.
+    ####
+    @classmethod
+    def _open_validated(
+        cls,
+        path: Path,
+        *,
+        require_private: bool,
+    ) -> WindowsDirectoryAnchor | None:
         handle: wintypes.HANDLE | None = None
         try:
             absolute = path.absolute()
@@ -587,7 +705,7 @@ class WindowsDirectoryAnchor:
             if handle is None:
                 return None
             identity = _file_identity(handle)
-            if identity is None or not _handle_is_private(handle):
+            if identity is None or (require_private and not _handle_is_private(handle)):
                 return None
             anchor = cls(absolute, handle, identity)
             handle = None
@@ -606,6 +724,108 @@ class WindowsDirectoryAnchor:
     #### Create one child with an explicit protected owner-only DACL and verify it.
     ####
     def create(self, name: str) -> tuple[int, tuple[int, int], str | None] | None:
+        return self._create_named(name, delete_on_close=True)
+
+
+
+    #### Create one persistent protected child for later same-directory replacement.
+    ####
+    def create_persistent(self, name: str) -> tuple[int, tuple[int, int], str | None] | None:
+        return self._create_named(name, delete_on_close=False)
+
+
+
+    #### Open one existing regular non-reparse child relative to the retained handle.
+    ####
+    def open_child(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        return self._open_child_with_access(name, _GENERIC_READ)
+
+
+
+    #### Open one regular child with delete access retained for atomic rename.
+    ####
+    def open_child_for_replace(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        return self._open_child_with_access(name, _GENERIC_READ | _DELETE)
+
+
+
+    #### Open and validate one child using the requested native access mask.
+    ####
+    def _open_child_with_access(self, name: str, access: int) -> tuple[int, tuple[int, int]] | None:
+        if not self._stable() or Path(name).name != name:
+            return None
+        handle = _nt_open_relative(self._handle, name, access)
+        if handle is None:
+            return None
+        try:
+            identity = _file_identity(handle)
+            information = _ByHandleFileInformation()
+            if (
+                identity is None
+                or not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+                or information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
+                or not self._stable()
+            ):
+                return None
+            raw_handle = _handle_value(handle)
+            descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDONLY | os.O_BINARY)
+            handle = None
+            return descriptor, identity
+        finally:
+            if handle is not None:
+                _close_handle(handle)
+
+
+
+    #### Atomically rename one retained child handle over a destination child name.
+    ####
+    def replace_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        if (
+            not self._stable()
+            or Path(source_name).name != source_name
+            or Path(destination_name).name != destination_name
+        ):
+            return False
+        handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+        information = _ByHandleFileInformation()
+        if (
+            _file_identity(handle) != identity
+            or not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+            or information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
+        ):
+            return False
+        return _rename_handle_relative(handle, self._handle, destination_name) and self._stable()
+
+
+
+    #### Report whether the retained directory still owns its original pathname.
+    ####
+    def stable(self) -> bool:
+        return self._stable()
+
+
+
+    #### Complete the cross-platform directory-sync seam where unsupported.
+    ####
+    def synchronize(self) -> None:
+        return None
+
+
+
+    #### Create and verify one child under the retained directory handle.
+    ####
+    def _create_named(
+        self,
+        name: str,
+        *,
+        delete_on_close: bool,
+    ) -> tuple[int, tuple[int, int], str | None] | None:
         if not self._stable() or Path(name).name != name:
             return None
         descriptor = _new_security_descriptor()
@@ -614,7 +834,12 @@ class WindowsDirectoryAnchor:
         handle: wintypes.HANDLE | None = None
         try:
             _before_relative_create()
-            handle = _nt_create_relative(self._handle, name, descriptor)
+            handle = _nt_create_relative(
+                self._handle,
+                name,
+                descriptor,
+                delete_on_close=delete_on_close,
+            )
             if handle is None:
                 return None
             identity = _file_identity(handle)
@@ -682,6 +907,45 @@ class WindowsDirectoryAnchor:
         if not _close_handle(handle):
             raise OSError
         self._handle = wintypes.HANDLE(_INVALID_HANDLE_VALUE)
+
+
+
+#### Open one regular path without following a final or ancestral reparse point.
+####
+def open_regular_file(path: Path) -> int | None:
+    handle: wintypes.HANDLE | None = None
+    try:
+        absolute = path.absolute()
+        if not _ancestry_is_plain_directory(absolute.parent):
+            return None
+        handle = _KERNEL32.CreateFileW(
+            str(absolute),
+            _GENERIC_READ | _FILE_READ_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            _FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+        if _is_invalid_handle(handle):
+            error = ctypes.get_last_error()
+            handle = None
+            if error in (_ERROR_FILE_NOT_FOUND, _ERROR_PATH_NOT_FOUND):
+                raise FileNotFoundError
+            return None
+        information = _ByHandleFileInformation()
+        if (
+            not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+            or information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
+        ):
+            return None
+        raw_handle = _handle_value(handle)
+        descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDONLY | os.O_BINARY)
+        handle = None
+        return descriptor
+    finally:
+        if handle is not None:
+            _close_handle(handle)
 
 
 
