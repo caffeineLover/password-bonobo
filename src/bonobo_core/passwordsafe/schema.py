@@ -29,7 +29,7 @@ from .errors import (
     ResourceLimitError,
     ResourceLimitReason,
 )
-from .model import PreservationWarning, PreservationWarningCode, RawField, SectionName
+from .model import FieldClassification, PreservationWarning, PreservationWarningCode, RawField, SectionName
 from .payloads import InlinePayload
 from .secrets import SecretBuffer
 
@@ -89,6 +89,7 @@ class FieldSpec:
     mandatory_role: MandatoryRole
     editable: bool
     fixed_length: int | None = None
+    alternate_lengths: tuple[int, ...] = ()
     allow_historical_time: bool = False
 
 
@@ -110,6 +111,16 @@ class FieldSpec:
             isinstance(self.fixed_length, bool) or self.fixed_length < 0
         ):
             raise ValueError("fixed field length must be nonnegative")
+        if not isinstance(self.alternate_lengths, tuple) or any(
+            isinstance(length, bool) or not isinstance(length, int) or length < 0
+            for length in self.alternate_lengths
+        ):
+            raise ValueError("alternate field lengths must be nonnegative integers")
+        if (
+            len(set(self.alternate_lengths)) != len(self.alternate_lengths)
+            or self.fixed_length in self.alternate_lengths
+        ):
+            raise ValueError("alternate field lengths must be distinct")
 
 
 
@@ -259,6 +270,7 @@ def _spec(
     role: MandatoryRole = MandatoryRole.OPTIONAL,
     editable: bool = True,
     fixed_length: int | None = None,
+    alternate_lengths: tuple[int, ...] = (),
     historical_time: bool = False,
 ) -> FieldSpec:
     return FieldSpec(
@@ -269,6 +281,7 @@ def _spec(
         role,
         editable=editable,
         fixed_length=fixed_length,
+        alternate_lengths=alternate_lengths,
         allow_historical_time=historical_time,
     )
 
@@ -317,12 +330,12 @@ RECORD_SCHEMA: Mapping[RecordFieldType, FieldSpec] = MappingProxyType({
     RecordFieldType.USERNAME: _spec(FieldKind.TEXT, 0x0300),
     RecordFieldType.NOTES: _spec(FieldKind.TEXT, 0x0300, secrecy=_PS),
     RecordFieldType.PASSWORD: _spec(FieldKind.TEXT, 0x0300, secrecy=_S, role=_RR),
-    RecordFieldType.CREATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4, historical_time=True),
-    RecordFieldType.PASSWORD_MODIFICATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4, historical_time=True),
-    RecordFieldType.LAST_ACCESS_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4, historical_time=True),
-    RecordFieldType.PASSWORD_EXPIRY_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4, historical_time=True),
+    RecordFieldType.CREATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4),
+    RecordFieldType.PASSWORD_MODIFICATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4),
+    RecordFieldType.LAST_ACCESS_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4),
+    RecordFieldType.PASSWORD_EXPIRY_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4),
     RecordFieldType.RESERVED_0B: _spec(FieldKind.OPAQUE, 0x0300, secrecy=_PS, editable=False, fixed_length=4),
-    RecordFieldType.LAST_MODIFICATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4, historical_time=True),
+    RecordFieldType.LAST_MODIFICATION_TIME: _spec(FieldKind.TIME, 0x0300, fixed_length=4),
     RecordFieldType.URL: _spec(FieldKind.TEXT, 0x0300),
     RecordFieldType.AUTOTYPE: _spec(FieldKind.TEXT, 0x0300),
     RecordFieldType.PASSWORD_HISTORY: _spec(FieldKind.TEXT, 0x0300, secrecy=_S),
@@ -346,7 +359,7 @@ RECORD_SCHEMA: Mapping[RecordFieldType, FieldSpec] = MappingProxyType({
     RecordFieldType.TOTP_CONFIG: _spec(FieldKind.UINT8, 0x030E, fixed_length=1),
     RecordFieldType.TOTP_LENGTH: _spec(FieldKind.UINT8, 0x030E, fixed_length=1),
     RecordFieldType.TOTP_TIME_STEP: _spec(FieldKind.UINT8, 0x030E, fixed_length=1),
-    RecordFieldType.TOTP_START_TIME: _spec(FieldKind.TIME, 0x030E, fixed_length=4, historical_time=True),
+    RecordFieldType.TOTP_START_TIME: _spec(FieldKind.TIME, 0x030E, fixed_length=4, alternate_lengths=(5,)),
     RecordFieldType.ATTACHMENT_TITLE: _spec(FieldKind.OPAQUE, 0x030F, secrecy=_PS, editable=False),
     RecordFieldType.ATTACHMENT_MEDIA_TYPE: _spec(FieldKind.OPAQUE, 0x030F, secrecy=_PS, role=_AR, editable=False),
     RecordFieldType.ATTACHMENT_FILE_NAME: _spec(FieldKind.OPAQUE, 0x030F, secrecy=_PS, editable=False),
@@ -364,7 +377,7 @@ RECORD_SCHEMA: Mapping[RecordFieldType, FieldSpec] = MappingProxyType({
     RecordFieldType.PASSKEY_SIGN_COUNT: _spec(
         FieldKind.OPAQUE, 0x0310, secrecy=_PS, role=_PR, editable=False, fixed_length=4,
     ),
-    RecordFieldType.CUSTOM_TEXT_FIELD: _spec(FieldKind.TEXT, 0x0311, secrecy=_PS),
+    RecordFieldType.CUSTOM_TEXT_FIELD: _spec(FieldKind.TEXT, 0x0311, secrecy=_PS, editable=False),
     RecordFieldType.UNKNOWN_TESTING: _spec(
         FieldKind.OPAQUE, 0x0300, multiplicity=FieldMultiplicity.MULTIPLE, secrecy=_PS, editable=False,
     ),
@@ -423,6 +436,34 @@ def encode_record_field(raw: RawField, value: TypedValue) -> RawField:
     if spec is None:
         raise ValueError("unknown record fields cannot be edited")
     return _encode_field(raw, spec, value)
+
+
+
+#### Encode one newly added record field using its current canonical width.
+####
+def encode_new_record_field(
+    field_type: RecordFieldType,
+    value: TypedValue,
+    *,
+    ordinal: int,
+    classification: FieldClassification = FieldClassification.UNDERSTOOD,
+) -> RawField:
+    if not isinstance(field_type, RecordFieldType):
+        raise TypeError("new record field type must use RecordFieldType")
+    if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 0:
+        raise ValueError("field ordinal must be a nonnegative integer")
+    if not isinstance(classification, FieldClassification):
+        raise TypeError("field classification must use the closed enum")
+    spec = RECORD_SCHEMA[field_type]
+    if not spec.editable or spec.kind in (FieldKind.OPAQUE, FieldKind.EMPTY):
+        raise ValueError("field is not editable")
+    data = _encode_value(spec, value, wire_width=spec.fixed_length)
+    payload = InlinePayload.take_ownership(data)
+    try:
+        return RawField(field_type, payload, ordinal, classification)
+    except BaseException:
+        payload.close()
+        raise
 
 
 
@@ -504,6 +545,8 @@ def _decode_field(
 def _length_is_malformed(raw: RawField, spec: FieldSpec) -> bool:
     length = raw.payload.length
     if spec.kind is FieldKind.TIME and spec.allow_historical_time and length == 8:
+        return False
+    if length in spec.alternate_lengths:
         return False
     if spec.fixed_length is not None and length != spec.fixed_length:
         return True
@@ -628,7 +671,13 @@ def _decode_historical_time(data: bytearray) -> int:
 def _encode_field(raw: RawField, spec: FieldSpec, value: TypedValue) -> RawField:
     if not spec.editable or spec.kind in (FieldKind.OPAQUE, FieldKind.EMPTY):
         raise ValueError("field is not editable")
-    data = _encode_value(spec, value)
+    wire_width = spec.fixed_length
+    if spec.alternate_lengths:
+        valid_lengths = (spec.fixed_length, *spec.alternate_lengths)
+        if raw.payload.length not in valid_lengths:
+            raise ValueError("source field has no valid editable width")
+        wire_width = raw.payload.length
+    data = _encode_value(spec, value, wire_width=wire_width)
     payload = InlinePayload.take_ownership(data)
     return RawField(raw.type_code, payload, raw.ordinal, raw.classification)
 
@@ -636,7 +685,12 @@ def _encode_field(raw: RawField, spec: FieldSpec, value: TypedValue) -> RawField
 
 #### Encode one typed edit into the official canonical wire representation.
 ####
-def _encode_value(spec: FieldSpec, value: TypedValue) -> bytearray:
+def _encode_value(
+    spec: FieldSpec,
+    value: TypedValue,
+    *,
+    wire_width: int | None,
+) -> bytearray:
     if spec.kind is FieldKind.UUID:
         if not isinstance(value, UUID) or value.bytes[8] & 0xC0 != 0x80:
             raise ValueError("UUID edit must use an RFC 4122 UUID")
@@ -662,7 +716,7 @@ def _encode_value(spec: FieldSpec, value: TypedValue) -> bytearray:
     if spec.kind in (FieldKind.TIME, FieldKind.UINT8, FieldKind.UINT16, FieldKind.UINT32):
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError("integer field edit requires an integer")
-        width = spec.fixed_length
+        width = wire_width
         if width is None or not 0 <= value < 1 << (width * 8):
             raise ValueError("integer field edit is outside its wire range")
         return bytearray(value.to_bytes(width, "little"))

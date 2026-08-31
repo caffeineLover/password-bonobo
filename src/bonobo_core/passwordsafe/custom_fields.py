@@ -8,8 +8,15 @@ storage, including unknown identifiers.  Targeted edits retain all other owners.
 from contextlib import suppress
 from typing import NoReturn, SupportsIndex
 
-from .constants import MAX_DECODED_TEXT_BYTES, FormatVersion
-from .errors import IncompatibleExportError, IncompatibleExportReason
+from .constants import MAX_DECODED_TEXT_BYTES, MAX_IO_CHUNK_BYTES, FormatVersion, RecordFieldType
+from .errors import (
+    IncompatibleExportError,
+    IncompatibleExportReason,
+    ResourceLimitError,
+    ResourceLimitReason,
+)
+from .model import RawField
+from .payloads import InlinePayload
 from .secrets import SecretBuffer, SecretLease
 
 
@@ -434,6 +441,17 @@ def parse_custom_fields(
 #### Serialize exact property bytes and separator placement in original order.
 ####
 def encode_custom_fields(fields: tuple[CustomField, ...]) -> bytes:
+    output = _encode_custom_fields_owned(fields)
+    try:
+        return bytes(output)
+    finally:
+        output[:] = bytes(len(output))
+
+
+
+#### Serialize custom fields into newly owned mutable storage for raw edits.
+####
+def _encode_custom_fields_owned(fields: tuple[CustomField, ...]) -> bytearray:
     if not isinstance(fields, tuple) or not all(isinstance(item, CustomField) for item in fields):
         raise TypeError("custom fields must be an immutable CustomField tuple")
     output = bytearray()
@@ -446,9 +464,10 @@ def encode_custom_fields(fields: tuple[CustomField, ...]) -> bytes:
                 output.extend(item._borrow_encoded())
             if custom_field.separator_after:
                 output.extend(_SEPARATOR)
-        return bytes(output)
-    finally:
+        return output
+    except BaseException:
         output[:] = bytes(len(output))
+        raise
 
 
 
@@ -481,7 +500,7 @@ def replace_custom_value(
     try:
         replacement = bytearray(value.borrow())
         try:
-            if not replacement or len(replacement) > 0xFFFF:
+            if len(replacement) > 0xFFFF:
                 raise ValueError("custom value length is invalid")
             _validate_property_value(memoryview(replacement))
             for custom_field in fields:
@@ -507,6 +526,58 @@ def replace_custom_value(
 
 
 
+#### Replace one named property through the structured raw-field boundary.
+####
+def replace_custom_raw_field_value(
+    raw: RawField,
+    *,
+    name: str,
+    value: SecretBuffer,
+    sensitive: bool | None = None,
+    max_bytes: int = MAX_DECODED_TEXT_BYTES,
+) -> RawField:
+    if not isinstance(value, SecretBuffer):
+        raise TypeError("custom value replacement requires SecretBuffer ownership")
+    source: SecretBuffer | None = None
+    parsed: tuple[CustomField, ...] = ()
+    edited: tuple[CustomField, ...] = ()
+    replacement_consumed = False
+    try:
+        if not isinstance(raw, RawField):
+            raise TypeError("custom raw edit requires RawField")
+        if raw.type_code != RecordFieldType.CUSTOM_TEXT_FIELD:
+            raise ValueError("raw field is not a custom text field")
+        materialized = _materialize_raw_custom_field(raw, max_bytes=max_bytes)
+        source = SecretBuffer.take_ownership(materialized)
+        parsed = parse_custom_fields(source, max_bytes=max_bytes)
+        replacement_consumed = True
+        edited = replace_custom_value(
+            parsed,
+            name=name,
+            value=value,
+            sensitive=sensitive,
+        )
+        encoded = _encode_custom_fields_owned(edited)
+        payload = InlinePayload.take_ownership(encoded)
+        try:
+            return RawField(raw.type_code, payload, raw.ordinal, raw.classification)
+        except BaseException:
+            payload.close()
+            raise
+    finally:
+        if not replacement_consumed:
+            value.close()
+        for custom_field in edited:
+            with suppress(BaseException):
+                custom_field.close()
+        for custom_field in parsed:
+            with suppress(BaseException):
+                custom_field.close()
+        if source is not None:
+            source.close()
+
+
+
 #### Reject any nonempty custom-field set for a target older than ``0x0311``.
 ####
 def ensure_custom_fields_representable(
@@ -517,6 +588,28 @@ def ensure_custom_fields_representable(
         raise IncompatibleExportError(IncompatibleExportReason.TARGET_VERSION_UNSUPPORTED)
     if fields and target_version < _CUSTOM_FIELD_VERSION:
         raise IncompatibleExportError(IncompatibleExportReason.UNREPRESENTABLE_FIELD)
+
+
+
+#### Materialize one structured custom payload within the approved text bound.
+####
+def _materialize_raw_custom_field(raw: RawField, *, max_bytes: int) -> bytearray:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 0 < max_bytes <= MAX_DECODED_TEXT_BYTES:
+        raise ValueError("custom field byte limit must be a positive approved integer")
+    if raw.payload.length > max_bytes:
+        raise ResourceLimitError(ResourceLimitReason.MAX_DECODED_TEXT_BYTES)
+    data = bytearray()
+    try:
+        for chunk in raw.payload.iter_chunks(MAX_IO_CHUNK_BYTES):
+            data.extend(chunk)
+            if len(data) > raw.payload.length:
+                raise ValueError("custom payload stream exceeds its declaration")
+        if len(data) != raw.payload.length:
+            raise ValueError("custom payload stream does not match its declaration")
+        return data
+    except BaseException:
+        data[:] = bytes(len(data))
+        raise
 
 
 
@@ -575,9 +668,9 @@ def _finish_field(
     separator_after: bool,
 ) -> CustomField:
     name_property = _property_by_id(tuple(properties), 0x01)
-    value_property = _property_by_id(tuple(properties), 0x02)
-    if name_property.value_length == 0 or value_property.value_length == 0:
-        raise ValueError("custom field name and value cannot be empty")
+    _property_by_id(tuple(properties), 0x02)
+    if name_property.value_length == 0:
+        raise ValueError("custom field name cannot be empty")
     name_bytes = name_property._copy_value()
     try:
         name = name_bytes.decode("utf-8")

@@ -7,7 +7,8 @@ import weakref
 
 import pytest
 
-from bonobo_core.passwordsafe.constants import FormatVersion
+import bonobo_core.passwordsafe.custom_fields as custom_fields_module
+from bonobo_core.passwordsafe.constants import FormatVersion, RecordFieldType
 from bonobo_core.passwordsafe.custom_fields import (
     CustomField,
     CustomProperty,
@@ -17,6 +18,9 @@ from bonobo_core.passwordsafe.custom_fields import (
     replace_custom_value,
 )
 from bonobo_core.passwordsafe.errors import IncompatibleExportError
+from bonobo_core.passwordsafe.model import FieldClassification, RawField
+from bonobo_core.passwordsafe.payloads import FieldPayload, InlinePayload
+from bonobo_core.passwordsafe.schema import encode_record_field
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 
 
@@ -26,6 +30,25 @@ from bonobo_core.passwordsafe.secrets import SecretBuffer
 def _close_fields(fields: tuple[CustomField, ...]) -> None:
     for custom_field in fields:
         custom_field.close()
+
+
+
+#### Build one exact custom raw field for the targeted edit boundary.
+####
+def _raw_custom(data: bytes, *, ordinal: int = 0) -> RawField:
+    return RawField(
+        RecordFieldType.CUSTOM_TEXT_FIELD,
+        InlinePayload.from_bytes(data),
+        ordinal,
+        FieldClassification.UNDERSTOOD,
+    )
+
+
+
+#### Read one small payload for preservation assertions without production codecs.
+####
+def _payload_bytes(payload: FieldPayload) -> bytes:
+    return b"".join(bytes(chunk) for chunk in payload.iter_chunks(64))
 
 
 
@@ -67,7 +90,6 @@ def test_custom_field_separators_round_trip_exactly() -> None:
         b"010001n010001x020001v",
         b"010001n020001v020001x",
         b"010000020001v",
-        b"010001n020000",
         b"010001n020001v0300012",
         b"010001n020001v03000210",
         b"010001n020001\xff",
@@ -92,6 +114,38 @@ def test_custom_field_names_are_unique_and_nonempty() -> None:
     duplicate = b"010004Name0200011000000010004Name0200012"
     with pytest.raises(ValueError, match="custom field names must be unique"):
         parse_custom_fields(duplicate)
+
+
+
+#### Parse, reveal, and re-encode a present empty value without normalization.
+####
+def test_custom_field_value_may_be_empty() -> None:
+    encoded = b"010004Name0200007f0003xyz"
+    parsed = parse_custom_fields(encoded)
+    assert encode_custom_fields(parsed) == encoded
+    with parsed[0].reveal_value(max_bytes=1) as lease:
+        assert bytes(lease.borrow()) == b""
+    edited = replace_custom_value(
+        parsed,
+        name="Name",
+        value=SecretBuffer.from_bytes(b"filled"),
+    )
+    assert encode_custom_fields(edited) == b"010004Name020006filled7f0003xyz"
+    _close_fields(edited)
+    _close_fields(parsed)
+
+
+
+#### Encode an explicit empty replacement while retaining unrelated properties.
+####
+def test_custom_value_edit_accepts_empty_secret_buffer() -> None:
+    parsed = parse_custom_fields(b"010004Name7f0003xyz020005Value")
+    replacement = SecretBuffer.from_bytes(b"")
+    edited = replace_custom_value(parsed, name="Name", value=replacement)
+    assert replacement.closed
+    assert encode_custom_fields(edited) == b"010004Name7f0003xyz020000"
+    _close_fields(edited)
+    _close_fields(parsed)
 
 
 
@@ -137,6 +191,58 @@ def test_targeted_replacement_inserts_missing_sensitivity_after_value() -> None:
 
 
 
+#### Reject generic UTF-8 replacement for the structured custom field payload.
+####
+def test_custom_raw_field_rejects_generic_text_encoding() -> None:
+    raw = _raw_custom(b"010004Name020005Value")
+    with pytest.raises(ValueError, match="field is not editable"):
+        encode_record_field(raw, "arbitrary text")
+    assert _payload_bytes(raw.payload) == b"010004Name020005Value"
+    raw.payload.close()
+
+
+
+#### Target one custom value while retaining exact unknown and unrelated bytes.
+####
+def test_targeted_custom_raw_edit_preserves_source_and_structural_metadata() -> None:
+    original = b"7f0003xyz010004Name040003abc020005Value0300010"
+    raw = _raw_custom(original, ordinal=9)
+    replacement = SecretBuffer.from_bytes(b"Other")
+    edited = custom_fields_module.replace_custom_raw_field_value(
+        raw,
+        name="Name",
+        value=replacement,
+        sensitive=True,
+    )
+    assert replacement.closed
+    assert edited.type_code == raw.type_code
+    assert edited.ordinal == 9
+    assert edited.classification is raw.classification
+    assert _payload_bytes(raw.payload) == original
+    assert _payload_bytes(edited.payload) == b"7f0003xyz010004Name040003abc020005Other0300011"
+    edited.payload.close()
+    raw.payload.close()
+
+
+
+#### Consume replacement ownership when raw custom parsing fails before editing.
+####
+def test_targeted_custom_raw_edit_cleans_failure_ownership() -> None:
+    original = b"010004Name020005x"
+    raw = _raw_custom(original)
+    replacement = SecretBuffer.from_bytes(b"Other")
+    with pytest.raises(ValueError):
+        custom_fields_module.replace_custom_raw_field_value(
+            raw,
+            name="Name",
+            value=replacement,
+        )
+    assert replacement.closed
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
 #### Consume and wipe replacement ownership even when the target does not exist.
 ####
 def test_failed_replacement_still_closes_supplied_secret() -> None:
@@ -154,8 +260,8 @@ def test_failed_replacement_still_closes_supplied_secret() -> None:
 ####
 @pytest.mark.parametrize(
     "data",
-    [b"", b"\xff", b"\xef\xbb\xbfvalue", b"x" * 65_536],
-    ids=("empty", "invalid-utf8", "bom", "too-long"),
+    [b"\xff", b"\xef\xbb\xbfvalue", b"x" * 65_536],
+    ids=("invalid-utf8", "bom", "too-long"),
 )
 def test_replacement_value_obeys_official_text_and_length_rules(data: bytes) -> None:
     parsed = parse_custom_fields(b"010004Name020005Value")

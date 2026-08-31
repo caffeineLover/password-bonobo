@@ -10,6 +10,7 @@ from uuid import UUID
 
 import pytest
 
+import bonobo_core.passwordsafe.schema as schema_module
 from bonobo_core.passwordsafe.constants import FieldKind, FormatVersion, HeaderFieldType, RecordFieldType
 from bonobo_core.passwordsafe.errors import IncompatibleExportError, MalformedVaultError
 from bonobo_core.passwordsafe.model import FieldClassification, RawField
@@ -161,7 +162,7 @@ def test_official_record_schema_is_complete_and_literal() -> None:
         (0x2D, "opaque", 0x0310, "single", "potentially-secret", "passkey-required", False, 4),
         (0x2E, "opaque", 0x0310, "single", "potentially-secret", "passkey-required", False, None),
         (0x2F, "opaque", 0x0310, "single", "potentially-secret", "passkey-required", False, 4),
-        (0x30, "text", 0x0311, "single", "potentially-secret", "optional", True, None),
+        (0x30, "text", 0x0311, "single", "potentially-secret", "optional", False, None),
         (0xDF, "opaque", 0x0300, "multiple", "potentially-secret", "optional", False, None),
         (0xFF, "empty", 0x0300, "single", "public", "terminator", False, 0),
     )
@@ -178,6 +179,8 @@ def test_official_record_schema_is_complete_and_literal() -> None:
     assert HEADER_SCHEMA[HeaderFieldType.EMPTY_GROUPS].multiplicity is FieldMultiplicity.MULTIPLE
     assert RECORD_SCHEMA[RecordFieldType.PASSWORD].secrecy is SecretClassification.SECRET
     assert RECORD_SCHEMA[RecordFieldType.TITLE].mandatory_role is MandatoryRole.RECORD_REQUIRED
+    assert RECORD_SCHEMA[RecordFieldType.TOTP_START_TIME].alternate_lengths == (5,)
+    assert not any(spec.allow_historical_time for spec in RECORD_SCHEMA.values())
 
 
 
@@ -200,10 +203,9 @@ def test_field_specs_are_immutable() -> None:
         (RecordFieldType.KEYBOARD_SHORTCUT, b"\x78\x56\x34\x12", 0x12345678),
         (RecordFieldType.PROTECTED, b"\x80", 0x80),
         (RecordFieldType.CREATION_TIME, b"\x04\x03\x02\x01", 0x01020304),
-        (RecordFieldType.CREATION_TIME, b"89aBCdEf", 0x89ABCDEF),
     ],
 )
-def test_record_decoder_validates_little_endian_and_historical_time(
+def test_record_decoder_validates_little_endian_integer_widths(
     type_code: RecordFieldType,
     data: bytes,
     expected: int,
@@ -215,6 +217,136 @@ def test_record_decoder_validates_little_endian_and_historical_time(
     assert decoded.warning is None
     decoded.close()
     raw.payload.close()
+
+
+
+#### Decode both official TOTP widths without changing the authoritative raw bytes.
+####
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (b"\xff\xff\xff\xff", 0xFFFFFFFF),
+        (b"\x01\x00\x00\x00\x01", 0x0100000001),
+        (b"\xff\xff\xff\xff\xff", 0xFFFFFFFFFF),
+    ],
+)
+def test_totp_start_time_accepts_four_and_five_byte_little_endian_values(
+    data: bytes,
+    expected: int,
+) -> None:
+    raw = _raw(RecordFieldType.TOTP_START_TIME, data)
+    decoded = decode_record_field(raw, record_ordinal=1)
+    assert decoded.raw is raw
+    assert decoded.value == expected
+    assert _payload_bytes(raw.payload) == data
+    decoded.close()
+    raw.payload.close()
+
+
+
+#### Preserve malformed record timestamp bytes with a warning and no projection.
+####
+@pytest.mark.parametrize(
+    "type_code",
+    [
+        RecordFieldType.CREATION_TIME,
+        RecordFieldType.PASSWORD_MODIFICATION_TIME,
+        RecordFieldType.LAST_ACCESS_TIME,
+        RecordFieldType.PASSWORD_EXPIRY_TIME,
+        RecordFieldType.LAST_MODIFICATION_TIME,
+        RecordFieldType.ATTACHMENT_MODIFICATION_TIME,
+        RecordFieldType.TOTP_START_TIME,
+    ],
+)
+def test_record_times_reject_historical_ascii_hex_without_losing_raw_bytes(
+    type_code: RecordFieldType,
+) -> None:
+    data = b"89aBCdEf"
+    raw = _raw(type_code, data)
+    decoded = decode_record_field(raw, record_ordinal=0)
+    assert decoded.raw is raw
+    assert decoded.value is None
+    assert decoded.warning is not None
+    assert _payload_bytes(raw.payload) == data
+    decoded.close()
+    raw.payload.close()
+
+
+
+#### Keep documented historical ASCII timestamps limited to both header fields.
+####
+@pytest.mark.parametrize(
+    "type_code",
+    [HeaderFieldType.LAST_SAVE_TIME, HeaderFieldType.LAST_MASTER_PASSWORD_CHANGE],
+)
+def test_header_historical_times_accept_exactly_eight_ascii_hex_digits(
+    type_code: HeaderFieldType,
+) -> None:
+    raw = _raw(type_code, b"89aBCdEf")
+    decoded = decode_header_field(raw)
+    assert decoded.value == 0x89ABCDEF
+    assert _payload_bytes(raw.payload) == b"89aBCdEf"
+    decoded.close()
+    raw.payload.close()
+
+
+
+#### Preserve the existing valid TOTP width for every explicit replacement.
+####
+@pytest.mark.parametrize(
+    ("original", "value", "expected"),
+    [
+        (b"\x00" * 4, 0xFFFFFFFF, b"\xff" * 4),
+        (b"\x00" * 5, 0x0100000001, b"\x01\x00\x00\x00\x01"),
+        (b"\x00" * 5, 0xFFFFFFFFFF, b"\xff" * 5),
+    ],
+)
+def test_totp_edit_preserves_the_existing_valid_width(
+    original: bytes,
+    value: int,
+    expected: bytes,
+) -> None:
+    raw = _raw(RecordFieldType.TOTP_START_TIME, original)
+    edited = encode_record_field(raw, value)
+    assert _payload_bytes(edited.payload) == expected
+    assert _payload_bytes(raw.payload) == original
+    edited.payload.close()
+    raw.payload.close()
+
+
+
+#### Reject a TOTP edit that cannot fit its source width or starts malformed.
+####
+@pytest.mark.parametrize(
+    ("original", "value"),
+    [(b"\x00" * 4, 0x100000000), (b"\x00" * 3, 1), (b"\x00" * 6, 1)],
+)
+def test_totp_edit_rejects_values_or_sources_outside_the_authoritative_width(
+    original: bytes,
+    value: int,
+) -> None:
+    raw = _raw(RecordFieldType.TOTP_START_TIME, original)
+    with pytest.raises(ValueError):
+        encode_record_field(raw, value)
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Choose the current four-byte interoperable width when adding a TOTP field.
+####
+def test_new_totp_field_uses_four_byte_little_endian_width() -> None:
+    created = schema_module.encode_new_record_field(
+        RecordFieldType.TOTP_START_TIME,
+        0x01020304,
+        ordinal=6,
+        classification=FieldClassification.UNDERSTOOD,
+    )
+    assert created.type_code == RecordFieldType.TOTP_START_TIME
+    assert created.ordinal == 6
+    assert created.classification is FieldClassification.UNDERSTOOD
+    assert _payload_bytes(created.payload) == b"\x04\x03\x02\x01"
+    created.payload.close()
 
 
 
