@@ -410,6 +410,10 @@ The PasswordSafe cryptographic vector contains only fabricated inputs. Its expec
 derived from the public PasswordSafe construction without product code and is used for deterministic cryptographic
 conformance testing.
 
+The PasswordSafe reader vector contains only fabricated expected metadata, redacted semantic-manifest hashes, and
+mutation descriptions. It contains no encrypted product output and is checked against vaults constructed at test time by
+the independent specification helper.
+
 {\def\LTcaptype{none} % do not increment counter
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\linewidth - 14\tabcolsep) * \real{0.2000}}
@@ -451,6 +455,8 @@ R & V \\
 \nolinkurl{tests/fixtures/python_structure/undocumented.py.txt} & Current revision & Bonobo & GPL-3.0-or-later & FX & S
 & R & V \\
 \nolinkurl{tests/fixtures/synthetic/passwordsafe/crypto-vectors.json} & Current revision & Bonobo & GPL-3.0-or-later &
+FX & S & R & V \\
+\nolinkurl{tests/fixtures/synthetic/passwordsafe/reader-vectors.json} & Current revision & Bonobo & GPL-3.0-or-later &
 FX & S & R & V \\
 \end{longtable}
 }

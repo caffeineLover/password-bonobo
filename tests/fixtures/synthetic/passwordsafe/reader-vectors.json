@@ -1,0 +1,35 @@
+{
+  "authority": "Independent synthetic PasswordSafe V3 fixture metadata",
+  "version": "0x0302",
+  "iterations": 3,
+  "manifest": {
+    "header_field_count": 3,
+    "record_count": 1,
+    "field_count": 9,
+    "entries": [
+      {"section": "header", "record_ordinal": null, "field_ordinal": 0, "type_code": 0, "length": 2, "sha256": "ee9040f65c341855e070ff438eb0ea9d5b831b2a2c270fb7ef592d750408e3b3"},
+      {"section": "header", "record_ordinal": null, "field_ordinal": 1, "type_code": 224, "length": 4, "sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a"},
+      {"section": "header", "record_ordinal": null, "field_ordinal": 2, "type_code": 255, "length": 0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 0, "type_code": 1, "length": 16, "sha256": "f963e82c7f249f67fa19d085d97af0a53a546e8bd9a12c36170e2f5e58984ef3"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 1, "type_code": 3, "length": 12, "sha256": "6c706b4591ca1e8a65a4c75594d1a3c76b8bffd8a3ef96ca5232d58edbc7863d"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 2, "type_code": 6, "length": 21, "sha256": "c358716897f110a0533e19e74dbe37b77017417cd52baf21baa92129b57c064c"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 3, "type_code": 13, "length": 29, "sha256": "f4b88ee8a165a45c7106220b9e3e3d1536480571b21d2dbd21071358343849cb"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 4, "type_code": 225, "length": 4, "sha256": "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a"},
+      {"section": "record", "record_ordinal": 0, "field_ordinal": 5, "type_code": 255, "length": 0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+    ]
+  },
+  "mutations": {
+    "wrong_password": "Use a different fabricated passphrase against the unchanged password check.",
+    "wrong_hmac": "Flip one bit in the final stored HMAC.",
+    "missing_version": "Omit the required first Version header field while retaining a valid envelope HMAC.",
+    "version_length_one": "Encode the first Version field with a one-byte payload and a valid envelope HMAC.",
+    "unsupported_version": "Declare authenticated version 0x0400.",
+    "missing_header_end": "Reach encrypted EOF while still routing header fields.",
+    "missing_record_end": "Reach encrypted EOF while one record remains open.",
+    "missing_record_mandatory": "End a record without UUID, Title, or Password.",
+    "truncation": "Remove bytes from the fixed prefix, encrypted region, EOF marker, or stored HMAC.",
+    "length_overrun": "Replace a decrypted field length with uint32 maximum without adding ciphertext.",
+    "resource_counts": "Exceed caller-selected field or record budgets with authenticated fields.",
+    "large_deferred": "Use an authenticated opaque payload above the inline threshold and stream it before publication."
+  }
+}
