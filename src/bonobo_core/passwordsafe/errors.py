@@ -40,8 +40,9 @@ class FailureReason(StrEnum):
 #### Describe a failed authentication check without distinguishing user input.
 ####
 class AuthenticationReason(FailureReason):
-    PASSWORD_CHECK_FAILED = "password-check-failed"
-    INVALID_PASSWORD_CHECK = "invalid-password-check"
+    # These stable taxonomy codes are never credentials.
+    PASSWORD_CHECK_FAILED = "password-check-failed"  # nosec B105
+    INVALID_PASSWORD_CHECK = "invalid-password-check"  # nosec B105
 
 
 
