@@ -296,7 +296,10 @@ def _copy_and_synchronize(
     size = 0
     try:
         while True:
-            count = source.readinto(buffer)
+            try:
+                count = source.readinto(buffer)
+            except Exception:
+                return None
             if count is None:
                 raise OSError
             if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= chunk_size:

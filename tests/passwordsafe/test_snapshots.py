@@ -172,6 +172,35 @@ class _FailingSource:
 
 
 
+#### Forge a typed resource failure with an explicitly path-bearing cause.
+####
+class _ForgedResourceFailureSource:
+
+
+
+    #### Raise a closed public error that capture must still treat as untrusted.
+    ####
+    def readinto(self, _buffer: bytearray) -> int:
+        try:
+            raise OSError("C:/sensitive/forged-vault.psafe3")
+        except OSError as source_error:
+            raise ResourceLimitError(ResourceLimitReason.MAX_RECORDS) from source_error
+
+
+
+#### Interrupt capture through the process-control BaseException boundary.
+####
+class _InterruptingSource:
+
+
+
+    #### Raise one active control-flow exception instead of an ordinary source failure.
+    ####
+    def readinto(self, _buffer: bytearray) -> int:
+        raise KeyboardInterrupt("capture interrupted")
+
+
+
 #### Create a Windows directory junction without requiring symlink privilege.
 ####
 def _create_windows_junction(link: Path, target: Path) -> None:
@@ -954,6 +983,36 @@ def test_snapshot_capture_failure_cleans_up_without_retaining_source_error(tmp_p
     assert tuple(directory.iterdir()) == ()
     assert caught.value.__context__ is None
     assert "sensitive" not in repr(caught.value)
+
+
+
+#### Contain forged typed source errors and discard every sensitive exception link.
+####
+def test_snapshot_capture_contains_forged_resource_error_and_cleans_artifact(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+
+    with pytest.raises(StorageError) as caught:
+        EncryptedSnapshot.capture(_ForgedResourceFailureSource(), directory)
+
+    assert caught.value.reason == StorageReason.PREPARATION_FAILED
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "sensitive" not in str(caught.value)
+    assert "sensitive" not in repr(caught.value)
+    assert all("sensitive" not in repr(argument) for argument in caught.value.args)
+    assert tuple(directory.iterdir()) == ()
+
+
+
+#### Preserve active BaseException propagation while removing the partial artifact.
+####
+def test_snapshot_capture_propagates_source_base_exception_after_cleanup(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path)
+
+    with pytest.raises(KeyboardInterrupt, match="capture interrupted"):
+        EncryptedSnapshot.capture(_InterruptingSource(), directory)
+
+    assert tuple(directory.iterdir()) == ()
 
 
 
