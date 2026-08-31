@@ -350,6 +350,67 @@ def test_new_totp_field_uses_four_byte_little_endian_width() -> None:
 
 
 
+#### Wipe an existing-field edit candidate when payload ownership transfer fails.
+####
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+def test_existing_record_encode_wipes_failed_payload_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[BaseException],
+) -> None:
+    raw = _raw(RecordFieldType.TITLE, b"Original")
+    retained: list[bytearray] = []
+    failure = error_type("synthetic payload transfer failure")
+
+
+
+    #### Retain the exact offered candidate and fail after possible adoption.
+    ####
+    def fail_transfer(_cls: type[InlinePayload], candidate: bytearray) -> InlinePayload:
+        retained.append(candidate)
+        raise failure
+
+    monkeypatch.setattr(InlinePayload, "take_ownership", classmethod(fail_transfer))
+    with pytest.raises(error_type) as caught:
+        encode_record_field(raw, "Changed")
+    assert caught.value is failure
+    assert len(retained) == 1
+    assert bytes(retained[0]) == bytes(len(retained[0]))
+    assert _payload_bytes(raw.payload) == b"Original"
+    raw.payload.close()
+
+
+
+#### Wipe a newly added field candidate when payload ownership transfer fails.
+####
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+def test_new_record_encode_wipes_failed_payload_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[BaseException],
+) -> None:
+    retained: list[bytearray] = []
+    failure = error_type("synthetic payload transfer failure")
+
+
+
+    #### Retain the exact offered candidate and fail after possible adoption.
+    ####
+    def fail_transfer(_cls: type[InlinePayload], candidate: bytearray) -> InlinePayload:
+        retained.append(candidate)
+        raise failure
+
+    monkeypatch.setattr(InlinePayload, "take_ownership", classmethod(fail_transfer))
+    with pytest.raises(error_type) as caught:
+        schema_module.encode_new_record_field(
+            RecordFieldType.TOTP_START_TIME,
+            0x01020304,
+            ordinal=0,
+        )
+    assert caught.value is failure
+    assert len(retained) == 1
+    assert bytes(retained[0]) == bytes(len(retained[0]))
+
+
+
 #### Decode an RFC 4122 UUID without replacing its original payload owner.
 ####
 def test_uuid_projection_retains_original_raw_field() -> None:

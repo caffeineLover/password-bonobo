@@ -17,7 +17,7 @@ from bonobo_core.passwordsafe.custom_fields import (
     parse_custom_fields,
     replace_custom_value,
 )
-from bonobo_core.passwordsafe.errors import IncompatibleExportError
+from bonobo_core.passwordsafe.errors import IncompatibleExportError, ResourceLimitError
 from bonobo_core.passwordsafe.model import FieldClassification, RawField
 from bonobo_core.passwordsafe.payloads import FieldPayload, InlinePayload
 from bonobo_core.passwordsafe.schema import encode_record_field
@@ -239,6 +239,314 @@ def test_targeted_custom_raw_edit_cleans_failure_ownership() -> None:
         )
     assert replacement.closed
     assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Wipe source plaintext if custom-field secret ownership transfer fails.
+####
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+def test_targeted_custom_raw_edit_wipes_failed_source_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[BaseException],
+) -> None:
+    original = b"010004Name020005Value"
+    raw = _raw_custom(original)
+    replacement = SecretBuffer.from_bytes(b"Other")
+    replacement_view = replacement.borrow()
+    retained: list[bytearray] = []
+    close_calls = 0
+    original_close = SecretBuffer.close
+    failure = error_type("synthetic secret transfer failure")
+
+
+
+    #### Retain the exact offered source and fail after possible adoption.
+    ####
+    def fail_transfer(_cls: type[SecretBuffer], candidate: bytearray) -> SecretBuffer:
+        retained.append(candidate)
+        raise failure
+
+
+
+    #### Count only cleanup of the caller-supplied replacement owner.
+    ####
+    def track_close(owner: SecretBuffer) -> None:
+        nonlocal close_calls
+        if owner is replacement:
+            close_calls += 1
+        original_close(owner)
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", classmethod(fail_transfer))
+    monkeypatch.setattr(SecretBuffer, "close", track_close)
+    with pytest.raises(error_type) as caught:
+        custom_fields_module.replace_custom_raw_field_value(
+            raw,
+            name="Name",
+            value=replacement,
+        )
+    assert caught.value is failure
+    assert len(retained) == 1
+    assert bytes(retained[0]) == bytes(len(retained[0]))
+    assert close_calls == 1
+    assert replacement.closed
+    assert bytes(replacement_view) == bytes(len(replacement_view))
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Wipe all custom temporaries if result payload ownership transfer fails.
+####
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+def test_targeted_custom_raw_edit_wipes_failed_result_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[BaseException],
+) -> None:
+    original = b"7f0003xyz010004Name020005Value"
+    raw = _raw_custom(original)
+    replacement = SecretBuffer.from_bytes(b"Other")
+    replacement_view = replacement.borrow()
+    source_candidates: list[bytearray] = []
+    result_candidates: list[bytearray] = []
+    close_calls = 0
+    original_secret_transfer = SecretBuffer.take_ownership
+    original_close = SecretBuffer.close
+    failure = error_type("synthetic payload transfer failure")
+
+
+
+    #### Track every secret candidate while preserving ordinary adoption behavior.
+    ####
+    def track_secret_transfer(_cls: type[SecretBuffer], candidate: bytearray) -> SecretBuffer:
+        source_candidates.append(candidate)
+        return original_secret_transfer(candidate)
+
+
+
+    #### Retain the exact result candidate and fail after possible adoption.
+    ####
+    def fail_result_transfer(_cls: type[InlinePayload], candidate: bytearray) -> InlinePayload:
+        result_candidates.append(candidate)
+        raise failure
+
+
+
+    #### Count only cleanup of the caller-supplied replacement owner.
+    ####
+    def track_close(owner: SecretBuffer) -> None:
+        nonlocal close_calls
+        if owner is replacement:
+            close_calls += 1
+        original_close(owner)
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", classmethod(track_secret_transfer))
+    monkeypatch.setattr(InlinePayload, "take_ownership", classmethod(fail_result_transfer))
+    monkeypatch.setattr(SecretBuffer, "close", track_close)
+    with pytest.raises(error_type) as caught:
+        custom_fields_module.replace_custom_raw_field_value(
+            raw,
+            name="Name",
+            value=replacement,
+        )
+    assert caught.value is failure
+    assert source_candidates
+    assert all(bytes(candidate) == bytes(len(candidate)) for candidate in source_candidates)
+    assert len(result_candidates) == 1
+    assert bytes(result_candidates[0]) == bytes(len(result_candidates[0]))
+    assert close_calls == 1
+    assert replacement.closed
+    assert bytes(replacement_view) == bytes(len(replacement_view))
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Wipe parsed and edited property candidates on failed secret adoption.
+####
+@pytest.mark.parametrize("transfer_number", [2, 7], ids=("parsed-property", "edited-property"))
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+def test_targeted_custom_raw_edit_wipes_failed_property_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+    transfer_number: int,
+    error_type: type[BaseException],
+) -> None:
+    original = b"7f0003xyz010004Name020005Value"
+    raw = _raw_custom(original)
+    replacement = SecretBuffer.from_bytes(b"Other")
+    replacement_view = replacement.borrow()
+    retained: list[bytearray] = []
+    close_calls = 0
+    original_secret_transfer = SecretBuffer.take_ownership
+    original_close = SecretBuffer.close
+    failure = error_type("synthetic property transfer failure")
+
+
+
+    #### Fail one selected adoption after retaining its exact candidate.
+    ####
+    def fail_selected_transfer(_cls: type[SecretBuffer], candidate: bytearray) -> SecretBuffer:
+        retained.append(candidate)
+        if len(retained) == transfer_number:
+            raise failure
+        return original_secret_transfer(candidate)
+
+
+
+    #### Count only cleanup of the caller-supplied replacement owner.
+    ####
+    def track_close(owner: SecretBuffer) -> None:
+        nonlocal close_calls
+        if owner is replacement:
+            close_calls += 1
+        original_close(owner)
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", classmethod(fail_selected_transfer))
+    monkeypatch.setattr(SecretBuffer, "close", track_close)
+    with pytest.raises(error_type) as caught:
+        custom_fields_module.replace_custom_raw_field_value(
+            raw,
+            name="Name",
+            value=replacement,
+        )
+    assert caught.value is failure
+    assert len(retained) == transfer_number
+    assert all(bytes(candidate) == bytes(len(candidate)) for candidate in retained)
+    assert close_calls == 1
+    assert replacement.closed
+    assert bytes(replacement_view) == bytes(len(replacement_view))
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Reject result growth by encoded byte size before payload publication.
+####
+@pytest.mark.parametrize(
+    ("original", "replacement_bytes", "max_bytes"),
+    [
+        (b"010004Name020001x", b"12345", 20),
+        (b"010001N020001x", "éé".encode(), 16),
+        (b"7f0003xyz010001N020001x", b"1234", 25),
+    ],
+    ids=("growth", "multibyte-utf8", "unknown-overhead"),
+)
+def test_targeted_custom_raw_edit_enforces_symmetric_result_byte_bound(
+    monkeypatch: pytest.MonkeyPatch,
+    original: bytes,
+    replacement_bytes: bytes,
+    max_bytes: int,
+) -> None:
+    raw = _raw_custom(original)
+    replacement = SecretBuffer.from_bytes(replacement_bytes)
+    replacement_view = replacement.borrow()
+    source_candidates: list[bytearray] = []
+    result_candidates: list[bytearray] = []
+    payload_calls = 0
+    close_calls = 0
+    original_secret_transfer = SecretBuffer.take_ownership
+    original_encode = custom_fields_module._encode_custom_fields_owned
+    original_close = SecretBuffer.close
+
+
+
+    #### Track every adopted source/property candidate for deterministic cleanup.
+    ####
+    def track_secret_transfer(_cls: type[SecretBuffer], candidate: bytearray) -> SecretBuffer:
+        source_candidates.append(candidate)
+        return original_secret_transfer(candidate)
+
+
+
+    #### Retain the encoded result candidate so rejection can prove its wipe.
+    ####
+    def track_result(fields: tuple[CustomField, ...]) -> bytearray:
+        candidate = original_encode(fields)
+        result_candidates.append(candidate)
+        return candidate
+
+
+
+    #### Fail if an oversized result reaches payload ownership publication.
+    ####
+    def reject_payload_call(_cls: type[InlinePayload], candidate: bytearray) -> InlinePayload:
+        nonlocal payload_calls
+        payload_calls += 1
+        raise AssertionError(f"oversized candidate reached payload factory: {len(candidate)}")
+
+
+
+    #### Count only cleanup of the caller-supplied replacement owner.
+    ####
+    def track_close(owner: SecretBuffer) -> None:
+        nonlocal close_calls
+        if owner is replacement:
+            close_calls += 1
+        original_close(owner)
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", classmethod(track_secret_transfer))
+    monkeypatch.setattr(custom_fields_module, "_encode_custom_fields_owned", track_result)
+    monkeypatch.setattr(InlinePayload, "take_ownership", classmethod(reject_payload_call))
+    monkeypatch.setattr(SecretBuffer, "close", track_close)
+    with pytest.raises(ResourceLimitError, match="vault resource limit exceeded"):
+        custom_fields_module.replace_custom_raw_field_value(
+            raw,
+            name="Name" if b"Name" in original else "N",
+            value=replacement,
+            max_bytes=max_bytes,
+        )
+    assert payload_calls == 0
+    assert len(result_candidates) == 1
+    assert bytes(result_candidates[0]) == bytes(len(result_candidates[0]))
+    assert source_candidates
+    assert all(bytes(candidate) == bytes(len(candidate)) for candidate in source_candidates)
+    assert close_calls == 1
+    assert replacement.closed
+    assert bytes(replacement_view) == bytes(len(replacement_view))
+    assert _payload_bytes(raw.payload) == original
+    raw.payload.close()
+
+
+
+#### Accept an exact-bound result and allow it to be re-edited under that bound.
+####
+def test_targeted_custom_raw_edit_accepts_exact_result_bound_and_reedit() -> None:
+    raw = _raw_custom(b"010004Name020001x")
+    edited = custom_fields_module.replace_custom_raw_field_value(
+        raw,
+        name="Name",
+        value=SecretBuffer.from_bytes(b"12345"),
+        max_bytes=21,
+    )
+    assert edited.payload.length == 21
+    assert _payload_bytes(edited.payload) == b"010004Name02000512345"
+    reedited = custom_fields_module.replace_custom_raw_field_value(
+        edited,
+        name="Name",
+        value=SecretBuffer.from_bytes(b""),
+        max_bytes=21,
+    )
+    assert _payload_bytes(reedited.payload) == b"010004Name020000"
+    reedited.payload.close()
+    edited.payload.close()
+    raw.payload.close()
+
+
+
+#### Permit a shrinking edit when both source and result fit the same bound.
+####
+def test_targeted_custom_raw_edit_allows_shrinking_with_symmetric_bound() -> None:
+    original = b"010001N020008abcdefgh"
+    raw = _raw_custom(original)
+    edited = custom_fields_module.replace_custom_raw_field_value(
+        raw,
+        name="N",
+        value=SecretBuffer.from_bytes(b""),
+        max_bytes=len(original),
+    )
+    assert _payload_bytes(edited.payload) == b"010001N020000"
+    assert _payload_bytes(raw.payload) == original
+    edited.payload.close()
     raw.payload.close()
 
 

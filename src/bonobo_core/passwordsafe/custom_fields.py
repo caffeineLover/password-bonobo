@@ -60,7 +60,7 @@ class CustomProperty:
             raise
         self.property_id = property_id
         self._value_length = value_length
-        self._encoded = SecretBuffer.take_ownership(encoded)
+        self._encoded = _take_secret_ownership(encoded)
         self._closed = False
 
 
@@ -548,7 +548,7 @@ def replace_custom_raw_field_value(
         if raw.type_code != RecordFieldType.CUSTOM_TEXT_FIELD:
             raise ValueError("raw field is not a custom text field")
         materialized = _materialize_raw_custom_field(raw, max_bytes=max_bytes)
-        source = SecretBuffer.take_ownership(materialized)
+        source = _take_secret_ownership(materialized)
         parsed = parse_custom_fields(source, max_bytes=max_bytes)
         replacement_consumed = True
         edited = replace_custom_value(
@@ -558,7 +558,10 @@ def replace_custom_raw_field_value(
             sensitive=sensitive,
         )
         encoded = _encode_custom_fields_owned(edited)
-        payload = InlinePayload.take_ownership(encoded)
+        if len(encoded) > max_bytes:
+            encoded[:] = bytes(len(encoded))
+            raise ResourceLimitError(ResourceLimitReason.MAX_DECODED_TEXT_BYTES)
+        payload = _take_inline_ownership(encoded)
         try:
             return RawField(raw.type_code, payload, raw.ordinal, raw.classification)
         except BaseException:
@@ -607,6 +610,28 @@ def _materialize_raw_custom_field(raw: RawField, *, max_bytes: int) -> bytearray
         if len(data) != raw.payload.length:
             raise ValueError("custom payload stream does not match its declaration")
         return data
+    except BaseException:
+        data[:] = bytes(len(data))
+        raise
+
+
+
+#### Transfer plaintext to a secret owner or wipe the rejected candidate.
+####
+def _take_secret_ownership(data: bytearray) -> SecretBuffer:
+    try:
+        return SecretBuffer.take_ownership(data)
+    except BaseException:
+        data[:] = bytes(len(data))
+        raise
+
+
+
+#### Transfer encoded custom plaintext or wipe the rejected payload candidate.
+####
+def _take_inline_ownership(data: bytearray) -> InlinePayload:
+    try:
+        return InlinePayload.take_ownership(data)
     except BaseException:
         data[:] = bytes(len(data))
         raise

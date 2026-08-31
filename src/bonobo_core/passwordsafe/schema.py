@@ -458,7 +458,7 @@ def encode_new_record_field(
     if not spec.editable or spec.kind in (FieldKind.OPAQUE, FieldKind.EMPTY):
         raise ValueError("field is not editable")
     data = _encode_value(spec, value, wire_width=spec.fixed_length)
-    payload = InlinePayload.take_ownership(data)
+    payload = _take_inline_payload_ownership(data)
     try:
         return RawField(field_type, payload, ordinal, classification)
     except BaseException:
@@ -678,8 +678,19 @@ def _encode_field(raw: RawField, spec: FieldSpec, value: TypedValue) -> RawField
             raise ValueError("source field has no valid editable width")
         wire_width = raw.payload.length
     data = _encode_value(spec, value, wire_width=wire_width)
-    payload = InlinePayload.take_ownership(data)
+    payload = _take_inline_payload_ownership(data)
     return RawField(raw.type_code, payload, raw.ordinal, raw.classification)
+
+
+
+#### Transfer encoded plaintext to a payload or wipe the rejected candidate.
+####
+def _take_inline_payload_ownership(data: bytearray) -> InlinePayload:
+    try:
+        return InlinePayload.take_ownership(data)
+    except BaseException:
+        data[:] = bytes(len(data))
+        raise
 
 
 
