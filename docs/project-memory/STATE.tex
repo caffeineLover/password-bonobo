@@ -90,7 +90,7 @@ Last updated: 2026-09-01
 \subsection{Overview and current state}\label{overview-and-current-state}
 
 Branch \nolinkurl{feature/lossless-passwordsafe-core} has a complete, locally verified repository foundation and
-compatibility dossier plus the first eleven implementation checkpoints of the approved lossless PasswordSafe core plan.
+compatibility dossier plus the first twelve implementation checkpoints of the approved lossless PasswordSafe core plan.
 The typed core can authenticate, parse, mutate, serialize, and transactionally publish supported PasswordSafe V3 vaults
 through a reviewed public service facade. The package version is \passthrough{\lstinline!0.1.0!}.
 
@@ -134,6 +134,10 @@ through a reviewed public service facade. The package version is \passthrough{\l
   \nolinkurl{VaultService} create/open/save/passphrase-rotation/export/recovery operations without exposing raw internal
   types.
 \item
+  Task 12 adds typed Hypothesis document strategies, exact round-trip and targeted-edit properties, attacker-length
+  allocation proofs, a dependency-free parser fuzz target and deterministic corpus runner, and a public large-vault
+  open/no-edit-save proof for bounded memory and encrypted-only private artifacts.
+\item
   Independent review regressions prove publication evidence is required before a session becomes clean, recoveries are
   destination-bound, handles remain stable within a live session, same-version unknown fields export losslessly,
   passphrase rotation cannot weaken iterations, early destination failures remove encrypted candidates, post-replace
@@ -145,9 +149,9 @@ through a reviewed public service facade. The package version is \passthrough{\l
 
 \subsection{Active work}\label{active-work}
 
-Task 12 is active after consulting \nolinkurl{docs/PROJECT_MEMORY.md}: add property, fuzz, corruption, and
-resource-safety evidence around the now-public lossless core. Preserve the established API and security boundaries, keep
-fixtures synthetic, and commit each approved checkpoint independently.
+Task 13 is next after the Task 12 resilience checkpoint: establish independent synthetic interoperability fixtures and
+manifests for Bonobo 0x0311, current PasswordSafe, and the pinned Gorilla baseline. Preserve the established API,
+security, and clean-room boundaries, and commit each approved checkpoint independently.
 
 \subsection{Active risks}\label{active-risks}
 
@@ -165,13 +169,13 @@ fixtures synthetic, and commit each approved checkpoint independently.
   Hosted CI has not run; only its complete local equivalent has passed. Ignored review PDFs must be regenerated from
   committed Markdown and LaTeX.
 \item
-  Generative and fuzz evidence, independent interoperability fixtures, mobile cross-build gates, and final operational
-  documentation remain incomplete in Tasks 12 through 15.
+  Independent interoperability fixtures, mobile cross-build gates, and final operational documentation remain incomplete
+  in Tasks 13 through 15.
 \end{itemize}
 
 \subsection{Next approved scope}\label{next-approved-scope}
 
-Finish \textbf{Lossless PasswordSafe core} Tasks 11 through 15. Do not start desktop/mobile clients, provider
+Finish \textbf{Lossless PasswordSafe core} Tasks 13 through 15. Do not start desktop/mobile clients, provider
 coordination, or URL-audit behavior until this core passes its complete release gate.
 
 \end{document}

@@ -1,6 +1,6 @@
 # Project Agent Instructions
 
-Instructions version: 0.3.0
+Instructions version: 0.4.0
 
 Before working on this project, read and follow the shared standards router at
 `E:\home\Code\Code Agent Prompts\docs\prompts\AGENTS.md`.
@@ -22,5 +22,11 @@ the approved work after those actions so another session can resume without conv
 Do not create `HANDOFF.md`, `HANDOFF.tex`, or `HANDOFF.pdf`.  `docs/PROJECT_MEMORY.md` is an approved Markdown-only
 exception to the shared generated-document policy: do not create or retain same-basename LaTeX or PDF versions.  Keep
 the memory concise, accurate, nonsensitive, and subordinate to the current code, configuration, tests, and Git state.
+
+Treat Markdown as the default and canonical document format.  Do not generate, regenerate, verify, or retain LaTeX or
+PDF derivatives unless the user explicitly names each document that should have them.  Preserve existing non-Gorilla
+LaTeX sources until the user directs otherwise.  Everything under `docs/compatibility/gorilla/` is Markdown-only: do
+not create or retain `.tex` or `.pdf` files there.  The document tool requires one repeated `--document` selection per
+approved Markdown source and must never be invoked as a repository-wide operation.
 
 Do not place project-specific changes in the shared standards repository.

@@ -140,7 +140,7 @@ Compact keys keep this source reviewable within the 120-character line limit:
 
 \subsection{Python packages}\label{python-packages}
 
-The lock contains 55 resolved third-party packages. Hatchling is declared for isolated builds but is not resolved in
+The lock contains 56 resolved third-party packages. Hatchling is declared for isolated builds but is not resolved in
 \passthrough{\lstinline!uv.lock!}; its exact build version and artifact origin therefore remain \nolinkurl{NOASSERTION}
 pending a build-lock decision.
 
@@ -200,6 +200,8 @@ defusedxml & T & N & 0.7.1 & \url{https://pypi.org/simple} & NOASSERTION & TS & 
 filelock & T & N & 3.32.3 & \url{https://pypi.org/simple} & MIT & TS & N & L+M & MP \\
 hatchling & DB & hatchling\textgreater=1.27,\textless2 & \nolinkurl{NOASSERTION} & \nolinkurl{NOASSERTION} &
 \nolinkurl{NOASSERTION} & BT & N & P & P \\
+hypothesis & DD & hypothesis\textgreater=6.161,\textless7 & 6.167.1 & \url{https://pypi.org/simple} & MPL-2.0 & BT & N &
+L+M & MP \\
 idna & T & N & 3.19 & \url{https://pypi.org/simple} & BSD-3-Clause & TS & N & L+M & MP \\
 iniconfig & T & N & 2.3.0 & \url{https://pypi.org/simple} & MIT & TS & N & L+M & MP \\
 jinja2 & T & N & 3.1.6 & \url{https://pypi.org/simple} & NOASSERTION & TS & N & L & P \\

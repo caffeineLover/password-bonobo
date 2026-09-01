@@ -42,6 +42,15 @@ listing and table wrapping.  The tracked generator verifies exact Pandoc output,
 and a bounded third when the compiler requests it, and emits an ignored manifest, logs, PDFs, and optional page renders.
 Review PDFs and rendered pages remain ignored, visually checked, and never committed.
 
+## 2026-09-01 - Explicit opt-in document derivatives
+
+Markdown is the canonical default.  LaTeX and PDF derivatives are generated, regenerated, or verified only when the
+user explicitly names each document; the tool requires a repeated `--document` selection and has no repository-wide
+operation.  Existing non-Gorilla LaTeX is preserved until the user directs otherwise.  The Gorilla compatibility
+directory is Markdown-only and contains no retained LaTeX or PDF derivatives.  This decision supersedes the automatic
+all-substantive-document portion of the 2026-08-22 policy while retaining ignored-output and visual-review safeguards
+for explicitly requested derivatives.
+
 ## 2026-08-22 - Compatibility and no-loss authority
 
 Observed Gorilla data loss is an Excluded characterization, not a passing cross-client contract.  Bonobo must persist

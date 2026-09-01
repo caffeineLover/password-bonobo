@@ -13,9 +13,37 @@ from tools.generate_documents import (
     check_document_coverage,
     discover_document_specs,
     latex_requires_rerun,
+    main,
     prepare_output_directory,
     verify_generated_tex,
 )
+
+
+
+#### Require callers to name every document before any LaTeX or PDF work begins.
+####
+def test_document_cli_requires_explicit_document_selection(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as captured:
+        main(("--verify", "--repository-root", str(tmp_path)))
+
+    assert captured.value.code == 2
+
+
+
+#### Restrict discovery and pair enforcement to the explicitly selected Markdown source.
+####
+def test_document_manifest_discovers_only_explicit_selection(tmp_path: Path) -> None:
+    (tmp_path / "docs" / "nested").mkdir(parents=True)
+    selected = tmp_path / "docs" / "selected.md"
+    selected.write_text("# Selected\n", encoding="utf-8")
+    selected.with_suffix(".tex").write_text("generated\n", encoding="utf-8")
+    unselected = tmp_path / "docs" / "nested" / "unselected.md"
+    unselected.write_text("# Unselected\n", encoding="utf-8")
+
+    specs = discover_document_specs(tmp_path, (Path("docs/selected.md"),))
+
+    assert check_document_coverage(tmp_path, (Path("docs/selected.md"),)) == ()
+    assert tuple(spec.markdown_relative_path.as_posix() for spec in specs) == ("docs/selected.md",)
 
 
 
@@ -345,7 +373,10 @@ This introduction belongs with the wide table.
 
 
 
-#### Keep the repository's complete substantive document corpus paired.
+#### Keep Gorilla compatibility authorities Markdown-only unless the user later names one for generation.
 ####
-def test_repository_document_coverage_passes() -> None:
-    assert check_document_coverage(Path.cwd()) == ()
+def test_repository_gorilla_documents_have_no_latex_or_pdf_derivatives() -> None:
+    gorilla_root = Path.cwd() / "docs" / "compatibility" / "gorilla"
+
+    assert tuple(gorilla_root.glob("*.tex")) == ()
+    assert tuple(gorilla_root.glob("*.pdf")) == ()

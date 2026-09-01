@@ -46,7 +46,7 @@ uv python install 3.14
 uv sync --locked --all-groups
 ```
 
-Document generation and visual QA additionally require
+Explicitly requested document generation and visual QA additionally require
 [Pandoc](https://pandoc.org/installing.html), a XeLaTeX distribution such as
 [MiKTeX](https://miktex.org/download), and Poppler's `pdfinfo` and `pdftoppm` commands.  Verify them before running
 the document gate:
@@ -58,11 +58,15 @@ pdfinfo -v
 pdftoppm -v
 ```
 
-Regenerate the tracked LaTeX sources, ignored PDFs, rendered review pages, logs, and manifest with:
+Only after the user names a document, regenerate its tracked LaTeX source, ignored PDF, rendered review pages, logs,
+and manifest with an explicit selection:
 
 ```powershell
-uv run python -m tools.generate_documents --write --render
+uv run python -m tools.generate_documents --document docs/path/to/document.md --write --render
 ```
+
+Repeat `--document` for each separately approved source.  There is no repository-wide generation mode, and the
+Gorilla compatibility documents are Markdown-only.
 
 Run the complete local validation sequence from the repository root:
 
@@ -81,9 +85,11 @@ uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
 uv run python -m tools.check_wheel dist
-uv run python -m tools.generate_documents --verify
 git diff --cached --check
 ```
+
+When a document derivative was explicitly requested, verify only that named source with
+`uv run python -m tools.generate_documents --document docs/path/to/document.md --verify`.
 
 Stage every intended file before the REUSE command so that it validates the exact release candidate.  These commands
 validate only the Bonobo repository and never require the external Gorilla research checkout.  The artifact checker

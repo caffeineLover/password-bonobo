@@ -128,6 +128,26 @@ reported after atomic replacement reconcile the live session to the committed re
 that live revision, and still-live retired plaintext owners remain reachable for deterministic retry. The reviewer
 reported no remaining Critical or Important findings.
 
+\subsection{Lossless-core Task 12 checkpoint}\label{lossless-core-task-12-checkpoint}
+
+The parser-resilience checkpoint passed locally on Windows with CPython 3.14.7 on 2026-09-01. The complete suite
+collected 597 tests and reported 585 passed with 12 platform-specific skips at 79\% measured coverage. The exact
+property/resource/large-vault selection reported 16 passed with 501 deselected, and the fuzz integration pair passed.
+The deterministic runner processed 10,000 inputs across four committed hexadecimal corpus seeds without a deadline,
+untyped exception, or temporary-artifact failure.
+
+Hypothesis 6.167.1 is locked under the approved \nolinkurl{>=6.161,<7} direct development constraint and recorded as
+MPL-2.0, not distributed. Generated cases cover every supported format version, unusual known/unknown field order,
+duplicate optionals, mandatory records, 0x0311 custom properties, targeted edits, bounded opaque payloads, and hostile
+uint32 length declarations. A public open/no-edit-save test preserves an attachment larger than the 1 MiB inline
+threshold, stays below \passthrough{\lstinline!4 * max\_inline\_payload\_bytes + 8 * io\_chunk\_bytes!}, creates
+encrypted recovery, and finds no fabricated plaintext marker in private working or recovery artifacts.
+
+Ruff, strict mypy across 67 source files, the Python structure checker, the 66/45/55 compatibility contract, and the
+provenance checker reported no violations. REUSE 3.3 classified all 124 files. Bandit found no issues, pip-audit found
+no known third-party vulnerabilities, and the local package was the sole expected not-on-PyPI skip. A clean build
+produced the wheel and source distribution, and the distribution contract checker passed.
+
 \subsection{CI action pin evidence}\label{ci-action-pin-evidence}
 
 Official, read-only Git refs were observed directly on 2026-08-22:

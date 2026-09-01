@@ -1,4 +1,4 @@
-"""Generate and verify every substantive Markdown, LaTeX, and review-PDF document.
+"""Generate and verify explicitly selected Markdown, LaTeX, and review-PDF documents.
 
 Pandoc always receives the repository header and Lua filter.  Verification writes a temporary candidate LaTeX file,
 compares it exactly after line-ending normalization, and compiles the tracked source at least twice without modifying
@@ -190,11 +190,54 @@ def _document_source_paths(repository_root: Path) -> tuple[Path, ...]:
 
 
 
-#### Return every unpaired substantive Markdown or LaTeX path below docs.
+#### Restrict source discovery to validated, explicitly selected Markdown documents and their existing LaTeX peers.
 ####
-def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, ...]:
-    violations: list[DocumentViolation] = []
+def _selected_document_source_paths(
+    repository_root: Path,
+    document_paths: Sequence[Path] | None,
+) -> tuple[Path, ...]:
     source_paths = _document_source_paths(repository_root)
+    if document_paths is None:
+        return source_paths
+    repository_root = repository_root.resolve()
+    source_by_relative_path = {
+        path.relative_to(repository_root): path
+        for path in source_paths
+    }
+    selected_paths: list[Path] = []
+    selected_relative_paths: set[Path] = set()
+    for requested_path in document_paths:
+        candidate_path = requested_path if requested_path.is_absolute() else repository_root / requested_path
+        try:
+            relative_path = candidate_path.resolve().relative_to(repository_root)
+        except ValueError:
+            raise RuntimeError(f"selected document is outside the repository: {requested_path}") from None
+        if relative_path.suffix != ".md" or relative_path.parent == Path(".") or relative_path.parts[0] != "docs":
+            raise RuntimeError(f"selected document must be a Markdown source below docs: {requested_path}")
+        if relative_path in MARKDOWN_ONLY_DOCUMENTS:
+            raise RuntimeError(f"selected document is Markdown-only: {relative_path}")
+        markdown_path = source_by_relative_path.get(relative_path)
+        if markdown_path is None:
+            raise RuntimeError(f"selected document is unavailable or ignored: {relative_path}")
+        if relative_path in selected_relative_paths:
+            continue
+        selected_relative_paths.add(relative_path)
+        selected_paths.append(markdown_path)
+        tex_path = source_by_relative_path.get(relative_path.with_suffix(".tex"))
+        if tex_path is not None:
+            selected_paths.append(tex_path)
+    return tuple(selected_paths)
+
+
+
+#### Return every unpaired selected Markdown or LaTeX path.
+####
+def check_document_coverage(
+    repository_root: Path,
+    document_paths: Sequence[Path] | None = None,
+) -> tuple[DocumentViolation, ...]:
+    violations: list[DocumentViolation] = []
+    source_paths = _selected_document_source_paths(repository_root, document_paths)
     markdown_paths = tuple(path for path in source_paths if path.suffix == ".md")
     tex_paths = tuple(
         path
@@ -224,11 +267,14 @@ def check_document_coverage(repository_root: Path) -> tuple[DocumentViolation, .
 
 
 
-#### Discover every Markdown document and its generated output paths in stable relative order.
+#### Discover each explicitly selected Markdown document and its generated output paths in stable order.
 ####
-def discover_document_specs(repository_root: Path) -> tuple[DocumentSpec, ...]:
+def discover_document_specs(
+    repository_root: Path,
+    document_paths: Sequence[Path] | None = None,
+) -> tuple[DocumentSpec, ...]:
     specs: list[DocumentSpec] = []
-    for markdown_path in _document_source_paths(repository_root):
+    for markdown_path in _selected_document_source_paths(repository_root, document_paths):
         if markdown_path.suffix != ".md":
             continue
         tex_path = markdown_path.with_suffix(".tex")
@@ -369,16 +415,17 @@ def _manifest_record(entry: DocumentManifestEntry) -> dict[str, str | int | bool
 
 
 
-#### Generate or verify all documents, compile two passes, and emit a detailed ignored manifest.
+#### Generate or verify selected documents, compile two passes, and emit a detailed ignored manifest.
 ####
 def generate_documents(
     repository_root: Path,
     *,
+    document_paths: Sequence[Path],
     write_tex: bool,
     render: bool,
     manifest_path: Path,
 ) -> tuple[DocumentManifestEntry, ...]:
-    coverage_violations = check_document_coverage(repository_root)
+    coverage_violations = check_document_coverage(repository_root, document_paths)
     if write_tex:
         coverage_violations = tuple(
             violation
@@ -395,7 +442,7 @@ def generate_documents(
     render_root = temporary_root / "rendered"
     log_root = temporary_root / "logs"
     entries: list[DocumentManifestEntry] = []
-    for spec in discover_document_specs(repository_root):
+    for spec in discover_document_specs(repository_root, document_paths):
         relative_stem = spec.markdown_relative_path.with_suffix("")
         tracked_tex_path = repository_root / spec.tex_relative_path
         candidate_path = tracked_tex_path if write_tex else generated_root / spec.tex_relative_path
@@ -491,7 +538,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="regenerate tracked same-basename LaTeX sources")
     mode.add_argument("--verify", action="store_true", help="verify tracked LaTeX without modifying it")
-    parser.add_argument("--render", action="store_true", help="render every final PDF page to PNG")
+    parser.add_argument(
+        "--document",
+        action="append",
+        type=Path,
+        required=True,
+        help="explicit Markdown document to process; repeat for additional documents",
+    )
+    parser.add_argument("--render", action="store_true", help="render each selected final PDF page to PNG")
     parser.add_argument("--repository-root", type=Path, default=Path.cwd())
     parser.add_argument("--manifest", type=Path, default=Path("tmp/pdfs/manifest.json"))
     arguments = parser.parse_args(argv)
@@ -502,6 +556,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_tex = cast(bool, arguments.write)
     generate_documents(
         repository_root,
+        document_paths=cast(list[Path], arguments.document),
         write_tex=write_tex,
         render=cast(bool, arguments.render),
         manifest_path=manifest_path,
