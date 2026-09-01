@@ -398,6 +398,71 @@ def test_find_shared_library_prefers_installed_library_over_staging_copy(tmp_pat
 
 
 
+#### Select Linux's unversioned linker library when the installation also retains its soname chain.
+####
+def test_find_shared_library_prefers_linux_linker_name_over_soname_chain(tmp_path: Path) -> None:
+    library_directory = tmp_path / "botan-output" / "lib"
+    library_directory.mkdir(parents=True)
+    linker_library = library_directory / "libbotan-3.so"
+    linker_library.write_bytes(b"linker library")
+    (library_directory / "libbotan-3.so.13").write_bytes(b"soname library")
+    (library_directory / "libbotan-3.so.13.13.0").write_bytes(b"versioned library")
+
+    assert find_shared_library(library_directory.parent) == linker_library
+
+
+
+#### Retain one versioned Linux library as a fallback when the unversioned linker name is absent.
+####
+def test_find_shared_library_selects_single_versioned_linux_fallback(tmp_path: Path) -> None:
+    versioned_library = tmp_path / "botan-output" / "lib" / "libbotan-3.so.13"
+    versioned_library.parent.mkdir(parents=True)
+    versioned_library.write_bytes(b"soname library")
+
+    assert find_shared_library(versioned_library.parents[1]) == versioned_library
+
+
+
+#### Reject multiple versioned Linux candidates when no canonical linker name identifies the installation.
+####
+def test_find_shared_library_rejects_ambiguous_versioned_linux_fallback(tmp_path: Path) -> None:
+    library_directory = tmp_path / "botan-output" / "lib"
+    library_directory.mkdir(parents=True)
+    (library_directory / "libbotan-3.so.13").write_bytes(b"soname library")
+    (library_directory / "libbotan-3.so.13.13.0").write_bytes(b"versioned library")
+
+    with pytest.raises(BotanBuildError, match="Botan shared library was not produced"):
+        find_shared_library(library_directory.parent)
+
+
+
+#### Reject unrelated matches instead of hiding them behind one canonical linker filename.
+####
+@pytest.mark.parametrize(
+    ("canonical_relative", "unrelated_relative"),
+    (
+        ("lib/libbotan-3.so", "lib/libbotan-3.so.backup"),
+        ("bin/botan-3.dll", "lib/libbotan-3.so.13"),
+    ),
+)
+def test_find_shared_library_rejects_non_soname_companion(
+    tmp_path: Path,
+    canonical_relative: str,
+    unrelated_relative: str,
+) -> None:
+    output_directory = tmp_path / "botan-output"
+    canonical = output_directory / canonical_relative
+    unrelated = output_directory / unrelated_relative
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    unrelated.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_bytes(b"canonical library")
+    unrelated.write_bytes(b"unrelated library")
+
+    with pytest.raises(BotanBuildError, match="Botan shared library was not produced"):
+        find_shared_library(output_directory)
+
+
+
 #### Refuse an ambiguous installed-library tier instead of choosing a final file by traversal order.
 ####
 #### An output with two matching files below `bin` is corrupt or incomplete.  The

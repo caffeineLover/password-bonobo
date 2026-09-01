@@ -28,7 +28,7 @@ Local `main` tracks `origin/main` at `https://github.com/caffeineLover/password-
 initial GPLv3 `LICENSE` commit `7cb8203` was fetched and joined to the completed local history by merge commit `11f0ea7`.
 That earlier `963441d` checkpoint passed 645 tests with 12 expected platform-specific skips and 79% coverage in
 107.71 seconds, plus Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates.
-The later synchronized `main` state is the diagnostic commit `caec5f5` recorded below.
+The later synchronized `main` state is `68c1317`, containing the diagnostic and strict-typing repairs recorded below.
 
 Hosted run `33549509896` then passed Android arm64 but failed the iOS smoke link, macOS strict mypy, Ubuntu host-library
 discovery, and Windows test suite. Diagnostic repair `caec5f5` is integrated and pushed on `main`. Its follow-up hosted
@@ -36,7 +36,13 @@ run `33555795740` passed Android and exposed bounded causes for every remaining 
 unversioned `libbotan-3.so` files under `lib/`; iOS omits the C++ runtime while linking the Botan static archive;
 macOS reports the expected 23 platform-stub mypy errors; and the hosted Windows environment rejects private artifact
 preparation across 157 tests. Commit `403f638` resolves the macOS failure with narrow typed native-module facades while
-preserving the runtime modules and flags. It is integrated locally on `main` and awaits push.
+preserving the runtime modules and flags. It is integrated and pushed on `main` with checkpoint `68c1317`.
+
+Hosted run `33564705673` confirmed macOS strict mypy now passes. Android passed again; Ubuntu retained the expected
+shared-library ambiguity; iOS retained the missing C++ runtime link failure; and macOS and Windows reached pytest but
+failed 153 and 157 tests respectively at private artifact preparation. Active branch `fix/linux-botan-discovery`
+reproduced Ubuntu's exact unversioned/soname/versioned candidate set in a red regression and now deterministically
+prefers the canonical installed linker name while retaining absent/ambiguous failure behavior.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -195,6 +201,15 @@ Commit `403f638` was then fast-forwarded into local `main`; the merged result re
 12 expected skips, 79% coverage, and zero failures in 108.08 seconds. The completed worktree and local feature branch
 were removed after that green run.
 
+The 2026-09-01 Linux Botan-discovery repair added a red regression for the exact `libbotan-3.so`,
+`libbotan-3.so.13`, and `libbotan-3.so.13.13.0` hosted artifact set. The minimal selection rule prefers the one canonical
+linker filename only when every other candidate is a same-directory numeric soname companion. The versioned-only
+single-candidate fallback and genuine ambiguity rejection remain covered. All 44 build-driver tests pass. The full
+Windows/CPython 3.14.7 suite reports 654 passed, 12 expected skips, 79% coverage, and zero failures in 108.88 seconds.
+Autopep8, Ruff, Python structure, Bandit, REUSE 119/119, whitespace, and strict mypy under Darwin, Windows, and Linux
+profiles pass. Independent review identified and closed an Important fail-open case for malformed or cross-platform
+leftovers plus its Minor missing fallback coverage. Follow-up review found no remaining Critical or Important issue.
+
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
 the same metadata.
@@ -222,15 +237,13 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33555795740` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
-  archive smoke link; Ubuntu discovery rejects real `lib/libbotan-3.so*` outputs; macOS has the 23 strict-mypy errors
-  addressed on the active branch; and hosted Windows private-artifact preparation fails across 157 tests even though
-  the same commit passes all 649 applicable tests locally.
+- Hosted run `33564705673` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
+  archive smoke link; Ubuntu discovery rejects the real soname chain addressed on the active branch; and private
+  artifact preparation fails across 153 macOS and 157 Windows tests even though all 650 applicable tests pass locally.
 
 ## Exact continuation order after this checkpoint
 
-1. Push local `main` containing the integrated strict-typing repair, then verify macOS in the resulting hosted run.
-2. Repair Ubuntu discovery, hosted Windows DACL behavior, and the iOS C++
-   runtime link one at a time.
+1. Complete independent review, commit, integrate, and push `fix/linux-botan-discovery`, then verify Ubuntu in CI.
+2. Diagnose the shared macOS/Windows private-artifact preparation failures, then repair the iOS C++ runtime link.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

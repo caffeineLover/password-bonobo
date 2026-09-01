@@ -42,6 +42,9 @@ FINAL_LIBRARY_LOCATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("bin", ("botan-3.dll", "libbotan-3.dll")),
     ("lib", ("libbotan-3.dylib", "libbotan-3.so*")),
 )
+LINUX_SHARED_LIBRARY_NAME_PATTERN: re.Pattern[str] = re.compile(
+    r"^libbotan-3\.so(?:\.[0-9]+){0,3}$"
+)
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 ExecutableFinder = Callable[..., str | None]
 MOBILE_TARGETS = frozenset({"android-arm64", "ios-arm64"})
@@ -700,8 +703,9 @@ def build_command(target: str, build_directory: Path) -> tuple[str, ...]:
 #### Locate the installed shared library without guessing at a generated staging file.
 ####
 #### Botan's supported platform names vary by suffix and ABI suffix.  The search is deliberately restricted to the
-#### installer's `bin` and `lib` tiers, excluding its generated `work` staging tree.  An absent or ambiguous final-tier
-#### result remains an error rather than selecting an arbitrary library.
+#### installer's `bin` and `lib` tiers, excluding its generated `work` staging tree.  Linux's unversioned linker name
+#### wins only when every other match is a numeric soname companion in the same directory.  Any other absent or
+#### ambiguous final-tier result remains an error rather than selecting an arbitrary library.
 ####
 def find_shared_library(output_directory: Path) -> Path:
     try:
@@ -714,11 +718,21 @@ def find_shared_library(output_directory: Path) -> Path:
         )
     except OSError as error:
         raise BotanBuildError("Botan shared library discovery failed") from error
-    if len(candidates) != 1:
+    selected_candidates = candidates
+    linux_linker_candidates = tuple(path for path in candidates if path.name == "libbotan-3.so")
+    if len(linux_linker_candidates) == 1:
+        linux_linker = linux_linker_candidates[0]
+        if all(
+            path.parent == linux_linker.parent
+            and LINUX_SHARED_LIBRARY_NAME_PATTERN.fullmatch(path.name) is not None
+            for path in candidates
+        ):
+            selected_candidates = linux_linker_candidates
+    if len(selected_candidates) != 1:
         evidence = _native_artifact_evidence(output_directory)
         suffix = f"; observed Botan artifacts: {', '.join(evidence)}" if evidence else ""
         raise BotanBuildError(f"Botan shared library was not produced{suffix}")
-    return candidates[0]
+    return selected_candidates[0]
 
 
 
