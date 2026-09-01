@@ -117,26 +117,30 @@ tracked-file gate plus `git diff --cached --check`, rerun the full suite if the 
 change beyond the already verified generator patch, update this memory, and commit.  Task 13 begins only after that
 commit.  Do not generate any LaTeX or PDF unless the user explicitly names its Markdown source.
 
+While the final status was being inspected, the user committed the Gorilla LaTeX deletions as `b77077c` and the full
+Task 12 plus explicit-selection workflow as `08c2107`.  Those commits were preserved exactly; the working tree was
+then confirmed clean.  Task 12 is therefore closed.  After restart, begin Task 13 from the approved plan: reread this
+file and the linked durable records, inspect Task 13's exact fixture/manifest requirements, and proceed test-first with
+independent synthetic interoperability evidence.  Do not run document generation or verification unless the user
+explicitly names each Markdown source, and never retain Gorilla `.tex` or `.pdf` derivatives.
+
 Continue in this exact order:
 
-1. Finish and verify the continuity checkpoint: update the paired generated sources affected by durable-state edits,
-   run the focused document-generation tests, structure check, REUSE lint, and document verification, inspect Git, and
-   commit this checkpoint independently.
-2. Execute Task 12 Step 1: add Hypothesis `>=6.161,<7`, update the lock and dependency provenance, review the complete
-   transitive lock delta, and run the provenance checks.
-3. Execute Task 12 Steps 2 and 3 test-first: add failing property/resource tests, confirm their expected failures, then
-   implement typed strategies for supported versions, ordered known/unknown fields, duplicates, mandatory records,
-   custom properties, targeted edits, and bounded synthetic payloads.
-4. Execute Task 12 Step 4 test-first: add the dependency-free fuzz target, deterministic seed corpus, and mutation
-   runner with typed-failure, deadline, and temporary-artifact enforcement.
-5. Execute Task 12 Step 5 test-first: prove opaque large-field open/no-edit-save memory bounds and absence of plaintext
-   fragments in temporary and recovery storage.
-6. Run Task 12 focused generative/fuzz/resource gates, the deterministic 10,000-iteration corpus run, the full quality
-   suite, and document/provenance/build checks; update this file with exact evidence and commit Task 12 independently.
+1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
+   memory; rerun a gate only if the checkout differs from the recorded clean state.
+2. Execute Task 13 Steps 1 and 2 test-first: create failing manifest/authority/provenance tests for the four exact
+   fixture stems, then prove the failure is only the intentionally absent fixtures and manifests.
+3. Execute Task 13 Step 3: implement the safe interoperability manifest extractor/comparator with standard-input
+   fabricated passphrases, ordinal/type/length/SHA-256 output, typed-value redaction, and one explicitly named edit.
+4. Execute Task 13 Steps 4 and 5: independently produce the four synthetic vaults and ordered manifests, then perform
+   only disposable no-edit/title-edit transactions at each declared client compatibility level.
+5. Update only the canonical compatibility and provenance Markdown plus their typed gates and REUSE metadata; Task 13
+   plan references to Gorilla `.tex` and repository-wide document commands are superseded by the user-approved
+   Markdown-only/explicit-selection policy.
+6. Run Task 13 focused tests, compatibility, provenance, tracked-file, REUSE, static, and full-suite gates; record exact
+   evidence here and commit independently.  Then continue Tasks 14 and 15 in order.
 
-After Task 12, continue Tasks 13, 14, and 15 from the approved plan in order: independent synthetic interoperability,
-platform/release automation and operational documentation, then the final complete-core release checkpoint.  Do not
-start client applications, provider coordination, or URL-audit behavior before Task 15 closes.
+Do not start client applications, provider coordination, or URL-audit behavior before Task 15 closes.
 
 In the current shell, invoke uv as `python -m uv` because the module is installed but the `uv` console executable is not
 discoverable on `PATH`.  Update this section before and after every meaningful step above, before long-running gates,
@@ -162,8 +166,8 @@ upstream content.
 - Credential and user-authored metadata loss is unacceptable; unknown-field preservation is a core data contract.
 - Bonobo-authored material is GPL-3.0-or-later.  External contributions remain closed while contributor permissions and
   any App Store distribution exception are unresolved.
-- The tracked exact generator produces review PDFs and renders.  Canonical Markdown and same-basename LaTeX are
-  committed for substantive documents; this live project memory is an explicit Markdown-only exception.  PDFs,
-  manifests, logs, and renders remain ignored.
+- Markdown is canonical by default.  The tracked generator requires explicit user-approved `--document` selections;
+  no unnamed document receives LaTeX, PDF, manifest, or render work.  Existing non-Gorilla LaTeX remains preserved
+  until the user directs otherwise, while the Gorilla compatibility directory and this live memory are Markdown-only.
 - The compatibility contract distinguishes Excluded Gorilla loss characterization from Bonobo's authoritative
   transactional no-loss behavior; the typed compatibility gate must remain green as the dossier evolves.

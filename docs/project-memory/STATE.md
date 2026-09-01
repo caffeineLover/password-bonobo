@@ -42,6 +42,8 @@ a reviewed public service facade.  The package version is `0.1.0`.
   failures reconcile the live session to committed disk state, and still-live retired owners remain retryable.
 - Task 11 is recorded by implementation commit `8c2b30e` and its final project-memory checkpoint; final independent
   review reported no Critical or Important findings.
+- Task 12 and the explicit-selection document workflow are recorded by commit `08c2107`; removal of the four tracked
+  Gorilla LaTeX derivatives is recorded by its parent `b77077c`.  The four ignored Gorilla PDFs were also deleted.
 
 ## Active work
 
