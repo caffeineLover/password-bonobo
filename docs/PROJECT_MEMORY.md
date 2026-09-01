@@ -14,12 +14,17 @@ This file is Markdown-only.  Do not create a second project-memory location or a
 ## Immediate checkpoint
 
 Branch `feature/lossless-passwordsafe-core` completed and independently committed Task 13 of the approved lossless
-PasswordSafe core plan at `a91977d`. Task 14 is active at final verification and review. Its build driver now exposes
+PasswordSafe core plan at `a91977d`. Task 14 was independently committed at `73431ea`. Its build driver exposes
 the five exact Windows x86-64, macOS arm64, Linux x86-64, Android arm64, and iOS arm64 profiles. Desktop profiles install
 shared libraries; mobile profiles install static libraries and optionally compile/link a raw Twofish FFI probe. Android
 requires the exact NDK API 28 compiler before source acquisition. iOS requires macOS and fixed iPhoneOS `xcrun`
 discovery. Dedicated hosted Android and iOS jobs exercise those gates, while the desktop matrix builds and tests with
-its resolved host library. Hosted results have not yet been observed.
+its resolved host library. Task 15 implementation, release verification, and independent review are complete: the safe
+demonstration, operational guide, root status, contributor validation, legal note, and REUSE coverage are ready for the
+independent delivery commit. Hosted results have not yet been observed.
+
+The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..HEAD`; the Task 15 delivery
+commit closes that range when created.
 
 Checkpoint `669506e` consolidated the retired split identity/state/decisions/verification records into this file and
 deleted the obsolete folder.  It also made `docs/superpowers/specs/` Markdown-only, removed its TeX/PDF derivatives,
@@ -95,12 +100,14 @@ GPL-3.0-or-later.  The possible iOS distribution exception remains unresolved an
   a dependency-free deterministic fuzz corpus/runner, and a bounded-memory encrypted-only large-vault proof.
 - Task 13 adds independently produced Bonobo, Password Safe, Gorilla, and specification fixtures; authenticated
   redacted manifests; exact no-edit/title-edit transaction evidence; and gated producer provenance.
-- Task 14 work in progress adds exact desktop/mobile Botan target profiles, fail-closed cross-toolchain discovery,
+- Task 14 adds exact desktop/mobile Botan target profiles, fail-closed cross-toolchain discovery,
   Windows MSVC environment bootstrapping, mobile compile/link probes, and dedicated hosted workflow jobs.
+- Task 15 adds a non-overwriting public-service demonstration using only fixed fabricated data, its real-Botan
+  subprocess coverage, and exact operating guidance for the delivered core and its security boundaries.
 
 Key checkpoints: continuity `4013f8a`; Task 11 `8c2b30e`; Task 12/workflow `08c2107`; Gorilla derivatives `b77077c`;
 legal Markdown-only `2be2512`; specifications Markdown-only `925e8c6`; plans Markdown-only `3df88b4`; single memory
-and approved-design Markdown-only `669506e`; Task 13 interoperability `a91977d`.
+and approved-design Markdown-only `669506e`; Task 13 interoperability `a91977d`; Task 14 platform gates `73431ea`.
 
 ## Last proven verification
 
@@ -141,6 +148,16 @@ from the generated C source onto the static archive; the command now enforces `-
 Important findings; its sole Minor note is that workflow tests use substring assertions, while a separate YAML parse
 confirmed the jobs are structurally valid.
 
+Task 15's final 2026-09-01 Windows/CPython 3.14.7 release candidate used the resolved Botan 3.13.0 DLL, collected 657
+tests, and reported 645 passed, 12 expected platform-specific skips, 79% coverage, and zero failures in 106.11 seconds.
+Three subprocess tests completed a real create/save/reopen/lock cycle and proved preexisting destination and private
+workspace paths remain untouched; a fourth test proves hidden terminal input fails closed. Autopep8 introduced no
+unstaged drift. Ruff, strict mypy over 71 Python files, Python structure, compatibility,
+provenance, tracked-file, Bandit, pip-audit, REUSE 117/117, source-distribution build, wheel build, wheel inspection,
+and staged/unstaged whitespace checks all passed. The only pip-audit skip is the unpublished local project.
+Independent review reported no Critical or Important findings. Its sole remaining Minor note is that the private-
+directory rollback path is implemented but not directly fault-injected by the example tests.
+
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
 the same metadata.
@@ -168,11 +185,10 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Task 15 owns operational documentation and the complete release checkpoint.
+- Hosted desktop/mobile Task 14 jobs have not yet been observed after publication.
 
 ## Exact continuation order after this checkpoint
 
-1. Complete Task 14's final repository gates, independent review, memory reconciliation, and independent commit.
-2. Execute Task 15's operational documentation and release checkpoint in order. Do not start client applications,
-   provider coordination, or URL-audit behavior
-   before Task 15 closes.
+1. Commit the independently reviewed Task 15 candidate as `docs: deliver lossless PasswordSafe core`.
+2. After Task 15 closes, the next approved subproject is a separate design and plan for the vault application core and
+   desktop foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

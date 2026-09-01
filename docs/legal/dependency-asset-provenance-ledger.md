@@ -201,7 +201,8 @@ marker; wheel metadata must also declare the exact GPL text as PEP 639 license c
 document tools do not enter either artifact.  Botan is bundled only with applicable platform application artifacts, not
 the pure Python wheel.  Source-distribution presence does not establish mobile or App Store eligibility.  Every `P` or
 `MP` row remains pending for the iOS distribution decision; no row grants an exception, contributor permission, or
-permission to copy third-party expression.
+permission to copy third-party expression. The runnable core demonstration is Bonobo-authored source, contains only
+fixed fabricated values, and does not add a dependency or third-party asset.
 
 Run `uv run python -m tools.check_provenance` after dependency declarations, `uv.lock`, workflow action references,
 document-tool commands, or tracked assets change.  The command fails on missing, extra, or stale coverage.

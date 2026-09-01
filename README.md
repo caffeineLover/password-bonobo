@@ -2,15 +2,16 @@
 
 Password Bonobo is an original, local-file-first password manager built around a fully typed Python core.
 
-The repository foundation and compatibility dossier are complete.  Product behavior remains unimplemented, so this
-project does not yet provide a usable vault.
+The repository foundation, compatibility dossier, and lossless PasswordSafe core are implemented. The core has no
+production user interface yet, so Password Bonobo is not an end-user password manager at this stage.
 
 ## Design
 
 The approved program design is in `docs/specs/password-bonobo-python-reimplementation-design.md`.
 
-Future work starts with the single durable [project memory](docs/PROJECT_MEMORY.md), which contains current state,
-decisions, verification, exact continuation order, and authoritative links.
+Developers can start with the [lossless core operations guide](docs/guides/lossless-passwordsafe-core.md). Future work
+starts with the single durable [project memory](docs/PROJECT_MEMORY.md), which contains current state, decisions,
+verification, exact continuation order, and authoritative links.
 
 ## Source boundary
 
@@ -71,17 +72,22 @@ do not select their sources unless that restriction is explicitly reversed.
 
 Run the complete local validation sequence from the repository root:
 
+First build and select the pinned Botan library by following the
+[lossless core operations guide](docs/guides/lossless-passwordsafe-core.md#build-and-select-the-pinned-botan-library).
+`BONOBO_TEST_BOTAN_LIBRARY` must name that resolved host library. A run without it is not release evidence; CI fails if
+the qualified library is absent.
+
 ```powershell
-uv run autopep8 --in-place --recursive src tests tools
-git diff --exit-code -- src tests tools
-uv run ruff check src tests tools
-uv run mypy src tests tools
+uv run autopep8 --in-place --recursive src tests tools examples
+git diff --exit-code -- src tests tools examples
+uv run ruff check src tests tools examples
+uv run mypy src tests tools examples
 uv run python -m pytest
-uv run python -m tools.check_python_structure src tests tools
+uv run python -m tools.check_python_structure src tests tools examples
 uv run python -m tools.check_compatibility
 uv run python -m tools.check_provenance
 git ls-files -z | uv run python -m tools.check_tracked_files
-uv run bandit -c pyproject.toml -r src tools
+uv run bandit -c pyproject.toml -r src tools examples
 uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build

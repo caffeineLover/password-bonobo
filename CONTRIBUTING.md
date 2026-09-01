@@ -19,3 +19,11 @@ file will state the accepted contribution process and the terms that apply befor
 The source-provenance policy applies to all future work.  In particular, Gorilla source and other copyrightable
 implementation material must not be copied into this repository or submitted as a contribution.  See
 [`docs/legal/source-provenance-policy.md`](docs/legal/source-provenance-policy.md).
+
+## Maintainer validation
+
+Maintainers working under the current closed-contribution policy must follow the exact environment, Botan, and example
+commands in the [lossless core operations guide](docs/guides/lossless-passwordsafe-core.md) and the complete validation
+sequence in the [README development section](README.md#development). The release gate includes `src`, `tests`, `tools`,
+and `examples`; it must use the locked dependency graph and an explicitly qualified host Botan library. Never use real
+credentials or a personal PasswordSafe database as development evidence.
