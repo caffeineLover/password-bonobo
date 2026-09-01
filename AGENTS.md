@@ -1,6 +1,6 @@
 # Project Agent Instructions
 
-Instructions version: 0.6.0
+Instructions version: 0.7.0
 
 Before working on this project, read and follow the shared standards router at
 `E:\home\Code\Code Agent Prompts\docs\prompts\AGENTS.md`.
@@ -34,5 +34,8 @@ create or retain `.tex` or `.pdf` files there, and do not pass a legal Markdown 
 
 Everything under `docs/specs/` is likewise Markdown-only until the user explicitly reverses this restriction.  Do not
 create or retain `.tex` or `.pdf` files there, and do not pass a specification Markdown source to the generator.
+
+Everything under `docs/superpowers/plans/` is Markdown-only until explicitly reversed.  Do not create or retain `.tex`
+or `.pdf` files there, and do not pass an implementation-plan Markdown source to the generator.
 
 Do not place project-specific changes in the shared standards repository.

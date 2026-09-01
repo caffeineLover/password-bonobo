@@ -75,6 +75,20 @@ def test_document_manifest_rejects_markdown_only_spec_selection(tmp_path: Path) 
 
 
 
+#### Refuse implementation-plan selection while the user requires that directory to remain Markdown-only.
+####
+def test_document_manifest_rejects_markdown_only_plan_selection(tmp_path: Path) -> None:
+    plans_root = tmp_path / "docs" / "superpowers" / "plans"
+    plans_root.mkdir(parents=True)
+    markdown_path = plans_root / "plan.md"
+    markdown_path.write_text("# Plan\n", encoding="utf-8")
+    markdown_path.with_suffix(".tex").write_text("generated\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Markdown-only"):
+        discover_document_specs(tmp_path, (Path("docs/superpowers/plans/plan.md"),))
+
+
+
 #### Discover every nested Markdown and LaTeX pair in stable relative-path order.
 ####
 def test_document_manifest_discovers_every_pair(tmp_path: Path) -> None:
@@ -428,3 +442,13 @@ def test_repository_spec_documents_have_no_latex_or_pdf_derivatives() -> None:
 
     assert tuple(specs_root.glob("*.tex")) == ()
     assert tuple(specs_root.glob("*.pdf")) == ()
+
+
+
+#### Keep implementation plans Markdown-only until the user explicitly reverses that policy.
+####
+def test_repository_plan_documents_have_no_latex_or_pdf_derivatives() -> None:
+    plans_root = Path.cwd() / "docs" / "superpowers" / "plans"
+
+    assert tuple(plans_root.glob("*.tex")) == ()
+    assert tuple(plans_root.glob("*.pdf")) == ()

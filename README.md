@@ -66,8 +66,8 @@ uv run python -m tools.generate_documents --document docs/path/to/document.md --
 ```
 
 Repeat `--document` for each separately approved source.  There is no repository-wide generation mode, and the
-Gorilla compatibility, legal, and specification documents are Markdown-only, so do not select their sources unless
-that restriction is explicitly reversed.
+Gorilla compatibility, legal, specification, and implementation-plan documents are Markdown-only, so do not select
+their sources unless that restriction is explicitly reversed.
 
 Run the complete local validation sequence from the repository root:
 

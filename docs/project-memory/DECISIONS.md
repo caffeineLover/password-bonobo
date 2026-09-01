@@ -57,6 +57,9 @@ LaTeX nor PDF derivatives, and the generator rejects legal-document selections.
 The specifications directory is likewise Markdown-only until explicitly reversed.  Its Markdown authorities remain,
 while LaTeX/PDF derivatives are absent and rejected by the generator.
 
+The implementation-plan directory is also Markdown-only until explicitly reversed.  Its Markdown plans remain, while
+LaTeX/PDF derivatives are absent and rejected by the generator.
+
 ## 2026-08-22 - Compatibility and no-loss authority
 
 Observed Gorilla data loss is an Excluded characterization, not a passing cross-client contract.  Bonobo must persist

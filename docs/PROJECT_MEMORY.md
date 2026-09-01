@@ -176,6 +176,22 @@ The specifications Markdown-only policy, three tracked LaTeX deletions, six-file
 generator/test boundary are committed as `925e8c6`.  All recorded gates above are green, and no derivative was
 generated.  Resume Task 13 Step 1 after reconciling a clean tree.
 
+The user has now made `docs/superpowers/plans/` Markdown-only and reiterated that no LaTeX or PDF may be generated
+without explicit document-level instructions.  It currently contains two Markdown plans, two tracked LaTeX files, and
+two ignored PDFs.  The current action is to record failing generator/repository regressions, add the plans directory to
+the Markdown-only boundary, delete those exact four derivatives, update policy/REUSE metadata, run focused and policy
+gates, and commit promptly.
+
+The two plan regressions failed for the exact intended reasons: the generator accepted a selected plan, and two tracked
+plan `.tex` files remained.  The plans directory is now enforced as Markdown-only and policy/REUSE metadata is updated.
+The current action is to delete the exact two tracked LaTeX files and two ignored PDFs, then run the focused/static
+policy gates and commit.
+
+The four plan derivatives are removed and the directory contains exactly its two Markdown plans.  The complete
+document suite reports 22 passed; Ruff, strict mypy across 67 files, structure, provenance, and REUSE 3.3 for 112 files
+all pass.  No derivative was generated.  The current action is to stage, run tracked-file/whitespace checks, inspect,
+and commit this Markdown-only checkpoint.
+
 Continue in this exact order:
 
 1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
@@ -221,7 +237,7 @@ upstream content.
 - Markdown is canonical by default.  The tracked generator requires explicit user-approved `--document` selections;
   no unnamed document receives LaTeX, PDF, manifest, or render work.  Existing LaTeX outside named Markdown-only
   boundaries remains preserved until the user directs otherwise; this live memory is also Markdown-only.
-- The Gorilla compatibility, legal, and specifications directories are Markdown-only until the user explicitly
-  reverses that policy; the generator must reject their selections and none may retain `.tex` or `.pdf` derivatives.
+- The Gorilla compatibility, legal, specifications, and implementation-plan directories are Markdown-only until the
+  user explicitly reverses that policy; the generator rejects their selections and none retain derivatives.
 - The compatibility contract distinguishes Excluded Gorilla loss characterization from Bonobo's authoritative
   transactional no-loss behavior; the typed compatibility gate must remain green as the dossier evolves.
