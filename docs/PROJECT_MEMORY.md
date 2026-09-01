@@ -124,6 +124,32 @@ file and the linked durable records, inspect Task 13's exact fixture/manifest re
 independent synthetic interoperability evidence.  Do not run document generation or verification unless the user
 explicitly names each Markdown source, and never retain Gorilla `.tex` or `.pdf` derivatives.
 
+The user then strengthened the legal-document rule: `docs/legal/` is Markdown-only, with neither LaTeX nor PDF retained.
+Two focused regressions were observed failing first under the initial PDF-only restriction: the generator still
+accepted a legal source and the repository still contained three ignored legal PDFs.  Those PDFs are now deleted.  The
+current action is to update the red test to require no legal `.tex` either, confirm that red state against the three
+tracked LaTeX files, then enforce the Markdown-only directory, remove those exact tracked files, update policy wording,
+rerun all document/static/policy gates, and commit this bounded checkpoint.
+
+That strengthened test failed for the exact expected reasons: the generator reported only `PDF-disabled`, and all
+three tracked legal `.tex` files remained.  The generator now treats both `docs/legal/` and
+`docs/compatibility/gorilla/` as Markdown-only directories; all three legal LaTeX files were removed with `git rm`, and
+REUSE/policy wording was updated.  The three ignored legal PDFs had already been deleted.  The current action is to run
+the complete document test file, static and policy gates, confirm `docs/legal/` contains exactly its three Markdown
+authorities, inspect/stage the patch, update this memory with exact evidence, and commit.
+
+The complete 18-test document suite now passes, as do Ruff, strict mypy across 67 files, structure, and REUSE 3.3 for
+117 files.  Provenance then exposed a separate Task 12 omission previously masked while the fuzz corpus was untracked:
+the four committed `.hex` seeds had no repository-asset ledger rows.  The canonical legal Markdown ledger now describes
+and inventories those four Bonobo-authored synthetic seeds; no legal derivative was created.  The current action is to
+rerun provenance and the remaining staging gates, then commit the legal Markdown-only checkpoint and provenance repair.
+
+Provenance is current again and all 10 provenance tests pass.  The broader foundation suite reports 84 passed; Bandit
+reports zero issues.  `docs/legal/` contains exactly its three `.md` authorities, with no `.tex` or `.pdf`; the Gorilla
+directory remains Markdown-only as well.  Ruff, mypy, structure, and REUSE were already green for this patch.  The
+current action is to stage the exact policy, generator, test, ledger, memory, and three legal-LaTeX deletion changes;
+run tracked-file and staged whitespace checks; inspect the staged patch; and commit this bounded checkpoint.
+
 Continue in this exact order:
 
 1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
@@ -167,7 +193,9 @@ upstream content.
 - Bonobo-authored material is GPL-3.0-or-later.  External contributions remain closed while contributor permissions and
   any App Store distribution exception are unresolved.
 - Markdown is canonical by default.  The tracked generator requires explicit user-approved `--document` selections;
-  no unnamed document receives LaTeX, PDF, manifest, or render work.  Existing non-Gorilla LaTeX remains preserved
-  until the user directs otherwise, while the Gorilla compatibility directory and this live memory are Markdown-only.
+  no unnamed document receives LaTeX, PDF, manifest, or render work.  Existing LaTeX outside named Markdown-only
+  boundaries remains preserved until the user directs otherwise; this live memory is also Markdown-only.
+- The Gorilla compatibility and legal directories are Markdown-only until the user explicitly reverses that policy;
+  the generator must reject their selections and neither directory may retain `.tex` or `.pdf` derivatives.
 - The compatibility contract distinguishes Excluded Gorilla loss characterization from Bonobo's authoritative
   transactional no-loss behavior; the typed compatibility gate must remain green as the dossier evolves.

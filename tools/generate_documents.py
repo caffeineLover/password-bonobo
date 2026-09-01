@@ -35,6 +35,10 @@ LATEX_WARNING = re.compile(
 MISSING_TEX_MESSAGE = "Markdown document has no same-basename repository-owned LaTeX source"
 MISSING_MARKDOWN_MESSAGE = "LaTeX document has no same-basename repository-owned Markdown source"
 MARKDOWN_ONLY_DOCUMENTS = frozenset({Path("docs/PROJECT_MEMORY.md")})
+MARKDOWN_ONLY_DOCUMENT_DIRECTORIES = frozenset({
+    Path("docs/compatibility/gorilla"),
+    Path("docs/legal"),
+})
 
 
 
@@ -214,7 +218,10 @@ def _selected_document_source_paths(
             raise RuntimeError(f"selected document is outside the repository: {requested_path}") from None
         if relative_path.suffix != ".md" or relative_path.parent == Path(".") or relative_path.parts[0] != "docs":
             raise RuntimeError(f"selected document must be a Markdown source below docs: {requested_path}")
-        if relative_path in MARKDOWN_ONLY_DOCUMENTS:
+        if relative_path in MARKDOWN_ONLY_DOCUMENTS or any(
+            relative_path.is_relative_to(directory)
+            for directory in MARKDOWN_ONLY_DOCUMENT_DIRECTORIES
+        ):
             raise RuntimeError(f"selected document is Markdown-only: {relative_path}")
         markdown_path = source_by_relative_path.get(relative_path)
         if markdown_path is None:

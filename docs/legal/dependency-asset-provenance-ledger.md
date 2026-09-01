@@ -138,6 +138,10 @@ The PasswordSafe reader vector contains only fabricated expected metadata, redac
 mutation descriptions.  It contains no encrypted product output and is checked against vaults constructed at test time
 by the independent specification helper.
 
+The four PasswordSafe fuzz-corpus seeds are Bonobo-authored hexadecimal encodings of empty, tag-only, hostile declared
+length, and fabricated XOR-backend V3 inputs.  They contain no user data or third-party client output and are replayed
+and deterministically mutated only by the parser-resilience runner.
+
 |Path|Version|Origin|Terms|Use|Dist|Evidence|Review|
 |---|---|---|---|---|---|---|---|
 |`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE download|GPL-3.0-or-later|LT|S+W|R|V|
@@ -147,6 +151,10 @@ by the independent specification helper.
 |`tests/fixtures/python_structure/documented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/python_structure/undocumented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/crypto-vectors.json`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/declared-length.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/empty.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/tag-only.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/valid-xor-v3.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/reader-vectors.json`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 
 ## Distribution conclusions and review status

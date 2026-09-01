@@ -51,6 +51,9 @@ directory is Markdown-only and contains no retained LaTeX or PDF derivatives.  T
 all-substantive-document portion of the 2026-08-22 policy while retaining ignored-output and visual-review safeguards
 for explicitly requested derivatives.
 
+The legal directory is also Markdown-only until the user explicitly reverses that restriction.  It retains neither
+LaTeX nor PDF derivatives, and the generator rejects legal-document selections.
+
 ## 2026-08-22 - Compatibility and no-loss authority
 
 Observed Gorilla data loss is an Excluded characterization, not a passing cross-client contract.  Bonobo must persist
