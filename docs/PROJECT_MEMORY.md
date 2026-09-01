@@ -35,8 +35,8 @@ discovery, and Windows test suite. Diagnostic repair `caec5f5` is integrated and
 run `33555795740` passed Android and exposed bounded causes for every remaining job: Ubuntu produces versioned and
 unversioned `libbotan-3.so` files under `lib/`; iOS omits the C++ runtime while linking the Botan static archive;
 macOS reports the expected 23 platform-stub mypy errors; and the hosted Windows environment rejects private artifact
-preparation across 157 tests. Branch `fix/macos-strict-typing` resolves the macOS failure with narrow typed
-native-module facades while preserving the runtime modules and flags.
+preparation across 157 tests. Commit `403f638` resolves the macOS failure with narrow typed native-module facades while
+preserving the runtime modules and flags. It is integrated locally on `main` and awaits push.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -191,6 +191,9 @@ suite used the verified Botan DLL and reported 649 passed, 12 expected skips, 79
 107.13 seconds. Autopep8 produced no residual drift; Ruff, Python structure, Bandit, REUSE 119/119, whitespace, and all
 three mypy profiles passed. Independent review identified and resolved one Important loss of `WinDLL` constructor
 checking plus one Minor stale-memory wording issue. Follow-up review found no remaining Critical or Important issue.
+Commit `403f638` was then fast-forwarded into local `main`; the merged result repeated the full suite with 649 passed,
+12 expected skips, 79% coverage, and zero failures in 108.08 seconds. The completed worktree and local feature branch
+were removed after that green run.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -226,8 +229,8 @@ the same metadata.
 
 ## Exact continuation order after this checkpoint
 
-1. Complete review of `docs/superpowers/plans/2026-09-01-cross-platform-strict-typing.md`, integrate it, and push.
-2. Verify macOS in the next hosted run, then repair Ubuntu discovery, hosted Windows DACL behavior, and the iOS C++
+1. Push local `main` containing the integrated strict-typing repair, then verify macOS in the resulting hosted run.
+2. Repair Ubuntu discovery, hosted Windows DACL behavior, and the iOS C++
    runtime link one at a time.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
