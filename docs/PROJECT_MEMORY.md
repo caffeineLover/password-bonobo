@@ -192,6 +192,9 @@ document suite reports 22 passed; Ruff, strict mypy across 67 files, structure, 
 all pass.  No derivative was generated.  The current action is to stage, run tracked-file/whitespace checks, inspect,
 and commit this Markdown-only checkpoint.
 
+The implementation-plan Markdown-only policy and four-file derivative removal are committed as `3df88b4`.  All
+recorded gates are green, no derivative was generated, and Task 13 Step 1 remains next.
+
 Continue in this exact order:
 
 1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
