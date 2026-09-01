@@ -1,6 +1,6 @@
 # Project Agent Instructions
 
-Instructions version: 0.5.0
+Instructions version: 0.6.0
 
 Before working on this project, read and follow the shared standards router at
 `E:\home\Code\Code Agent Prompts\docs\prompts\AGENTS.md`.
@@ -24,12 +24,15 @@ exception to the shared generated-document policy: do not create or retain same-
 the memory concise, accurate, nonsensitive, and subordinate to the current code, configuration, tests, and Git state.
 
 Treat Markdown as the default and canonical document format.  Do not generate, regenerate, verify, or retain LaTeX or
-PDF derivatives unless the user explicitly names each document that should have them.  Preserve existing non-Gorilla
-and non-legal LaTeX sources until the user directs otherwise.  Everything under `docs/compatibility/gorilla/` is
+PDF derivatives unless the user explicitly names each document that should have them.  Preserve existing LaTeX outside
+named Markdown-only directories until the user directs otherwise.  Everything under `docs/compatibility/gorilla/` is
 Markdown-only: do not create or retain `.tex` or `.pdf` files there.  The document tool requires one repeated
 `--document` selection per approved Markdown source and must never be invoked as a repository-wide operation.
 
 Everything under `docs/legal/` is also Markdown-only until the user explicitly reverses this restriction.  Do not
 create or retain `.tex` or `.pdf` files there, and do not pass a legal Markdown source to the document generator.
+
+Everything under `docs/specs/` is likewise Markdown-only until the user explicitly reverses this restriction.  Do not
+create or retain `.tex` or `.pdf` files there, and do not pass a specification Markdown source to the generator.
 
 Do not place project-specific changes in the shared standards repository.

@@ -38,6 +38,7 @@ MARKDOWN_ONLY_DOCUMENTS = frozenset({Path("docs/PROJECT_MEMORY.md")})
 MARKDOWN_ONLY_DOCUMENT_DIRECTORIES = frozenset({
     Path("docs/compatibility/gorilla"),
     Path("docs/legal"),
+    Path("docs/specs"),
 })
 
 
