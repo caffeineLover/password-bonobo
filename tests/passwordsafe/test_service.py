@@ -182,7 +182,7 @@ def test_lock_retries_a_still_live_retired_owner(
     with pytest.raises(RuntimeError, match="fabricated live retired-owner cleanup failure"):
         session.lock()
     assert session.locked
-    assert not retiring.closed
+    assert session._retired_resources == [retiring]
 
     session.lock()
 
