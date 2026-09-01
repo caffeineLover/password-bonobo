@@ -19,12 +19,11 @@ the five exact Windows x86-64, macOS arm64, Linux x86-64, Android arm64, and iOS
 shared libraries; mobile profiles install static libraries and optionally compile/link a raw Twofish FFI probe. Android
 requires the exact NDK API 28 compiler before source acquisition. iOS requires macOS and fixed iPhoneOS `xcrun`
 discovery. Dedicated hosted Android and iOS jobs exercise those gates, while the desktop matrix builds and tests with
-its resolved host library. Task 15 implementation, release verification, and independent review are complete: the safe
-demonstration, operational guide, root status, contributor validation, legal note, and REUSE coverage are ready for the
-independent delivery commit. Hosted results have not yet been observed.
+its resolved host library. Task 15 implementation, release verification, and independent review were committed at
+`5e1d5d7`. The safe demonstration, operational guide, root status, contributor validation, legal note, and REUSE
+coverage complete the approved lossless PasswordSafe core plan. Hosted results have not yet been observed.
 
-The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..HEAD`; the Task 15 delivery
-commit closes that range when created.
+The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
 Checkpoint `669506e` consolidated the retired split identity/state/decisions/verification records into this file and
 deleted the obsolete folder.  It also made `docs/superpowers/specs/` Markdown-only, removed its TeX/PDF derivatives,
@@ -108,6 +107,7 @@ GPL-3.0-or-later.  The possible iOS distribution exception remains unresolved an
 Key checkpoints: continuity `4013f8a`; Task 11 `8c2b30e`; Task 12/workflow `08c2107`; Gorilla derivatives `b77077c`;
 legal Markdown-only `2be2512`; specifications Markdown-only `925e8c6`; plans Markdown-only `3df88b4`; single memory
 and approved-design Markdown-only `669506e`; Task 13 interoperability `a91977d`; Task 14 platform gates `73431ea`.
+Task 15 delivery is `5e1d5d7`.
 
 ## Last proven verification
 
@@ -189,6 +189,5 @@ the same metadata.
 
 ## Exact continuation order after this checkpoint
 
-1. Commit the independently reviewed Task 15 candidate as `docs: deliver lossless PasswordSafe core`.
-2. After Task 15 closes, the next approved subproject is a separate design and plan for the vault application core and
+1. The next approved subproject is a separate design and plan for the vault application core and
    desktop foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
