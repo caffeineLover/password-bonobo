@@ -1,10 +1,7 @@
-"""Define the public identity of the Password Bonobo core package.
-
-Vault behavior is intentionally absent until the lossless PasswordSafe core subproject.
-"""
+"""Define the public identity of the Password Bonobo core package."""
 
 from typing import Final
 
 
 
-__version__: Final[str] = "0.0.0"
+__version__: Final[str] = "0.1.0"

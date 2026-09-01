@@ -420,6 +420,24 @@ class VaultDocument:
 
 
 
+    #### Preserve one session's opaque record identities after an exact reopen.
+    ####
+    def _adopt_session_identity(self, source: VaultDocument) -> None:
+        self._require_open()
+        if not isinstance(source, VaultDocument):
+            raise TypeError("session identity source must use VaultDocument")
+        source._require_open()
+        if len(self.records) != len(source.records):
+            raise ValueError("session identity requires matching record counts")
+        records = tuple(
+            RawRecord(record.fields, record.ordinal, source_record.handle)
+            for record, source_record in zip(self.records, source.records, strict=True)
+        )
+        object.__setattr__(self, "records", records)
+        object.__setattr__(self, "revision", source.revision)
+
+
+
     #### Close each distinct payload once and make model operations terminal.
     ####
     def close(self) -> None:

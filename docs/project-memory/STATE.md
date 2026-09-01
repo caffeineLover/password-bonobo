@@ -1,13 +1,13 @@
 # Password Bonobo Current State
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Overview and current state
 
 Branch `feature/lossless-passwordsafe-core` has a complete, locally verified repository foundation and compatibility
-dossier plus the first ten implementation checkpoints of the approved lossless PasswordSafe core plan.  Internal typed
-modules can authenticate, parse, mutate, serialize, and transactionally replace supported PasswordSafe V3 vaults, but
-the package still exposes no service facade and retains version `0.0.0`.
+dossier plus the first eleven implementation checkpoints of the approved lossless PasswordSafe core plan.  The typed
+core can authenticate, parse, mutate, serialize, and transactionally publish supported PasswordSafe V3 vaults through
+a reviewed public service facade.  The package version is `0.1.0`.
 
 ## Completed foundation artifacts
 
@@ -30,14 +30,19 @@ the package still exposes no service facade and retains version `0.0.0`.
   reopen comparison.
 - Tasks 9 and 10 implement revision-safe sessions, explicit secret leases, protected-record rules, atomic local
   publication, external-change detection, and one encrypted recovery revision.
-- The latest completed checkpoint is commit `32e2d82` (`feat: add transactional local vault storage`).
+- Task 11 adds minimal fresh-envelope and no-replace publication primitives, authenticated baseline advancement, and
+  `VaultService` create/open/save/passphrase-rotation/export/recovery operations without exposing raw internal types.
+- Independent review regressions prove publication evidence is required before a session becomes clean, recoveries are
+  destination-bound, handles remain stable within a live session, same-version unknown fields export losslessly,
+  passphrase rotation cannot weaken iterations, and early destination failures remove encrypted candidates.
+- The Task 11 working checkpoint follows handoff commit `5564e2f`; its dedicated implementation commit is the next
+  repository action.
 
 ## Active work
 
-Task 11 is next.  Its original file map assumes creation, passphrase rotation, independent export, and baseline
-advancement primitives that Tasks 7 through 10 do not expose.  The user approved a minimal Task 11 amendment covering
-`reader.py`, `writer.py`, `storage.py`, and `session.py` before the service facade is assembled.  Implement the amendment
-with failing tests first, preserve the existing security boundaries, and commit Task 11 independently as planned.
+Task 12 is next: add property, fuzz, corruption, and resource-safety evidence around the now-public lossless core.
+Preserve the established API and security boundaries, keep fixtures synthetic, and commit each approved checkpoint
+independently.
 
 ## Active risks
 
@@ -48,8 +53,8 @@ with failing tests first, preserve the existing security boundaries, and commit 
 - Python 3.14 support for future binary and mobile dependencies must be requalified in the owning subproject.
 - Hosted CI has not run; only its complete local equivalent has passed.  Ignored review PDFs must be regenerated from
   committed Markdown and LaTeX.
-- The public facade, generative and fuzz evidence, independent interoperability fixtures, mobile cross-build gates, and
-  final operational documentation remain incomplete in Tasks 11 through 15.
+- Generative and fuzz evidence, independent interoperability fixtures, mobile cross-build gates, and final operational
+  documentation remain incomplete in Tasks 12 through 15.
 
 ## Next approved scope
 

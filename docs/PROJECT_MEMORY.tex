@@ -91,29 +91,27 @@ Last updated: 2026-08-31
 
 Password Bonobo is an original, local-file-first password manager with a typed Python core and platform-appropriate
 clients. The repository foundation and neutral compatibility dossier are locally verified. Branch
-\nolinkurl{feature/lossless-passwordsafe-core} has completed Tasks 1 through 10 of the approved lossless PasswordSafe
+\nolinkurl{feature/lossless-passwordsafe-core} has completed Tasks 1 through 11 of the approved lossless PasswordSafe
 core plan: Botan-backed cryptography, secret ownership, ordered lossless documents, schema and custom fields,
-authenticated reading, validated writing, revision-safe sessions, and transactional local storage with encrypted
-recovery.
+authenticated reading, validated writing, revision-safe sessions, transactional local storage with encrypted recovery,
+and the first reviewed public service facade.
 
-The core is not yet publicly usable. Task 11 must assemble the service facade and public exports, followed by the
-property/fuzz/resource, interoperability, platform-CI, documentation, and release checkpoints in Tasks 12 through 15. Do
-not begin client or URL-audit behavior ahead of that boundary.
+The package is now version \passthrough{\lstinline!0.1.0!}. \nolinkurl{VaultService} supports new-vault creation,
+open/save, master-passphrase rotation, version-targeted export, recovery discovery, and explicit recovery restore while
+retaining authenticated baseline and lossless-document guarantees. Tasks 12 through 15 still own property/fuzz/resource
+evidence, interoperability, platform CI, documentation, and the release checkpoint. Do not begin client or URL-audit
+behavior ahead of that boundary.
 
 \subsection{Active work}\label{active-work}
 
-Resume from clean commit \passthrough{\lstinline!32e2d82!} on \nolinkurl{feature/lossless-passwordsafe-core}. The
-complete baseline on 2026-08-31 was 556 passed and 12 platform-specific skips under CPython 3.14.7. In the current
-shell, invoke uv as \passthrough{\lstinline!python -m uv!} because the module is installed but the
-\passthrough{\lstinline!uv!} console executable is not discoverable on \passthrough{\lstinline!PATH!}.
-
-Task 11\textquotesingle s approved facade cannot be implemented safely against the current Tasks 7 through 10
-interfaces: they can open and rewrite an existing vault and replace an existing destination, but they cannot create a
-new destination, rotate salt and passphrase material, perform an independent export, or advance a
-session\textquotesingle s published baseline. The user approved amending Task 11 to add the minimal supported primitives
-in \passthrough{\lstinline!reader.py!}, \passthrough{\lstinline!writer.py!}, \nolinkurl{storage.py}, and
-\nolinkurl{session.py} before implementing \nolinkurl{service.py}. Continue test-first and do not bypass private
-constructors or duplicate security-sensitive publication logic in the facade.
+Task 11 is complete in the working checkpoint after handoff commit \passthrough{\lstinline!5564e2f!}. Its test-first
+amendment added minimal new-envelope reading/writing, no-replace publication, and published-baseline advancement
+primitives before assembling \nolinkurl{service.py}; the facade does not bypass private constructors or duplicate
+publication logic. The complete local test suite on 2026-08-31 was 569 passed and 12 platform-specific skips under
+CPython 3.14.7. Focused facade tests, Ruff, strict mypy, structure, REUSE, provenance, source/wheel builds, and
+distribution inspection also passed. Task 12 is next. In the current shell, invoke uv as
+\passthrough{\lstinline!python -m uv!} because the module is installed but the \passthrough{\lstinline!uv!} console
+executable is not discoverable on \passthrough{\lstinline!PATH!}.
 
 \subsection{Required read order}\label{required-read-order}
 

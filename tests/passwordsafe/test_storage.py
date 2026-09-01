@@ -138,7 +138,7 @@ def test_publish_retains_one_encrypted_recovery_revision(tmp_path: Path) -> None
     baseline = store.capture(case.source)
 
     published = store.publish(case.source, case.candidate, baseline)
-    recoveries = store.available_recovery()
+    recoveries = store.available_recovery(case.source)
 
     assert len(recoveries) == 1
     assert recoveries[0].sha256 == hashlib.sha256(original).hexdigest()
@@ -160,7 +160,7 @@ def test_recovery_revision_contains_only_path_free_metadata(tmp_path: Path) -> N
         validator=case.validator,
     )
     store.publish(case.source, case.candidate, store.capture(case.source))
-    recovery = store.available_recovery()[0]
+    recovery = store.available_recovery(case.source)[0]
 
     assert set(asdict(recovery)) == {"identifier", "created_ns", "size", "sha256"}
     case.close()
@@ -180,7 +180,7 @@ def test_restore_republishes_selected_encrypted_revision(tmp_path: Path) -> None
     )
     baseline = store.capture(case.source)
     store.publish(case.source, case.candidate, baseline)
-    recovery = store.available_recovery()[0]
+    recovery = store.available_recovery(case.source)[0]
     published_baseline = store.capture(case.source)
 
     restored = store.restore(
@@ -193,4 +193,26 @@ def test_restore_republishes_selected_encrypted_revision(tmp_path: Path) -> None
     assert case.source.read_bytes() == original
     assert restored.sha256 == hashlib.sha256(original).hexdigest()
     assert not store.pending_candidates()
+    case.close()
+
+
+
+#### Publish a complete candidate only when its destination is still absent.
+####
+def test_publish_new_creates_destination_without_recovery(tmp_path: Path) -> None:
+    case = _publication_case(tmp_path)
+    destination = tmp_path / "fabricated-created.psafe3"
+    store = LocalVaultStore(
+        _private_directory(tmp_path, "new-store-working"),
+        _private_directory(tmp_path, "new-store-recovery"),
+        validator=case.validator,
+    )
+
+    published = store.publish_new(destination, case.candidate)
+
+    assert published.path == destination
+    assert published.sha256 == hashlib.sha256(destination.read_bytes()).hexdigest()
+    assert published.recovery is None
+    assert not case.candidate.path.exists()
+    assert not store.available_recovery(destination)
     case.close()

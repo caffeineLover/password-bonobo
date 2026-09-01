@@ -1,12 +1,30 @@
 # Password Bonobo Foundation Verification
 
-Last updated: 2026-08-22
+Last updated: 2026-09-01
 
 ## Overview and current state
 
 This record distinguishes executed local checks from hosted service state.  The complete local release gate and
 document review passed against the staged whole-branch remediation candidate.  Hosted CI has not yet run because this
 branch introduces the workflow; its Windows, macOS, and Linux jobs remain to be observed after publication.
+
+## Lossless-core Task 11 checkpoint
+
+The public service-facade checkpoint passed locally on Windows with CPython 3.14.7 on 2026-09-01.  The complete suite
+collected 587 tests and reported 575 passed with 12 platform-specific skips.  The focused service, public API, and
+package-contract selection reported 16 passed.  Ruff, strict mypy, the Python structure checker, REUSE 3.3 lint, and
+the provenance ledger checker reported no violations.  A clean build produced exactly
+`password_bonobo-0.1.0-py3-none-any.whl` and `password_bonobo-0.1.0.tar.gz`; the distribution checker passed.
+
+The focused service evidence covers create/edit/save/reopen, passphrase consumption and rotation, legacy export,
+recovery discovery and explicit restore, no-replace creation, external-change save abort without loss of session work,
+and rejection of incompatible unknown fields before an export destination is created.  Hosted CI remains unobserved;
+this is a local checkpoint rather than the Task 15 release gate.
+
+Independent review added regression evidence that save completion requires authenticated publication, recovery is
+bound to one destination even when vaults share a passphrase, record handles remain stable across saves in one session,
+same-version exports preserve unknown fields exactly, passphrase rotation preserves stronger iteration policies, and
+destination-preparation failures remove encrypted writer candidates.
 
 ## CI action pin evidence
 

@@ -1,31 +1,33 @@
 # Password Bonobo Project Memory
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Overview and current state
 
 Password Bonobo is an original, local-file-first password manager with a typed Python core and platform-appropriate
 clients.  The repository foundation and neutral compatibility dossier are locally verified.  Branch
-`feature/lossless-passwordsafe-core` has completed Tasks 1 through 10 of the approved lossless PasswordSafe core plan:
+`feature/lossless-passwordsafe-core` has completed Tasks 1 through 11 of the approved lossless PasswordSafe core plan:
 Botan-backed cryptography, secret ownership, ordered lossless documents, schema and custom fields, authenticated
-reading, validated writing, revision-safe sessions, and transactional local storage with encrypted recovery.
+reading, validated writing, revision-safe sessions, transactional local storage with encrypted recovery, and the first
+reviewed public service facade.
 
-The core is not yet publicly usable.  Task 11 must assemble the service facade and public exports, followed by the
-property/fuzz/resource, interoperability, platform-CI, documentation, and release checkpoints in Tasks 12 through 15.
-Do not begin client or URL-audit behavior ahead of that boundary.
+The package is now version `0.1.0`.  `VaultService` supports new-vault creation, open/save, master-passphrase rotation,
+version-targeted export, recovery discovery, and explicit recovery restore while retaining authenticated baseline and
+lossless-document guarantees.  Tasks 12 through 15 still own property/fuzz/resource evidence, interoperability,
+platform CI, documentation, and the release checkpoint.  Do not begin client or URL-audit behavior ahead of that
+boundary.
 
 ## Active work
 
-Resume from clean commit `32e2d82` on `feature/lossless-passwordsafe-core`.  The complete baseline on 2026-08-31 was
-556 passed and 12 platform-specific skips under CPython 3.14.7.  In the current shell, invoke uv as `python -m uv`
-because the module is installed but the `uv` console executable is not discoverable on `PATH`.
-
-Task 11's approved facade cannot be implemented safely against the current Tasks 7 through 10 interfaces: they can
-open and rewrite an existing vault and replace an existing destination, but they cannot create a new destination,
-rotate salt and passphrase material, perform an independent export, or advance a session's published baseline.  The
-user approved amending Task 11 to add the minimal supported primitives in `reader.py`, `writer.py`, `storage.py`, and
-`session.py` before implementing `service.py`.  Continue test-first and do not bypass private constructors or duplicate
-security-sensitive publication logic in the facade.
+Task 11 is complete in the working checkpoint after handoff commit `5564e2f`.  Its test-first amendment added minimal
+new-envelope reading/writing, no-replace publication, and published-baseline advancement primitives before assembling
+`service.py`; the facade does not bypass private constructors or duplicate publication logic.  The complete local test
+suite on 2026-09-01 was 575 passed and 12 platform-specific skips under CPython 3.14.7.  Independent review drove
+additional proofs for publication-only save completion, destination-bound recovery, stable in-session handles,
+same-version unknown-field export, iteration-policy preservation, and early candidate cleanup.  Focused facade tests,
+Ruff, strict mypy, structure, REUSE, provenance, source/wheel builds, and distribution inspection also passed.  Task 12
+is next.  In the current shell, invoke uv as `python -m uv` because the module is installed but the `uv` console
+executable is not discoverable on `PATH`.
 
 ## Required read order
 

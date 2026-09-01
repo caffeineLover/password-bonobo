@@ -90,9 +90,9 @@ Last updated: 2026-08-31
 \subsection{Overview and current state}\label{overview-and-current-state}
 
 Branch \nolinkurl{feature/lossless-passwordsafe-core} has a complete, locally verified repository foundation and
-compatibility dossier plus the first ten implementation checkpoints of the approved lossless PasswordSafe core plan.
-Internal typed modules can authenticate, parse, mutate, serialize, and transactionally replace supported PasswordSafe V3
-vaults, but the package still exposes no service facade and retains version \passthrough{\lstinline!0.0.0!}.
+compatibility dossier plus the first eleven implementation checkpoints of the approved lossless PasswordSafe core plan.
+The typed core can authenticate, parse, mutate, serialize, and transactionally publish supported PasswordSafe V3 vaults
+through a reviewed public service facade. The package version is \passthrough{\lstinline!0.1.0!}.
 
 \subsection{Completed foundation artifacts}\label{completed-foundation-artifacts}
 
@@ -130,17 +130,19 @@ vaults, but the package still exposes no service facade and retains version \pas
   Tasks 9 and 10 implement revision-safe sessions, explicit secret leases, protected-record rules, atomic local
   publication, external-change detection, and one encrypted recovery revision.
 \item
-  The latest completed checkpoint is commit \passthrough{\lstinline!32e2d82!}
-  (\passthrough{\lstinline!feat: add transactional local vault storage!}).
+  Task 11 adds minimal fresh-envelope and no-replace publication primitives, authenticated baseline advancement, and
+  \nolinkurl{VaultService} create/open/save/passphrase-rotation/export/recovery operations without exposing raw internal
+  types.
+\item
+  The Task 11 working checkpoint follows handoff commit \passthrough{\lstinline!5564e2f!}; its dedicated implementation
+  commit is the next repository action.
 \end{itemize}
 
 \subsection{Active work}\label{active-work}
 
-Task 11 is next. Its original file map assumes creation, passphrase rotation, independent export, and baseline
-advancement primitives that Tasks 7 through 10 do not expose. The user approved a minimal Task 11 amendment covering
-\passthrough{\lstinline!reader.py!}, \passthrough{\lstinline!writer.py!}, \nolinkurl{storage.py}, and
-\nolinkurl{session.py} before the service facade is assembled. Implement the amendment with failing tests first,
-preserve the existing security boundaries, and commit Task 11 independently as planned.
+Task 12 is next: add property, fuzz, corruption, and resource-safety evidence around the now-public lossless core.
+Preserve the established API and security boundaries, keep fixtures synthetic, and commit each approved checkpoint
+independently.
 
 \subsection{Active risks}\label{active-risks}
 
@@ -158,8 +160,8 @@ preserve the existing security boundaries, and commit Task 11 independently as p
   Hosted CI has not run; only its complete local equivalent has passed. Ignored review PDFs must be regenerated from
   committed Markdown and LaTeX.
 \item
-  The public facade, generative and fuzz evidence, independent interoperability fixtures, mobile cross-build gates, and
-  final operational documentation remain incomplete in Tasks 11 through 15.
+  Generative and fuzz evidence, independent interoperability fixtures, mobile cross-build gates, and final operational
+  documentation remain incomplete in Tasks 12 through 15.
 \end{itemize}
 
 \subsection{Next approved scope}\label{next-approved-scope}

@@ -727,6 +727,39 @@ class PasswordSafeReader(_ExclusiveOwner):
 
 
 
+    #### Reopen a candidate under caller-supplied fresh passphrase policy.
+    ####
+    #### Creation, passphrase change, and independent export use this path because
+    #### no retained source-derived state may authorize their new salt.  A mismatch
+    #### closes the authenticated aggregate before exposing a fixed storage error.
+    ####
+    def reopen_candidate_with_passphrase(
+        self,
+        path: Path,
+        passphrase: SecretBuffer,
+        *,
+        expected_salt: bytes,
+        expected_iterations: int,
+    ) -> OpenedVault:
+        if not isinstance(expected_salt, bytes) or len(expected_salt) != SALT_BYTES:
+            raise ValueError("expected candidate salt must be exactly 32 bytes")
+        if (
+            isinstance(expected_iterations, bool)
+            or not isinstance(expected_iterations, int)
+            or not 1 <= expected_iterations <= self._limits.max_iterations
+        ):
+            raise ValueError("expected candidate iterations are outside reader limits")
+        opened = self.open(path, passphrase)
+        if (
+            opened.crypto_state.salt != expected_salt
+            or opened.crypto_state.iterations != expected_iterations
+        ):
+            opened.close()
+            raise StorageError(StorageReason.VERIFICATION_FAILED)
+        return opened
+
+
+
     #### Authenticate a caller snapshot through the same quarantine used by open.
     ####
     #### Success transfers snapshot ownership to ``OpenedVault``.  Failure leaves

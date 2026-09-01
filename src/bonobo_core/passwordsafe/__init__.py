@@ -1,8 +1,4 @@
-"""Expose the reviewed PasswordSafe domain primitives used by later core layers.
-
-The package surface intentionally contains only constants, safe failures, and secret
-owners at this stage; codecs, sessions, and storage remain separate responsibilities.
-"""
+"""Expose the reviewed lossless PasswordSafe service and safe domain surface."""
 
 from .constants import (
     CURRENT_FORMAT_VERSION,
@@ -40,7 +36,22 @@ from .errors import (
     UnsupportedFormatError,
     UnsupportedFormatReason,
 )
+from .model import PreservationWarning, PreservationWarningCode, RecordHandle, RevisionToken
 from .secrets import SecretBuffer, SecretClosedError, SecretLease
+from .service import SaveResult, VaultService
+from .session import (
+    Change,
+    NewRecord,
+    RecordView,
+    RemoveField,
+    SetBytesField,
+    SetSecretField,
+    SetTextField,
+    SetTimeField,
+    SetUInt32Field,
+    VaultSession,
+)
+from .storage import RecoveryRevision
 
 
 
@@ -49,6 +60,7 @@ __all__ = (
     "MINIMUM_ITERATIONS",
     "AuthenticationError",
     "AuthenticationReason",
+    "Change",
     "CryptoBackendError",
     "CryptoBackendReason",
     "ExternalModificationError",
@@ -63,21 +75,37 @@ __all__ = (
     "IntegrityReason",
     "MalformedReason",
     "MalformedVaultError",
+    "NewRecord",
     "OperationReason",
     "PasswordSafeError",
+    "PreservationWarning",
+    "PreservationWarningCode",
     "ProtectedRecordError",
     "RecordFieldType",
+    "RecordHandle",
+    "RecordView",
     "RecoveryAvailableError",
+    "RecoveryRevision",
+    "RemoveField",
     "ResourceLimitError",
     "ResourceLimitReason",
     "ResourceLimits",
+    "RevisionToken",
+    "SaveResult",
     "SecretBuffer",
     "SecretClosedError",
     "SecretLease",
+    "SetBytesField",
+    "SetSecretField",
+    "SetTextField",
+    "SetTimeField",
+    "SetUInt32Field",
     "StaleRevisionError",
     "StorageError",
     "StorageReason",
     "UnsavedChangesError",
     "UnsupportedFormatError",
     "UnsupportedFormatReason",
+    "VaultService",
+    "VaultSession",
 )

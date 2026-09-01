@@ -7,11 +7,12 @@ Every accepted mutation creates one copy-on-write document revision.
 
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from threading import RLock
 from typing import Literal
 from uuid import UUID
 
-from .constants import FieldKind, RecordFieldType
+from .constants import FieldKind, FormatVersion, RecordFieldType
 from .errors import ProtectedRecordError, StaleRevisionError, UnsavedChangesError
 from .model import (
     FieldClassification,
@@ -21,12 +22,14 @@ from .model import (
     RecordHandle,
     RevisionToken,
     VaultDocument,
+    documents_equal_exact,
 )
 from .payloads import FieldPayload, InlinePayload
 from .reader import OpenedVault, VaultCryptoState
 from .schema import RECORD_SCHEMA, decode_record_field, encode_new_record_field, encode_record_field
 from .secrets import MAX_SECRET_LEASE_BYTES, SecretBuffer, SecretLease
 from .snapshots import EncryptedSnapshot
+from .storage import FileBaseline, PublishedFile
 
 
 
@@ -196,12 +199,15 @@ RecordEdit = SetTextField | SetSecretField | SetBytesField | SetUInt32Field | Se
 ####
 class VaultSession:
     __slots__ = (
+        "_baseline",
         "_changes",
         "_document",
         "_lock",
         "_locked",
         "_opened",
         "_original_document",
+        "_path",
+        "_retired_resources",
         "_save_snapshot",
     )
 
@@ -209,14 +215,33 @@ class VaultSession:
 
     #### Adopt an authenticated vault and begin one clean unlocked session.
     ####
-    def __init__(self, opened: OpenedVault) -> None:
+    def __init__(
+        self,
+        opened: OpenedVault,
+        path: Path | None = None,
+        baseline: FileBaseline | None = None,
+    ) -> None:
         if not isinstance(opened, OpenedVault):
             raise TypeError("session requires an authenticated opened vault")
+        if (path is None) != (baseline is None):
+            raise TypeError("session path and baseline must be supplied together")
+        if path is not None and not isinstance(path, Path):
+            raise TypeError("session path must use Path")
+        if baseline is not None and not isinstance(baseline, FileBaseline):
+            raise TypeError("session baseline must use FileBaseline")
+        if baseline is not None and (
+            opened.source_snapshot.size != baseline.size
+            or opened.source_snapshot.sha256 != baseline.sha256
+        ):
+            raise ValueError("session baseline does not match the authenticated snapshot")
         self._opened = opened
         self._document = opened.document
         self._original_document = opened.document
         self._changes: tuple[Change, ...] = ()
         self._save_snapshot: VaultDocument | None = None
+        self._path = path
+        self._baseline = baseline
+        self._retired_resources: list[VaultDocument | OpenedVault] = []
         self._locked = False
         self._lock = RLock()
 
@@ -262,7 +287,7 @@ class VaultSession:
     #### Borrow authenticated key state for the coordinated writer boundary.
     ####
     @property
-    def crypto_state(self) -> VaultCryptoState:
+    def _crypto_state_for_service(self) -> VaultCryptoState:
         with self._lock:
             self._require_active()
             return self._opened.crypto_state
@@ -276,6 +301,40 @@ class VaultSession:
         with self._lock:
             self._require_active()
             return self._opened.source_snapshot
+
+
+
+    #### Return the exact authenticated PasswordSafe format level in this session.
+    ####
+    @property
+    def version(self) -> FormatVersion:
+        with self._lock:
+            self._require_active()
+            return self._document.version
+
+
+
+    #### Return the authoritative local destination bound by the service layer.
+    ####
+    @property
+    def path(self) -> Path:
+        with self._lock:
+            self._require_active()
+            if self._path is None:
+                raise RuntimeError("vault session is not bound to local storage")
+            return self._path
+
+
+
+    #### Return the path-free evidence required for the next publication check.
+    ####
+    @property
+    def baseline(self) -> FileBaseline:
+        with self._lock:
+            self._require_active()
+            if self._baseline is None:
+                raise RuntimeError("vault session is not bound to local storage")
+            return self._baseline
 
 
 
@@ -423,7 +482,7 @@ class VaultSession:
 
     #### Freeze one independently closable immutable revision for a save attempt.
     ####
-    def prepare_save(self) -> VaultDocument:
+    def _prepare_save(self) -> VaultDocument:
         with self._lock:
             self._require_active()
             if self._save_snapshot is not None:
@@ -434,20 +493,59 @@ class VaultSession:
 
 
 
+    #### Retain an independent current revision without changing dirty/save state.
+    ####
+    def _export_snapshot(self) -> VaultDocument:
+        with self._lock:
+            self._require_active()
+            if self._save_snapshot is not None:
+                raise RuntimeError("save is in progress")
+            return self._document.retain(revision=self._document.revision)
+
+
+
     #### Complete a frozen save and establish the current revision as clean.
     ####
-    def finish_save(self) -> None:
+    def _finish_save(
+        self,
+        opened: OpenedVault,
+        published: PublishedFile,
+    ) -> None:
         with self._lock:
             snapshot = self._require_save_snapshot()
-            snapshot.close()
+            if not isinstance(opened, OpenedVault):
+                raise TypeError("published save must use OpenedVault")
+            if not isinstance(published, PublishedFile):
+                raise TypeError("published save must use PublishedFile")
+            if self._path is not None and published.path != self._path:
+                raise ValueError("published save path does not match the session")
+            if (
+                opened.source_snapshot.size != published.size
+                or opened.source_snapshot.sha256 != published.sha256
+                or not documents_equal_exact(snapshot, opened.document)
+            ):
+                raise ValueError("published save does not match the frozen revision")
+            opened.document._adopt_session_identity(snapshot)
+            previous_opened = self._opened
+            previous_document = self._document
+            previous_original = self._original_document
+            self._opened = opened
+            self._document = opened.document
+            self._original_document = opened.document
             self._save_snapshot = None
+            self._path = published.path
+            self._baseline = published.baseline
             self._changes = ()
+            self._retire_resource(snapshot)
+            if previous_document is not previous_original:
+                self._retire_resource(previous_document)
+            self._retire_resource(previous_opened)
 
 
 
     #### Release a failed save snapshot while retaining all unsaved mutations.
     ####
-    def abort_save(self) -> None:
+    def _abort_save(self) -> None:
         with self._lock:
             snapshot = self._require_save_snapshot()
             snapshot.close()
@@ -459,6 +557,9 @@ class VaultSession:
     ####
     def lock(self) -> None:
         with self._lock:
+            if self._locked and self._retired_resources:
+                self._close_retired_resources()
+                return
             self._require_active()
             if self._save_snapshot is not None:
                 raise RuntimeError("save is in progress")
@@ -486,6 +587,10 @@ class VaultSession:
         with suppress(BaseException):
             if hasattr(self, "_locked") and not self._locked:
                 self.discard_and_lock()
+        with suppress(BaseException):
+            if hasattr(self, "_retired_resources") and self._retired_resources:
+                with self._lock:
+                    self._close_retired_resources()
 
 
 
@@ -723,6 +828,37 @@ class VaultSession:
         self._opened.close()
         self._locked = True
         self._changes = ()
+        self._close_retired_resources()
+
+
+
+    #### Retire one superseded owner without destabilizing committed live state.
+    ####
+    def _retire_resource(self, owner: VaultDocument | OpenedVault) -> None:
+        try:
+            owner.close()
+        except BaseException:
+            if not owner.closed:
+                self._retired_resources.append(owner)
+
+
+
+    #### Retry every superseded owner and preserve any still-live cleanup graph.
+    ####
+    def _close_retired_resources(self) -> None:
+        pending: list[VaultDocument | OpenedVault] = []
+        first_failure: BaseException | None = None
+        for owner in self._retired_resources:
+            try:
+                owner.close()
+            except BaseException as error:
+                if not owner.closed:
+                    pending.append(owner)
+                if first_failure is None:
+                    first_failure = error
+        self._retired_resources = pending
+        if first_failure is not None:
+            raise first_failure
 
 
 

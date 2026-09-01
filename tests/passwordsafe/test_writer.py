@@ -251,3 +251,36 @@ def test_repeated_writes_use_fresh_envelope_material(tmp_path: Path) -> None:
     assert first_bytes[136:152] != second_bytes[136:152]
     assert first.manifest == second.manifest == opened.manifest
     opened.close()
+
+
+
+#### Generate a new salt and wrapping key for a fresh-passphrase candidate.
+####
+def test_fresh_passphrase_write_uses_new_envelope_material(tmp_path: Path) -> None:
+    backend = _XorBackend()
+    reader, opened, _source = _opened_source(tmp_path, backend)
+    writer = PasswordSafeWriter(
+        backend,
+        reader,
+        _private_directory(tmp_path, "fresh-candidates"),
+        random_source=DeterministicRandomSource(
+            _SALT + bytes((index + 97) % 197 for index in range(16384)),
+        ),
+    )
+    passphrase = SecretBuffer.from_bytes(b"fabricated-replacement-passphrase")
+
+    candidate = writer.write_new(opened.document, passphrase, excluded_salt=_SALT)
+    prefix = candidate.path.read_bytes()[:40]
+    reopened = reader.reopen_candidate_with_passphrase(
+        candidate.path,
+        passphrase,
+        expected_salt=prefix[4:36],
+        expected_iterations=262_144,
+    )
+
+    assert prefix[4:36] != _SALT
+    assert int.from_bytes(prefix[36:40], "little") == 262_144
+    assert documents_equal_exact(opened.document, reopened.document)
+    reopened.close()
+    passphrase.close()
+    opened.close()

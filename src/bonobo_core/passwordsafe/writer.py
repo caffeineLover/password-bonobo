@@ -10,6 +10,7 @@ import hashlib
 import os
 import stat
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,17 +24,20 @@ from .constants import (
     HMAC_BYTES,
     IV_BYTES,
     KEY_CHECK_BYTES,
+    MINIMUM_ITERATIONS,
     SALT_BYTES,
     WRAPPED_KEY_BYTES,
     ResourceLimits,
 )
 from .crypto import (
     CbcEncryptor,
+    DerivedKey,
     FieldAuthenticator,
     RandomSource,
     SystemRandomSource,
     TwofishBackend,
     VaultKeys,
+    stretch_passphrase,
     wrap_vault_keys,
 )
 from .errors import PasswordSafeError, ResourceLimitError, ResourceLimitReason, StorageError, StorageReason
@@ -44,10 +48,12 @@ from .reader import (
     VaultCryptoState,
     validate_document_for_serialization,
 )
+from .secrets import SecretBuffer
 
 
 
 _MAX_FIELD_BYTES: Final[int] = 0xFFFF_FFFF
+_SALT_ATTEMPTS: Final[int] = 32
 _DEFAULT_LIMITS: Final[ResourceLimits] = ResourceLimits()
 _FIXED_CANDIDATE_BYTES: Final[int] = (
     len(FILE_TAG) + SALT_BYTES + 4 + KEY_CHECK_BYTES + WRAPPED_KEY_BYTES + IV_BYTES + len(EOF_MARKER) + HMAC_BYTES
@@ -107,6 +113,55 @@ class _CandidateArtifact:
 
 
 
+#### Borrow the exact wrapping material selected for one candidate envelope.
+####
+@dataclass(frozen=True, slots=True)
+class _SerializationMaterial:
+    salt: bytes
+    iterations: int
+    derived_key: DerivedKey
+
+
+
+#### Reopen an ordinary candidate through the established positional boundary.
+####
+@dataclass(frozen=True, slots=True)
+class _RetainedCandidateReopener:
+    reader: PasswordSafeReader
+    crypto_state: VaultCryptoState
+
+
+
+    #### Preserve the reader call shape used by transaction fault injection.
+    ####
+    def __call__(self, path: Path) -> OpenedVault:
+        return self.reader.reopen_candidate(path, self.crypto_state)
+
+
+
+#### Reopen a fresh-envelope candidate under its exact selected policy.
+####
+@dataclass(frozen=True, slots=True)
+class _FreshCandidateReopener:
+    reader: PasswordSafeReader
+    passphrase: SecretBuffer
+    salt: bytes
+    iterations: int
+
+
+
+    #### Authenticate the candidate without retaining passphrase ownership.
+    ####
+    def __call__(self, path: Path) -> OpenedVault:
+        return self.reader.reopen_candidate_with_passphrase(
+            path,
+            self.passphrase,
+            expected_salt=self.salt,
+            expected_iterations=self.iterations,
+        )
+
+
+
 #### Prepare independently randomized candidates and verify them before return.
 ####
 class PasswordSafeWriter:
@@ -155,7 +210,72 @@ class PasswordSafeWriter:
             raise TypeError("writer document must use VaultDocument")
         if not isinstance(crypto_state, VaultCryptoState):
             raise TypeError("writer crypto state must use VaultCryptoState")
-        _validate_document(document, crypto_state, self._limits)
+        material = _SerializationMaterial(
+            crypto_state.salt,
+            crypto_state.serialization_iterations,
+            crypto_state.serialization_derived_key,
+        )
+        reopen = _RetainedCandidateReopener(self._reader, crypto_state)
+        return self._write_verified(document, material, reopen)
+
+
+
+    #### Serialize under a new salt and transient caller-owned passphrase.
+    ####
+    #### This path retains no raw passphrase.  It closes the derived owner after
+    #### exact candidate reopen while leaving passphrase disposal to its caller.
+    ####
+    def write_new(
+        self,
+        document: VaultDocument,
+        passphrase: SecretBuffer,
+        *,
+        iterations: int = MINIMUM_ITERATIONS,
+        excluded_salt: bytes | None = None,
+    ) -> EncryptedCandidate:
+        if not isinstance(document, VaultDocument):
+            raise TypeError("writer document must use VaultDocument")
+        if not isinstance(passphrase, SecretBuffer):
+            raise TypeError("writer passphrase must use SecretBuffer")
+        if (
+            isinstance(iterations, bool)
+            or not isinstance(iterations, int)
+            or not MINIMUM_ITERATIONS <= iterations <= self._limits.max_iterations
+        ):
+            raise ValueError("new candidate iterations are outside writer policy")
+        if excluded_salt is not None and (
+            not isinstance(excluded_salt, bytes) or len(excluded_salt) != SALT_BYTES
+        ):
+            raise ValueError("excluded salt must be exactly 32 bytes")
+        salt: bytes | None = None
+        for _attempt in range(_SALT_ATTEMPTS):
+            candidate_salt = self._random.bytes(SALT_BYTES)
+            if len(candidate_salt) != SALT_BYTES:
+                raise ValueError("random source returned an invalid salt length")
+            if candidate_salt != excluded_salt:
+                salt = candidate_salt
+                break
+        if salt is None:
+            raise ValueError("random source could not produce an independent salt")
+        derived_key = stretch_passphrase(passphrase, salt, iterations, limits=self._limits)
+        try:
+            material = _SerializationMaterial(salt, iterations, derived_key)
+            reopen = _FreshCandidateReopener(self._reader, passphrase, salt, iterations)
+            return self._write_verified(document, material, reopen)
+        finally:
+            derived_key.close()
+
+
+
+    #### Write, authenticate, and compare one candidate under selected material.
+    ####
+    def _write_verified(
+        self,
+        document: VaultDocument,
+        material: _SerializationMaterial,
+        reopen: Callable[[Path], OpenedVault],
+    ) -> EncryptedCandidate:
+        _validate_document(document, material.iterations, self._limits)
         artifact: _CandidateArtifact | None = None
         vault_keys: VaultKeys | None = None
         reopened: OpenedVault | None = None
@@ -173,7 +293,7 @@ class PasswordSafeWriter:
                 _write_candidate(
                     output,
                     document,
-                    crypto_state,
+                    material,
                     vault_keys,
                     iv,
                     self._backend,
@@ -181,7 +301,7 @@ class PasswordSafeWriter:
                     self._limits,
                 )
                 _flush_and_sync(output)
-            reopened = self._reader.reopen_candidate(artifact.path, crypto_state)
+            reopened = reopen(artifact.path)
             if not documents_equal_exact(
                 document,
                 reopened.document,
@@ -308,21 +428,20 @@ def _candidate_matches(artifact: _CandidateArtifact, expected_sha256: str, chunk
 def _write_candidate(
     output: BinaryIO,
     document: VaultDocument,
-    crypto_state: VaultCryptoState,
+    material: _SerializationMaterial,
     vault_keys: VaultKeys,
     iv: bytes,
     backend: TwofishBackend,
     random_source: RandomSource,
     limits: ResourceLimits,
 ) -> None:
-    derived_key = crypto_state.serialization_derived_key
     prefix = b"".join(
         (
             FILE_TAG,
-            crypto_state.salt,
-            crypto_state.serialization_iterations.to_bytes(4, "little"),
-            hashlib.sha256(derived_key.borrow()).digest(),
-            wrap_vault_keys(backend, derived_key, vault_keys),
+            material.salt,
+            material.iterations.to_bytes(4, "little"),
+            hashlib.sha256(material.derived_key.borrow()).digest(),
+            wrap_vault_keys(backend, material.derived_key, vault_keys),
             iv,
         )
     )
@@ -431,11 +550,11 @@ def _flush_and_sync(output: BinaryIO) -> None:
 ####
 def _validate_document(
     document: VaultDocument,
-    crypto_state: VaultCryptoState,
+    iterations: int,
     limits: ResourceLimits,
 ) -> None:
     validate_document_for_serialization(document, limits)
-    if crypto_state.serialization_iterations > limits.max_iterations:
+    if iterations > limits.max_iterations:
         raise ResourceLimitError(ResourceLimitReason.MAX_ITERATIONS)
     candidate_size = _FIXED_CANDIDATE_BYTES
     for raw_field in _iter_document_fields(document):

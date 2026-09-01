@@ -505,6 +505,27 @@ def test_reader_uses_real_botan_when_configured(tmp_path: Path) -> None:
 
 
 
+#### Reopen a fresh-passphrase candidate only under its selected envelope policy.
+####
+def test_reopen_candidate_with_passphrase_checks_fresh_envelope(tmp_path: Path) -> None:
+    backend = _XorBackend()
+    source = _write_vault(tmp_path, _vault_bytes(backend, _base_fields()))
+    reader = PasswordSafeReader(backend, _private_directory(tmp_path))
+    passphrase = SecretBuffer.from_bytes(_PASSPHRASE)
+
+    reopened = reader.reopen_candidate_with_passphrase(
+        source,
+        passphrase,
+        expected_salt=_SALT,
+        expected_iterations=3,
+    )
+
+    assert reopened.document.version.value == 0x0302
+    reopened.close()
+    passphrase.close()
+
+
+
 #### Keep static type references to the ownership API under strict checking.
 ####
 def _type_contract(opened: OpenedVault, state: VaultCryptoState) -> tuple[bool, bool]:

@@ -104,12 +104,12 @@ def test_fault_never_leaves_partial_authoritative_file(
     else:
         assert not case.candidate.path.exists()
     assert not store.pending_candidates()
-    for recovery in store.available_recovery():
+    for recovery in store.available_recovery(case.source):
         encrypted = (recovery_directory / recovery.identifier).read_bytes()
         assert encrypted.startswith(FILE_TAG)
         assert b"fabricated-credential" not in encrypted
     if new_is_authoritative:
-        recoveries = store.available_recovery()
+        recoveries = store.available_recovery(case.source)
         assert len(recoveries) == 1
         store.restore(
             case.source,
@@ -203,7 +203,7 @@ def test_retry_after_post_replace_fault_keeps_one_prior_revision(tmp_path: Path)
         random_source=DeterministicRandomSource(bytes(index % 163 for index in range(1024))),
     )
     resumed.publish(case.source, retry_candidate, resumed.capture(case.source))
-    recoveries = resumed.available_recovery()
+    recoveries = resumed.available_recovery(case.source)
 
     assert len(recoveries) == 1
     assert recoveries[0].sha256 == first_published_sha256
@@ -223,7 +223,7 @@ def test_uncommitted_recovery_artifact_is_not_advertised(tmp_path: Path) -> None
         validator=case.validator,
     )
 
-    assert not store.available_recovery()
+    assert not store.available_recovery(case.source)
     case.candidate.path.unlink()
     case.close()
 
@@ -355,5 +355,5 @@ def test_missing_obsolete_recovery_does_not_poison_restart(tmp_path: Path) -> No
 
     resumed.publish(case.source, candidate, resumed.capture(case.source))
 
-    assert len(resumed.available_recovery()) == 1
+    assert len(resumed.available_recovery(case.source)) == 1
     case.close()

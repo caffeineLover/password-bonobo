@@ -591,12 +591,14 @@ def _rename_handle_relative(
     handle: wintypes.HANDLE,
     root_directory: wintypes.HANDLE,
     name: str,
+    *,
+    replace: bool,
 ) -> bool:
     encoded = name.encode("utf-16le")
     size = _FileRenameInfo.FileName.offset + len(encoded)
     buffer = ctypes.create_string_buffer(size)
     information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
-    information.ReplaceIfExists = True
+    information.ReplaceIfExists = replace
     information.RootDirectory = root_directory
     information.FileNameLength = len(encoded)
     ctypes.memmove(ctypes.addressof(buffer) + _FileRenameInfo.FileName.offset, encoded, len(encoded))
@@ -800,7 +802,34 @@ class WindowsDirectoryAnchor:
             or information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
         ):
             return False
-        return _rename_handle_relative(handle, self._handle, destination_name) and self._stable()
+        return _rename_handle_relative(handle, self._handle, destination_name, replace=True) and self._stable()
+
+
+
+    #### Atomically rename one complete child only when the destination is absent.
+    ####
+    def publish_new_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        if (
+            not self._stable()
+            or Path(source_name).name != source_name
+            or Path(destination_name).name != destination_name
+        ):
+            return False
+        handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+        information = _ByHandleFileInformation()
+        if (
+            _file_identity(handle) != identity
+            or not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+            or information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
+        ):
+            return False
+        return _rename_handle_relative(handle, self._handle, destination_name, replace=False) and self._stable()
 
 
 

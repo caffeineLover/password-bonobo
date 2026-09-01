@@ -135,6 +135,21 @@ class PublishedFile:
 
 
 
+#### Preserve verified publication evidence when a later durability or cleanup step fails.
+####
+class _CommittedPublicationError(StorageError):
+    __slots__ = ("published",)
+
+
+
+    #### Carry evidence for internal state reconciliation without exposing platform details.
+    ####
+    def __init__(self, published: PublishedFile) -> None:
+        super().__init__(StorageReason.PUBLICATION_FAILED)
+        self.published = published
+
+
+
 CandidateValidator = Callable[[Path], None]
 
 
@@ -239,6 +254,19 @@ class _PublicationAnchor(Protocol):
     #### Replace one child by retained descriptor under the held directory.
     ####
     def replace_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        raise NotImplementedError
+
+
+
+    #### Publish one retained complete child only if the destination is absent.
+    ####
+    def publish_new_child(
         self,
         descriptor: int,
         identity: tuple[int, int],
@@ -385,6 +413,8 @@ class _PosixPublicationAnchor:
         if Path(source_name).name != source_name or Path(destination_name).name != destination_name:
             return False
 
+
+
         #### POSIX has no universal conditional rename-by-handle primitive.  Make
         #### the latest practical name-to-inode check directly beside rename;
         #### same-UID namespace mutation inside that final syscall gap remains
@@ -393,6 +423,35 @@ class _PosixPublicationAnchor:
         if not stat.S_ISREG(named.st_mode) or (named.st_dev, named.st_ino) != identity:
             return False
         os.replace(source_name, destination_name, src_dir_fd=self._fd, dst_dir_fd=self._fd)
+        return self.stable()
+
+
+
+    #### Link a complete staged inode into an absent destination, then unstage it.
+    ####
+    def publish_new_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        metadata = os.fstat(descriptor)
+        if not self.stable() or (metadata.st_dev, metadata.st_ino) != identity:
+            return False
+        if Path(source_name).name != source_name or Path(destination_name).name != destination_name:
+            return False
+        named = os.stat(source_name, dir_fd=self._fd, follow_symlinks=False)
+        if not stat.S_ISREG(named.st_mode) or (named.st_dev, named.st_ino) != identity:
+            return False
+        os.link(
+            source_name,
+            destination_name,
+            src_dir_fd=self._fd,
+            dst_dir_fd=self._fd,
+            follow_symlinks=False,
+        )
+        os.unlink(source_name, dir_fd=self._fd)
         return self.stable()
 
 
@@ -510,6 +569,8 @@ class LocalVaultStore:
         destination: Path,
         candidate: EncryptedCandidate,
         baseline: FileBaseline,
+        *,
+        validator: CandidateValidator | None = None,
     ) -> PublishedFile:
         _validate_path(destination, "publication destination")
         if not isinstance(candidate, EncryptedCandidate):
@@ -523,33 +584,48 @@ class LocalVaultStore:
             baseline,
             consume_source=True,
             selected_recovery=None,
+            validator=validator,
+        )
+
+
+
+    #### Publish one authenticated candidate without replacing an existing entry.
+    ####
+    def publish_new(
+        self,
+        destination: Path,
+        candidate: EncryptedCandidate,
+        *,
+        validator: CandidateValidator | None = None,
+    ) -> PublishedFile:
+        _validate_path(destination, "publication destination")
+        if not isinstance(candidate, EncryptedCandidate):
+            raise TypeError("publication candidate must use EncryptedCandidate")
+        return self._publish_source(
+            destination,
+            candidate.path,
+            candidate.sha256,
+            None,
+            consume_source=True,
+            selected_recovery=None,
+            validator=validator,
         )
 
 
 
     #### Enumerate regular encrypted recoveries without exposing their paths.
     ####
-    def available_recovery(self) -> tuple[RecoveryRevision, ...]:
+    def available_recovery(self, destination: Path) -> tuple[RecoveryRevision, ...]:
+        _validate_path(destination, "recovery destination")
         with self._lock:
-            revisions: dict[str, RecoveryRevision] = {}
             try:
-                for path in self._recovery_directory.iterdir():
-                    locator = _locator_from_slot_name(path.name)
-                    if locator is None:
-                        continue
-                    try:
-                        slot = self._read_recovery_slot(locator)
-                        if slot is None:
-                            continue
-                        artifact = self._recovery_artifact(slot.current)
-                    except StorageError:
-                        continue
-                    revisions[artifact.revision.identifier] = artifact.revision
-            except OSError:
-                raise StorageError(StorageReason.PREPARATION_FAILED) from None
-            return tuple(
-                sorted(revisions.values(), key=lambda item: (item.created_ns, item.identifier), reverse=True)
-            )
+                slot = self._read_recovery_slot(_vault_locator(destination))
+                if slot is None:
+                    return ()
+                artifact = self._recovery_artifact(slot.current)
+            except StorageError:
+                return ()
+            return (artifact.revision,)
 
 
 
@@ -574,7 +650,8 @@ class LocalVaultStore:
             artifact = self._recovery_artifact(recovery.identifier)
         except FileNotFoundError:
             raise StorageError(StorageReason.VERIFICATION_FAILED) from None
-        if artifact.revision != recovery or not self._recovery_is_visible(recovery.identifier):
+        locator = _vault_locator(destination)
+        if artifact.revision != recovery or not self._recovery_is_visible(locator, recovery.identifier):
             raise StorageError(StorageReason.VERIFICATION_FAILED)
         return self._publish_source(
             destination,
@@ -603,7 +680,7 @@ class LocalVaultStore:
         destination: Path,
         source: Path,
         expected_sha256: str,
-        baseline: FileBaseline,
+        baseline: FileBaseline | None,
         *,
         consume_source: bool,
         selected_recovery: RecoveryRevision | None,
@@ -625,11 +702,11 @@ class LocalVaultStore:
             result: PublishedFile | None = None
             locator = _vault_locator(destination)
             try:
-                anchor, anchored_destination = _open_publication_destination(destination)
-                destination_name = anchored_destination.name
                 source_baseline = _capture_regular_file(source)
                 if source_baseline.sha256 != expected_sha256:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
+                anchor, anchored_destination = _open_publication_destination(destination)
+                destination_name = anchored_destination.name
                 staged, staged_identity, staged_baseline = self._stage_candidate(
                     anchor,
                     anchored_destination.parent,
@@ -655,27 +732,43 @@ class LocalVaultStore:
                 self._faults._hit(StorageStage.LOCK)
                 with _destination_lock(self._working_directory, destination):
                     self._faults._hit(StorageStage.BASELINE_RECHECK)
-                    if not anchor.stable() or _capture_anchor_child(anchor, destination_name) != baseline:
-                        raise ExternalModificationError()
-                    previous_slot = self._read_recovery_slot(locator)
-                    new_recovery = self._create_recovery(anchor, destination_name, baseline, locator)
-                    transaction_slot = _transaction_recovery_slot(
-                        new_recovery.revision.identifier,
-                        previous_slot,
-                        selected_recovery,
-                    )
-                    self._write_recovery_slot(locator, transaction_slot)
-                    if not anchor.stable() or _capture_anchor_child(anchor, destination_name) != baseline:
-                        raise ExternalModificationError()
+                    transaction_slot: _RecoverySlot | None = None
+                    if baseline is not None:
+                        if not anchor.stable() or _capture_anchor_child(anchor, destination_name) != baseline:
+                            raise ExternalModificationError()
+                        previous_slot = self._read_recovery_slot(locator)
+                        new_recovery = self._create_recovery(anchor, destination_name, baseline, locator)
+                        transaction_slot = _transaction_recovery_slot(
+                            new_recovery.revision.identifier,
+                            previous_slot,
+                            selected_recovery,
+                        )
+                        self._write_recovery_slot(locator, transaction_slot)
+                        if not anchor.stable() or _capture_anchor_child(anchor, destination_name) != baseline:
+                            raise ExternalModificationError()
                     if _capture_anchor_child(anchor, staged.name) != staged_baseline:
                         raise StorageError(StorageReason.VERIFICATION_FAILED)
                     self._faults._hit(StorageStage.REPLACE)
-                    if staged_identity is None or not anchor.replace_child(
-                        staged_descriptor,
-                        staged_identity,
-                        staged.name,
-                        destination_name,
-                    ):
+                    if staged_identity is None:
+                        raise StorageError(StorageReason.PUBLICATION_FAILED)
+                    if baseline is None:
+                        try:
+                            published = anchor.publish_new_child(
+                                staged_descriptor,
+                                staged_identity,
+                                staged.name,
+                                destination_name,
+                            )
+                        except FileExistsError:
+                            raise ExternalModificationError() from None
+                    else:
+                        published = anchor.replace_child(
+                            staged_descriptor,
+                            staged_identity,
+                            staged.name,
+                            destination_name,
+                        )
+                    if not published:
                         raise StorageError(StorageReason.PUBLICATION_FAILED)
                     replaced = True
                     self._pending.pop(staged, None)
@@ -688,18 +781,35 @@ class LocalVaultStore:
                         or published_baseline.size != staged_baseline.size
                     ):
                         raise StorageError(StorageReason.VERIFICATION_FAILED)
-                    self._commit_recovery(locator, new_recovery, transaction_slot)
+                    if new_recovery is not None and transaction_slot is not None:
+                        self._commit_recovery(locator, new_recovery, transaction_slot)
                     result = PublishedFile(
                         destination,
                         published_baseline.size,
                         published_baseline.sha256,
                         published_baseline,
-                        new_recovery.revision,
+                        None if new_recovery is None else new_recovery.revision,
                     )
             except BaseException as error:
                 failure = error
             finally:
                 cleanup_failed = False
+                if replaced and result is None and anchor is not None and staged_baseline is not None:
+                    try:
+                        published_baseline = _capture_anchor_child(anchor, destination_name)
+                        if (
+                            published_baseline.sha256 == expected_sha256
+                            and published_baseline.size == staged_baseline.size
+                        ):
+                            result = PublishedFile(
+                                destination,
+                                published_baseline.size,
+                                published_baseline.sha256,
+                                published_baseline,
+                                None if new_recovery is None else new_recovery.revision,
+                            )
+                    except BaseException:
+                        pass
                 if staged is not None and not replaced:
                     try:
                         if anchor is None or staged_identity is None:
@@ -749,10 +859,12 @@ class LocalVaultStore:
                 if cleanup_failed and failure is None:
                     failure = StorageError(StorageReason.PUBLICATION_FAILED)
             if failure is not None:
-                if isinstance(failure, (ExternalModificationError, StorageError)):
-                    raise failure from None
                 if not isinstance(failure, Exception):
                     raise failure
+                if replaced and result is not None:
+                    raise _CommittedPublicationError(result) from None
+                if isinstance(failure, (ExternalModificationError, StorageError)):
+                    raise failure from None
                 if isinstance(failure, PasswordSafeError):
                     raise StorageError(StorageReason.VERIFICATION_FAILED) from None
                 raise StorageError(StorageReason.PUBLICATION_FAILED) from None
@@ -968,18 +1080,13 @@ class LocalVaultStore:
 
     #### Confirm that at least one durable private slot advertises an identifier.
     ####
-    def _recovery_is_visible(self, identifier: str) -> bool:
+    def _recovery_is_visible(self, locator: str, identifier: str) -> bool:
         try:
-            for path in self._recovery_directory.iterdir():
-                locator = _locator_from_slot_name(path.name)
-                if locator is None:
-                    continue
-                slot = self._read_recovery_slot(locator)
-                if slot is not None and slot.current == identifier:
-                    return True
-        except OSError:
+            _validate_digest(locator, "vault locator")
+            slot = self._read_recovery_slot(locator)
+        except (OSError, ValueError):
             raise StorageError(StorageReason.PREPARATION_FAILED) from None
-        return False
+        return slot is not None and slot.current == identifier
 
 
 
@@ -1357,7 +1464,7 @@ def _recovery_slot_name(locator: str) -> str:
 def _locator_from_slot_name(name: str) -> str | None:
     if not name.startswith(_RECOVERY_SLOT_PREFIX) or not name.endswith(_RECOVERY_SLOT_SUFFIX):
         return None
-    locator = name[len(_RECOVERY_SLOT_PREFIX) : -len(_RECOVERY_SLOT_SUFFIX)]
+    locator = name[len(_RECOVERY_SLOT_PREFIX): -len(_RECOVERY_SLOT_SUFFIX)]
     try:
         _validate_digest(locator, "vault locator")
     except ValueError:
