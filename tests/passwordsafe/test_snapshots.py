@@ -142,7 +142,7 @@ def test_windows_post_create_disposition_failure_is_closed_and_leak_free(
         disposition_calls += 1
         if disposition_failure is not None:
             raise disposition_failure
-        ctypes.set_last_error(5)
+        _windows_security._WINDOWS_CTYPES.set_last_error(5)
         return False
 
     monkeypatch.setattr(snapshots, "_validate_private_directory", lambda _directory: anchor)
@@ -204,7 +204,9 @@ class _InterruptingSource:
 #### Create a Windows directory junction without requiring symlink privilege.
 ####
 def _create_windows_junction(link: Path, target: Path) -> None:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    from bonobo_core.passwordsafe import _windows_security
+
+    kernel32 = _windows_security._WINDOWS_CTYPES.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateFileW.argtypes = [
         wintypes.LPCWSTR,
         wintypes.DWORD,

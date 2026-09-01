@@ -24,17 +24,19 @@ Task 15 implementation, release verification, and independent review were commit
 `5e1d5d7`. The safe demonstration, operational guide, root status, contributor validation, legal note, and REUSE
 coverage complete the approved lossless PasswordSafe core plan.
 
-Local `main` now tracks `origin/main` at `https://github.com/caffeineLover/password-bonobo.git`. The remote's unrelated
+Local `main` tracks `origin/main` at `https://github.com/caffeineLover/password-bonobo.git`. The remote's unrelated
 initial GPLv3 `LICENSE` commit `7cb8203` was fetched and joined to the completed local history by merge commit `11f0ea7`.
-The merged result passed 645 tests with 12 expected platform-specific skips and 79% coverage in 107.71 seconds, plus
-Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates. Commit `963441d` is
-pushed and synchronized with `origin/main`.
+That earlier `963441d` checkpoint passed 645 tests with 12 expected platform-specific skips and 79% coverage in
+107.71 seconds, plus Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates.
+The later synchronized `main` state is the diagnostic commit `caec5f5` recorded below.
 
 Hosted run `33549509896` then passed Android arm64 but failed the iOS smoke link, macOS strict mypy, Ubuntu host-library
-discovery, and Windows test suite. Published `main` cannot diagnose the iOS failure because it captures and discards
-native stderr. Branch `fix/native-build-diagnostics` now retains at most 2,048 characters of path-redacted,
-control-stripped configure/compiler/linker evidence and reports a bounded allowlist of relative Botan artifacts from
-fixed output tiers. It does not change target profiles, build commands, library selection, or smoke-link semantics.
+discovery, and Windows test suite. Diagnostic repair `caec5f5` is integrated and pushed on `main`. Its follow-up hosted
+run `33555795740` passed Android and exposed bounded causes for every remaining job: Ubuntu produces versioned and
+unversioned `libbotan-3.so` files under `lib/`; iOS omits the C++ runtime while linking the Botan static archive;
+macOS reports the expected 23 platform-stub mypy errors; and the hosted Windows environment rejects private artifact
+preparation across 157 tests. Branch `fix/macos-strict-typing` resolves the macOS failure with narrow typed
+native-module facades while preserving the runtime modules and flags.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -175,11 +177,20 @@ The 2026-09-01 native-diagnostics repair added four red-first boundary regressio
 The full Windows/CPython 3.14.7 suite used the previously verified Botan 3.13 DLL and reported 649 passed, 12 expected
 platform-specific skips, 79% coverage, and zero failures in 110.35 seconds. Autopep8, Ruff, strict mypy over 71 files,
 Python structure, compatibility, provenance, tracked-file, Bandit, pip-audit, REUSE 118/118, source-distribution build,
-wheel build, wheel inspection, and whitespace checks all exited zero. The hosted failure causes remain unaltered until
-this diagnostic commit is integrated, pushed, and rerun. Independent review first identified missing cross-toolchain
-path redaction, an overly broad artifact-name filter, retained tab controls, and over-redaction of relative `make` text;
-red-first tests and implementation corrections closed all four. Follow-up review reported no Critical, Important, or
-Minor findings and assessed the repair ready to merge.
+wheel build, wheel inspection, and whitespace checks all exited zero. The diagnostic commit is integrated and pushed
+as `caec5f5`; follow-up hosted run `33555795740` completed with Android passing and the four remaining bounded failures
+recorded above. Independent review first identified missing cross-toolchain path redaction, an overly broad
+artifact-name filter, retained tab controls, and over-redaction of relative `make` text; red-first tests and
+implementation corrections closed all four. Follow-up review reported no Critical, Important, or Minor findings.
+
+The 2026-09-01 cross-platform strict-typing repair reproduced all 23 macOS errors and now passes strict mypy over all
+70 files under explicit Darwin, Windows, and Linux profiles. A red Windows DACL regression exposed an accidental
+`O_BINARY` lookup on `msvcrt`; retaining that flag on the typed `os` facade restored runtime behavior. The focused
+snapshot, storage, and Botan-build selection passed 92 tests with 7 expected skips. The full Windows/CPython 3.14.7
+suite used the verified Botan DLL and reported 649 passed, 12 expected skips, 79% coverage, and zero failures in
+107.13 seconds. Autopep8 produced no residual drift; Ruff, Python structure, Bandit, REUSE 119/119, whitespace, and all
+three mypy profiles passed. Independent review identified and resolved one Important loss of `WinDLL` constructor
+checking plus one Minor stale-memory wording issue. Follow-up review found no remaining Critical or Important issue.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -208,15 +219,15 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33549509896` failed four of five jobs. Android passed; iOS native linker output is hidden, macOS mypy sees
-  unsupported Windows-only stub members, Ubuntu cannot locate the installed Botan shared library, and Windows hosted
-  temporary directories do not satisfy the production owner-only DACL validation used by tests.
+- Hosted run `33555795740` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
+  archive smoke link; Ubuntu discovery rejects real `lib/libbotan-3.so*` outputs; macOS has the 23 strict-mypy errors
+  addressed on the active branch; and hosted Windows private-artifact preparation fails across 157 tests even though
+  the same commit passes all 649 applicable tests locally.
 
 ## Exact continuation order after this checkpoint
 
-1. Integrate and push `fix/native-build-diagnostics`, then rerun hosted CI to expose the exact iOS linker and Ubuntu
-   installation evidence.
-2. Repair and verify the macOS typing, Ubuntu discovery, Windows test DACL, and newly exposed iOS linker causes one at
-   a time.
+1. Complete review of `docs/superpowers/plans/2026-09-01-cross-platform-strict-typing.md`, integrate it, and push.
+2. Verify macOS in the next hosted run, then repair Ubuntu discovery, hosted Windows DACL behavior, and the iOS C++
+   runtime link one at a time.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

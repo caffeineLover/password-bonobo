@@ -25,7 +25,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 from urllib.request import urlopen
 
 
@@ -73,6 +73,17 @@ int main(void) {
     return botan_block_cipher_destroy(cipher) == 0 ? 0 : 4;
 }
 """
+
+
+
+#### Describe the Windows-only ctypes loader used to obtain the short-path API.
+####
+class _WindowsCtypesApi(Protocol):
+    WinDLL: type[ctypes.CDLL]
+
+
+
+_WINDOWS_CTYPES = cast(_WindowsCtypesApi, ctypes)
 
 
 
@@ -332,7 +343,7 @@ def extract_fresh_verified_source(
 def windows_toolchain_path(path: Path) -> Path:
     if platform.system() != "Windows":
         return path
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _WINDOWS_CTYPES.WinDLL("kernel32", use_last_error=True)
     get_short_path_name = kernel32.GetShortPathNameW
     get_short_path_name.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32)
     get_short_path_name.restype = ctypes.c_uint32

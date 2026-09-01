@@ -3,15 +3,46 @@
 import ctypes
 import msvcrt
 import os
+from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol, cast
 
 
 
-_ADVAPI32 = ctypes.WinDLL("advapi32", use_last_error=True)
-_KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_NTDLL = ctypes.WinDLL("ntdll")
+#### Describe the Windows-only ctypes members consumed by this native security boundary.
+####
+#### Typeshed deliberately omits these members on non-Windows hosts.  The explicit facade keeps this implementation
+#### fully checked under every hosted profile while retaining the runtime module and WinDLL calling convention.
+####
+class _WindowsCtypesApi(Protocol):
+    WinDLL: type[ctypes.CDLL]
+    get_last_error: Callable[[], int]
+    set_last_error: Callable[[int], None]
+
+
+
+#### Describe the Windows descriptor conversion members consumed by retained native handles.
+####
+class _WindowsMsvcrtApi(Protocol):
+    open_osfhandle: Callable[[int, int], int]
+    get_osfhandle: Callable[[int], int]
+
+
+
+#### Describe the Windows-only binary descriptor flag exposed by os.
+####
+class _WindowsOsApi(Protocol):
+    O_BINARY: int
+
+
+
+_WINDOWS_CTYPES = cast(_WindowsCtypesApi, ctypes)
+_WINDOWS_MSVCRT = cast(_WindowsMsvcrtApi, msvcrt)
+_WINDOWS_OS = cast(_WindowsOsApi, os)
+_ADVAPI32 = _WINDOWS_CTYPES.WinDLL("advapi32", use_last_error=True)
+_KERNEL32 = _WINDOWS_CTYPES.WinDLL("kernel32", use_last_error=True)
+_NTDLL = _WINDOWS_CTYPES.WinDLL("ntdll")
 
 _TOKEN_QUERY: Final[int] = 0x0008
 _TOKEN_USER: Final[int] = 1
@@ -770,7 +801,7 @@ class WindowsDirectoryAnchor:
             ):
                 return None
             raw_handle = _handle_value(handle)
-            descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDONLY | os.O_BINARY)
+            descriptor = _WINDOWS_MSVCRT.open_osfhandle(raw_handle, os.O_RDONLY | _WINDOWS_OS.O_BINARY)
             handle = None
             return descriptor, identity
         finally:
@@ -794,7 +825,7 @@ class WindowsDirectoryAnchor:
             or Path(destination_name).name != destination_name
         ):
             return False
-        handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+        handle = wintypes.HANDLE(_WINDOWS_MSVCRT.get_osfhandle(descriptor))
         information = _ByHandleFileInformation()
         if (
             _file_identity(handle) != identity
@@ -821,7 +852,7 @@ class WindowsDirectoryAnchor:
             or Path(destination_name).name != destination_name
         ):
             return False
-        handle = wintypes.HANDLE(msvcrt.get_osfhandle(descriptor))
+        handle = wintypes.HANDLE(_WINDOWS_MSVCRT.get_osfhandle(descriptor))
         information = _ByHandleFileInformation()
         if (
             _file_identity(handle) != identity
@@ -884,7 +915,7 @@ class WindowsDirectoryAnchor:
             if not _set_handle_disposition(handle, delete=False):
                 return None
             raw_handle = _handle_value(handle)
-            file_descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDWR | os.O_BINARY)
+            file_descriptor = _WINDOWS_MSVCRT.open_osfhandle(raw_handle, os.O_RDWR | _WINDOWS_OS.O_BINARY)
             handle = None
             return file_descriptor, identity, name
         finally:
@@ -906,7 +937,7 @@ class WindowsDirectoryAnchor:
     #### Delete only an unchanged child under the still-stable directory identity.
     ####
     def remove_if_same(self, descriptor: int, _name: str, identity: tuple[int, int]) -> bool:
-        raw_handle = msvcrt.get_osfhandle(descriptor)
+        raw_handle = _WINDOWS_MSVCRT.get_osfhandle(descriptor)
         handle = wintypes.HANDLE(raw_handle)
         return _delete_handle_if_same(handle, identity)
 
@@ -957,7 +988,7 @@ def open_regular_file(path: Path) -> int | None:
             None,
         )
         if _is_invalid_handle(handle):
-            error = ctypes.get_last_error()
+            error = _WINDOWS_CTYPES.get_last_error()
             handle = None
             if error in (_ERROR_FILE_NOT_FOUND, _ERROR_PATH_NOT_FOUND):
                 raise FileNotFoundError
@@ -969,7 +1000,7 @@ def open_regular_file(path: Path) -> int | None:
         ):
             return None
         raw_handle = _handle_value(handle)
-        descriptor = msvcrt.open_osfhandle(raw_handle, os.O_RDONLY | os.O_BINARY)
+        descriptor = _WINDOWS_MSVCRT.open_osfhandle(raw_handle, os.O_RDONLY | _WINDOWS_OS.O_BINARY)
         handle = None
         return descriptor
     finally:

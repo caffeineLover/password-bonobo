@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
-from typing import Final, Protocol
+from typing import Final, Protocol, cast
 
 from .constants import MAX_ENCRYPTED_FILE_BYTES, MAX_IO_CHUNK_BYTES
 from .crypto import RandomSource, SystemRandomSource
@@ -27,6 +27,24 @@ from .writer import EncryptedCandidate
 
 if os.name == "nt":
     from ._windows_security import WindowsDirectoryAnchor, open_regular_file
+
+
+
+#### Describe the POSIX advisory-lock members used through the non-Windows runtime branch.
+####
+class _PosixLockApi(Protocol):
+    LOCK_EX: int
+    LOCK_UN: int
+    flock: Callable[[int, int], None]
+
+
+
+#### Describe the Windows byte-range lock members used through the Windows runtime branch.
+####
+class _WindowsLockApi(Protocol):
+    LK_LOCK: int
+    LK_UNLCK: int
+    locking: Callable[[int, int, int], None]
 
 
 
@@ -1371,9 +1389,8 @@ def _destination_lock(working_directory: Path, destination: Path) -> Iterator[No
 def _lock_posix_descriptor(descriptor: int) -> None:
     import fcntl
 
-    # The Windows typeshed profile omits POSIX-only members even though this
-    # function is invoked exclusively under the non-Windows runtime branch.
-    fcntl.flock(descriptor, fcntl.LOCK_EX)  # type: ignore[attr-defined]
+    lock_api = cast(_PosixLockApi, fcntl)
+    lock_api.flock(descriptor, lock_api.LOCK_EX)
 
 
 
@@ -1382,9 +1399,8 @@ def _lock_posix_descriptor(descriptor: int) -> None:
 def _unlock_posix_descriptor(descriptor: int) -> None:
     import fcntl
 
-    # The Windows typeshed profile omits POSIX-only members even though this
-    # function is invoked exclusively under the non-Windows runtime branch.
-    fcntl.flock(descriptor, fcntl.LOCK_UN)  # type: ignore[attr-defined]
+    lock_api = cast(_PosixLockApi, fcntl)
+    lock_api.flock(descriptor, lock_api.LOCK_UN)
 
 
 
@@ -1393,11 +1409,12 @@ def _unlock_posix_descriptor(descriptor: int) -> None:
 def _lock_windows_descriptor(descriptor: int) -> None:
     import msvcrt
 
+    lock_api = cast(_WindowsLockApi, msvcrt)
     if os.fstat(descriptor).st_size == 0:
         os.write(descriptor, b"\x00")
         os.fsync(descriptor)
     os.lseek(descriptor, 0, os.SEEK_SET)
-    msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+    lock_api.locking(descriptor, lock_api.LK_LOCK, 1)
 
 
 
@@ -1406,8 +1423,9 @@ def _lock_windows_descriptor(descriptor: int) -> None:
 def _unlock_windows_descriptor(descriptor: int) -> None:
     import msvcrt
 
+    lock_api = cast(_WindowsLockApi, msvcrt)
     os.lseek(descriptor, 0, os.SEEK_SET)
-    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+    lock_api.locking(descriptor, lock_api.LK_UNLCK, 1)
 
 
 
