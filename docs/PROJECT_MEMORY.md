@@ -16,19 +16,12 @@ This file is Markdown-only.  Do not create a second project-memory location or a
 Branch `feature/lossless-passwordsafe-core` has completed Tasks 1 through 12 of the approved lossless PasswordSafe core
 plan.  Task 13 is next.
 
-The current maintenance checkpoint consolidates the retired split identity/state/decisions/verification records into
-this file and deletes that obsolete folder.  It also makes `docs/superpowers/specs/` Markdown-only by removing its one
-tracked LaTeX file and one ignored PDF.  Complete this checkpoint in order:
+Checkpoint `669506e` consolidated the retired split identity/state/decisions/verification records into this file and
+deleted the obsolete folder.  It also made `docs/superpowers/specs/` Markdown-only, removed its TeX/PDF derivatives,
+updated the policy/tool/tests/plans/REUSE metadata, and passed the verification recorded below.
 
-Current working-tree state: consolidation, deletions, policy/tool/test changes, stale-plan cleanup, and the complete
-checkpoint verification are finished.  The independent checkpoint commit and recording its hash here remain; no
-Task 13 implementation has started.
-
-1. Enforce the single-memory and approved-design Markdown-only boundaries with failing-then-passing regressions.
-2. Preserve the unique project identity, state, decisions, verification, risks, and links in this concise file.
-3. Delete the retired split-memory files and approved-design derivatives; update all live references and REUSE.
-4. Run the complete document suite, Ruff, strict mypy, structure, provenance, REUSE, tracked-file, and whitespace gates.
-5. Inspect and commit the checkpoint independently, record its commit here, then begin Task 13 Step 1.
+No Task 13 implementation has started.  The next action is Task 13 Step 1: inspect its exact manifest, authority, and
+provenance requirements, then write the failing tests before implementing fixtures or verification code.
 
 ## Product contract and authoritative documents
 
@@ -68,7 +61,8 @@ GPL-3.0-or-later.  The possible iOS distribution exception remains unresolved an
   a dependency-free deterministic fuzz corpus/runner, and a bounded-memory encrypted-only large-vault proof.
 
 Key checkpoints: continuity `4013f8a`; Task 11 `8c2b30e`; Task 12/workflow `08c2107`; Gorilla derivatives `b77077c`;
-legal Markdown-only `2be2512`; specifications Markdown-only `925e8c6`; plans Markdown-only `3df88b4`.
+legal Markdown-only `2be2512`; specifications Markdown-only `925e8c6`; plans Markdown-only `3df88b4`; single memory
+and approved-design Markdown-only `669506e`.
 
 ## Last proven verification
 
