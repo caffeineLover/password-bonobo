@@ -11,8 +11,8 @@ branch introduces the workflow; its Windows, macOS, and Linux jobs remain to be 
 ## Lossless-core Task 11 checkpoint
 
 The public service-facade checkpoint passed locally on Windows with CPython 3.14.7 on 2026-09-01.  The complete suite
-collected 587 tests and reported 575 passed with 12 platform-specific skips.  The focused service, public API, and
-package-contract selection reported 16 passed.  Ruff, strict mypy, the Python structure checker, REUSE 3.3 lint, and
+collected 590 tests and reported 578 passed with 12 platform-specific skips.  The focused service, public API, and
+package-contract selection reported 19 passed.  Ruff, strict mypy, the Python structure checker, REUSE 3.3 lint, and
 the provenance ledger checker reported no violations.  A clean build produced exactly
 `password_bonobo-0.1.0-py3-none-any.whl` and `password_bonobo-0.1.0.tar.gz`; the distribution checker passed.
 
@@ -24,7 +24,10 @@ this is a local checkpoint rather than the Task 15 release gate.
 Independent review added regression evidence that save completion requires authenticated publication, recovery is
 bound to one destination even when vaults share a passphrase, record handles remain stable across saves in one session,
 same-version exports preserve unknown fields exactly, passphrase rotation preserves stronger iteration policies, and
-destination-preparation failures remove encrypted writer candidates.
+destination-preparation failures remove encrypted writer candidates.  Final review also verified that storage faults
+reported after atomic replacement reconcile the live session to the committed revision, old-owner cleanup cannot
+corrupt that live revision, and still-live retired plaintext owners remain reachable for deterministic retry.  The
+reviewer reported no remaining Critical or Important findings.
 
 ## CI action pin evidence
 

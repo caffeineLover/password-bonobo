@@ -19,15 +19,19 @@ boundary.
 
 ## Active work
 
-Task 11 is complete in the working checkpoint after handoff commit `5564e2f`.  Its test-first amendment added minimal
+Task 11 is complete at implementation commit `8c2b30e` plus the reboot handoff checkpoint containing this record.  Its
+test-first amendment added minimal
 new-envelope reading/writing, no-replace publication, and published-baseline advancement primitives before assembling
 `service.py`; the facade does not bypass private constructors or duplicate publication logic.  The complete local test
-suite on 2026-09-01 was 575 passed and 12 platform-specific skips under CPython 3.14.7.  Independent review drove
+suite on 2026-09-01 was 578 passed and 12 platform-specific skips under CPython 3.14.7.  Independent review drove
 additional proofs for publication-only save completion, destination-bound recovery, stable in-session handles,
-same-version unknown-field export, iteration-policy preservation, and early candidate cleanup.  Focused facade tests,
-Ruff, strict mypy, structure, REUSE, provenance, source/wheel builds, and distribution inspection also passed.  Task 12
-is next.  In the current shell, invoke uv as `python -m uv` because the module is installed but the `uv` console
-executable is not discoverable on `PATH`.
+same-version unknown-field export, iteration-policy preservation, early candidate cleanup, committed-state adoption
+after a post-replace storage report, and retryable cleanup of still-live retired plaintext owners.  The final reviewer
+reported no Critical or Important findings.  The 19-test focused facade/public/package selection, Ruff, strict mypy,
+structure, REUSE, provenance, source/wheel builds, and distribution inspection passed; the full suite and static gates
+were rerun after the final review fix.  Task 12 is next after optionally repeating the packaging/security gates recorded
+in [the reboot handoff](HANDOFF.md).  In the current shell, invoke uv as `python -m uv` because the module is installed
+but the `uv` console executable is not discoverable on `PATH`.
 
 ## Required read order
 
