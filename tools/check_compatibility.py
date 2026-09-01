@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,69 @@ COMPATIBILITY_MARKDOWN_PATHS = (
     Path("docs/compatibility/gorilla/test-oracles.md"),
     Path("docs/compatibility/gorilla/upstream-baseline.md"),
 )
+INTEROP_FIXTURE_ROOT = Path("tests/fixtures/synthetic/passwordsafe")
+INTEROP_TRANSACTION_PATH = INTEROP_FIXTURE_ROOT / "interop-transactions.json"
+INTEROP_MANIFEST_SCHEMA = "password-bonobo-interoperability-manifest-v1"
+MAX_INTEROP_MANIFEST_BYTES = 1_048_576
+INTEROP_TRANSACTION_SHA256 = "ab79f9765c2a0376db9e5cd9ac327c3bd2c7953a6f4e7eba8809c141803fe3ef"
+INTEROP_TRANSACTION_SCHEMA = "password-bonobo-interoperability-transactions-v1"
+INTEROP_MANIFEST_KEYS = frozenset(
+    {
+        "authority",
+        "authority_version",
+        "creation_method",
+        "encrypted_sha256",
+        "entries",
+        "field_count",
+        "fixture",
+        "format_version",
+        "header_field_count",
+        "passphrase_input",
+        "platform",
+        "record_count",
+        "schema",
+        "tooling",
+    }
+)
+INTEROP_EXPECTATIONS = {
+    "bonobo-0311": (
+        "Bonobo",
+        "0x0311",
+        "97900c193c2b4a67e345519f4f50de1fb6af7d86951ae8c541981bb85f1ed0f0",
+    ),
+    "passwordsafe-current": (
+        "Password Safe 3.72.1",
+        "0x0311",
+        "a5f856c99e70f801b4286f5f6f89c96c257b1a81ec1109fc80c1b2e3d24b8b47",
+    ),
+    "gorilla-6728e85": (
+        "Gorilla 6728e85",
+        "0x0300",
+        "3a7772a31398aa5edf88646b4254fe93b5116ab9e19073c0408287a2cc1853ad",
+    ),
+    "official-unknown-0302": (
+        "Independent PasswordSafe V3 fixture authority",
+        "0x0302",
+        "4e58f02225ad4782b33eebb3996644cdedb81b67eee65836759171d0c17ba3d3",
+    ),
+}
+INTEROP_TRANSACTION_KEYS = frozenset(
+    {"external_artifacts", "performed_on", "platform", "schema", "transactions"}
+)
+INTEROP_EXTERNAL_ARTIFACTS = {
+    "gorilla_commit": "6728e85c05ac25357b8f19f541487b9d26a97402",
+    "password_safe_archive_sha256": "2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d",  # nosec B105
+    "password_safe_version": "3.72.1",  # nosec B105
+    "tclkit_sha256": "4008f8938ba60edaf9c7c72b1bd5330b4c60c3f4b10d9cd1ef25da0ac06333f1",
+    "tclkit_version": "8.6.9",
+}
+INTEROP_TRANSACTION_RELATIONSHIPS = {
+    ("Bonobo 0.1.0", "gorilla-6728e85.psafe3"): INTEROP_EXPECTATIONS["gorilla-6728e85"][2],
+    ("Bonobo 0.1.0", "official-unknown-0302.psafe3"): INTEROP_EXPECTATIONS["official-unknown-0302"][2],
+    ("Bonobo 0.1.0", "passwordsafe-current.psafe3"): INTEROP_EXPECTATIONS["passwordsafe-current"][2],
+    ("Gorilla 6728e85", "bonobo-0311.psafe3"): INTEROP_EXPECTATIONS["bonobo-0311"][2],
+    ("Password Safe 3.72.1", "bonobo-0311.psafe3"): INTEROP_EXPECTATIONS["bonobo-0311"][2],
+}
 CAMEL_CASE_IDENTIFIER = re.compile(r"\b[a-z][a-z0-9]{0,20}(?:[A-Z][A-Za-z0-9]*)+\b")
 WORD_IDENTIFIER = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 BEHAVIOR_HEADING = re.compile(r"(?m)^### (GOR-BEH-\d{3})\b")
@@ -231,6 +295,267 @@ def check_local_evidence_corpus(
 
 
 
+#### Bind each encrypted interoperability fixture to its redacted manifest and oracle link.
+####
+def check_interop_fixture_evidence(
+    repository_root: Path,
+    oracles_source: str,
+    *,
+    approved_hashes: Mapping[str, str] | None = None,
+) -> tuple[CompatibilityViolation, ...]:
+    fixture_root = repository_root / INTEROP_FIXTURE_ROOT
+    expected_stems = frozenset(INTEROP_EXPECTATIONS)
+    fixture_stems = frozenset(path.stem for path in fixture_root.glob("*.psafe3"))
+    manifest_stems = frozenset(
+        path.name.removesuffix(".manifest.json")
+        for path in fixture_root.glob("*.manifest.json")
+    )
+    violations: list[CompatibilityViolation] = []
+    if fixture_stems != expected_stems:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_FIXTURE_ROOT,
+                1,
+                "interoperability encrypted fixture set does not match the approved four stems",
+            )
+        )
+    if manifest_stems != expected_stems:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_FIXTURE_ROOT,
+                1,
+                "interoperability manifest set does not match the approved four stems",
+            )
+        )
+    selected_hashes = (
+        {stem: expectation[2] for stem, expectation in INTEROP_EXPECTATIONS.items()}
+        if approved_hashes is None
+        else approved_hashes
+    )
+    for stem, (authority, format_version, _repository_hash) in INTEROP_EXPECTATIONS.items():
+        fixture = fixture_root / f"{stem}.psafe3"
+        manifest = fixture_root / f"{stem}.manifest.json"
+        if not fixture.is_file() or not manifest.is_file():
+            continue
+        try:
+            document = json.loads(_read_bounded_utf8(manifest, MAX_INTEROP_MANIFEST_BYTES))
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            violations.append(
+                CompatibilityViolation(
+                    manifest.relative_to(repository_root),
+                    1,
+                    f"interoperability manifest is not valid UTF-8 JSON: {stem}",
+                )
+            )
+            continue
+        manifest_path = manifest.relative_to(repository_root)
+        if not isinstance(document, dict):
+            violations.append(
+                CompatibilityViolation(
+                    manifest_path,
+                    1,
+                    f"interoperability manifest root is not an object: {stem}",
+                )
+            )
+            continue
+        if frozenset(document) != INTEROP_MANIFEST_KEYS:
+            violations.append(
+                CompatibilityViolation(
+                    manifest_path,
+                    1,
+                    f"interoperability manifest top-level schema is not closed: {stem}",
+                )
+            )
+        expected_values = {
+            "schema": INTEROP_MANIFEST_SCHEMA,
+            "fixture": fixture.name,
+            "authority": authority,
+            "format_version": format_version,
+        }
+        for key, expected in expected_values.items():
+            if document.get(key) != expected:
+                violations.append(
+                    CompatibilityViolation(
+                        manifest_path,
+                        1,
+                        f"interoperability manifest {key} is stale: {stem}",
+                    )
+                )
+        digest = _sha256_path(fixture)
+        approved_digest = selected_hashes.get(stem, "")
+        if digest != approved_digest:
+            violations.append(
+                CompatibilityViolation(
+                    manifest_path,
+                    1,
+                    f"interoperability fixture does not match approved digest: {stem}",
+                )
+            )
+        if document.get("encrypted_sha256") != digest:
+            violations.append(
+                CompatibilityViolation(
+                    manifest_path,
+                    1,
+                    f"interoperability manifest digest does not match fixture: {stem}",
+                )
+            )
+        if approved_digest not in oracles_source:
+            violations.append(
+                CompatibilityViolation(
+                    COMPATIBILITY_MARKDOWN_PATHS[2],
+                    1,
+                    f"approved interoperability digest is not recorded in the oracle catalog: {stem}",
+                )
+            )
+        if manifest_path.as_posix() not in oracles_source:
+            violations.append(
+                CompatibilityViolation(
+                    COMPATIBILITY_MARKDOWN_PATHS[2],
+                    1,
+                    f"interoperability manifest is not linked from the oracle catalog: {stem}",
+                )
+            )
+    return tuple(violations)
+
+
+
+#### Read one small UTF-8 evidence document without accepting unbounded input.
+####
+def _read_bounded_utf8(path: Path, maximum_bytes: int) -> str:
+    with path.open("rb") as stream:
+        encoded = stream.read(maximum_bytes + 1)
+    if len(encoded) > maximum_bytes:
+        raise ValueError("evidence document exceeds its reviewed size limit")
+    return encoded.decode("utf-8")
+
+
+
+#### Hash one encrypted fixture without loading it into an unbounded byte string.
+####
+def _sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65_536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+
+#### Bind the redacted cross-client transaction record to its reviewed identity and relationships.
+####
+def check_interop_transaction_evidence(
+    repository_root: Path,
+    oracles_source: str,
+    *,
+    approved_digest: str = INTEROP_TRANSACTION_SHA256,
+) -> tuple[CompatibilityViolation, ...]:
+    transaction_path = repository_root / INTEROP_TRANSACTION_PATH
+    if not transaction_path.is_file():
+        return (
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction record is missing",
+            ),
+        )
+    try:
+        source = _read_bounded_utf8(transaction_path, MAX_INTEROP_MANIFEST_BYTES)
+        document = json.loads(source)
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+        return (
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction record is not valid bounded UTF-8 JSON",
+            ),
+        )
+
+    violations: list[CompatibilityViolation] = []
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    if digest != approved_digest:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction record does not match approved digest",
+            )
+        )
+    if not isinstance(document, dict):
+        return (
+            *violations,
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction record root is not an object",
+            ),
+        )
+    if frozenset(document) != INTEROP_TRANSACTION_KEYS:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction top-level schema is not closed",
+            )
+        )
+    if document.get("schema") != INTEROP_TRANSACTION_SCHEMA:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction schema is stale",
+            )
+        )
+    external_artifacts = document.get("external_artifacts")
+    if not isinstance(external_artifacts, dict) or frozenset(external_artifacts) != frozenset(
+        INTEROP_EXTERNAL_ARTIFACTS
+    ):
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction external-artifact schema is not closed",
+            )
+        )
+    if external_artifacts != INTEROP_EXTERNAL_ARTIFACTS:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction external-artifact identities are stale",
+            )
+        )
+
+    raw_transactions = document.get("transactions")
+    relationships: dict[tuple[object, object], object] = {}
+    duplicate_relationship = False
+    if isinstance(raw_transactions, list):
+        for raw_transaction in raw_transactions:
+            if not isinstance(raw_transaction, dict):
+                continue
+            relationship = (raw_transaction.get("client"), raw_transaction.get("source_fixture"))
+            if relationship in relationships:
+                duplicate_relationship = True
+            relationships[relationship] = raw_transaction.get("source_sha256")
+    if duplicate_relationship or relationships != INTEROP_TRANSACTION_RELATIONSHIPS:
+        violations.append(
+            CompatibilityViolation(
+                INTEROP_TRANSACTION_PATH,
+                1,
+                "interoperability transaction client/source relationships are stale or duplicated",
+            )
+        )
+    if INTEROP_TRANSACTION_PATH.as_posix() not in oracles_source or approved_digest not in oracles_source:
+        violations.append(
+            CompatibilityViolation(
+                COMPATIBILITY_MARKDOWN_PATHS[2],
+                1,
+                "approved interoperability transaction evidence is not recorded in the oracle catalog",
+            )
+        )
+    return tuple(violations)
+
+
+
 #### Check cross-document identifier closure and the disjoint no-loss merge contract.
 ####
 def check_traceability_sources(
@@ -398,6 +723,8 @@ def check_repository_contract(repository_root: Path) -> tuple[CompatibilityViola
     for path, source in sources.items():
         violations.extend(check_clean_room_source(path, source))
     violations.extend(check_local_evidence_corpus(repository_root))
+    violations.extend(check_interop_fixture_evidence(repository_root, oracles_source))
+    violations.extend(check_interop_transaction_evidence(repository_root, oracles_source))
     violations.extend(check_traceability_sources(dossier_source, matrix_source, oracles_source))
     violations.extend(
         _check_identifier_sequence(

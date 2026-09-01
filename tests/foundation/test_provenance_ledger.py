@@ -4,9 +4,22 @@ from pathlib import Path
 
 from tools.check_provenance import (
     check_botan_provenance_sources,
+    check_interop_producer_provenance,
     check_provenance_sources,
     check_repository_provenance,
 )
+
+
+
+INTEROP_PRODUCER_LEDGER = """
+## Interoperability producer tools
+
+|Name|Version|Artifact|Identity|Origin|Terms|Use|Dist|Evidence|Review|
+|---|---|---|---|---|---|---|---|---|---|
+|Password Safe|3.72.1|pwsafe64-3.72.1-bin.zip|2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d|https://github.com/pwsafe/pwsafe/releases/download/3.72.1/pwsafe64-3.72.1-bin.zip|Artistic-2.0|BT|N|V|V|
+|Tclkit|8.6.9|tclkit-8.6.9-win64-x86_64.exe|4008f8938ba60edaf9c7c72b1bd5330b4c60c3f4b10d9cd1ef25da0ac06333f1|https://gorilla.dp100.com/downloads/tclkit/tclkit-8.6.9-win64-x86_64.exe|NOASSERTION|BT|N|V|P|
+|Gorilla|6728e85|read-only source checkout|6728e85c05ac25357b8f19f541487b9d26a97402|https://github.com/zdia/gorilla.git|GPL-2.0-or-later|BT|N|V|V|
+"""
 
 
 
@@ -155,6 +168,27 @@ def test_botan_provenance_rejects_stale_archive_checksum() -> None:
 
 
 
+#### Accept the exact non-distributed producer artifacts used for interoperability evidence.
+####
+def test_interop_producer_provenance_accepts_reviewed_identities() -> None:
+    assert check_interop_producer_provenance(INTEROP_PRODUCER_LEDGER) == ()
+
+
+
+#### Reject producer hash drift even when the tool name and version still match.
+####
+def test_interop_producer_provenance_rejects_identity_drift() -> None:
+    ledger = INTEROP_PRODUCER_LEDGER.replace(
+        "2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d",
+        "0" * 64,
+    )
+
+    messages = tuple(violation.message for violation in check_interop_producer_provenance(ledger))
+
+    assert "interoperability producer facts are stale: Password Safe" in messages
+
+
+
 #### Reject present rows whose required review facts are blank.
 ####
 def test_provenance_ledger_rejects_incomplete_review_cells() -> None:
@@ -238,6 +272,51 @@ def test_provenance_rejects_inaccurate_packaged_asset_distribution() -> None:
 
 
 
+#### Accept the exact reviewed provenance facts for one tracked interoperability artifact.
+####
+def test_provenance_accepts_reviewed_interop_asset_facts() -> None:
+    path = "tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.psafe3"
+    ledger = _synthetic_ledger() + (
+        f"|`{path}`|6728e85 / 0x0300|Bonobo synthetic output via Gorilla 6728e85|"
+        "GPL-3.0-or-later|FX|S|R|V|\n"
+    )
+
+    messages = _messages_for_workflow(
+        "uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        ledger=ledger,
+        tracked_paths=(
+            Path("LICENSES/GPL-3.0-or-later.txt"),
+            Path("src/sample/py.typed"),
+            Path(path),
+        ),
+    )
+
+    assert messages == ()
+
+
+
+#### Reject interoperability artifact facts that drift from the reviewed producer boundary.
+####
+def test_provenance_rejects_stale_interop_asset_facts() -> None:
+    path = "tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.psafe3"
+    ledger = _synthetic_ledger() + (
+        f"|`{path}`|0x0302|Gorilla source checkout|GPL-3.0-or-later|FX|S|R|V|\n"
+    )
+
+    messages = _messages_for_workflow(
+        "uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        ledger=ledger,
+        tracked_paths=(
+            Path("LICENSES/GPL-3.0-or-later.txt"),
+            Path("src/sample/py.typed"),
+            Path(path),
+        ),
+    )
+
+    assert f"repository interoperability asset facts are stale: {path}" in messages
+
+
+
 #### Return a synthetic lock while varying one independently asserted resolved version.
 ####
 def _synthetic_ledger_lock_with_packaging_version(packaging_version: str) -> str:
@@ -263,7 +342,12 @@ source = {{ editable = "." }}
 
 #### Return provenance findings for one synthetic workflow and otherwise-complete authorities.
 ####
-def _messages_for_workflow(workflow: str, *, ledger: str | None = None) -> tuple[str, ...]:
+def _messages_for_workflow(
+    workflow: str,
+    *,
+    ledger: str | None = None,
+    tracked_paths: tuple[Path, ...] | None = None,
+) -> tuple[str, ...]:
     pyproject = """[build-system]
 requires = ["hatchling>=1.27,<2"]
 [project]
@@ -276,7 +360,10 @@ dev = ["pytest>=9,<10"]
         _synthetic_ledger_lock_with_packaging_version("25.0"),
         workflow,
         _synthetic_ledger() if ledger is None else ledger,
-        (Path("LICENSES/GPL-3.0-or-later.txt"), Path("src/sample/py.typed")),
+        (
+            Path("LICENSES/GPL-3.0-or-later.txt"),
+            Path("src/sample/py.typed"),
+        ) if tracked_paths is None else tracked_paths,
     )
     return tuple(violation.message for violation in violations)
 

@@ -1,0 +1,79 @@
+{
+  "external_artifacts": {
+    "gorilla_commit": "6728e85c05ac25357b8f19f541487b9d26a97402",
+    "password_safe_archive_sha256": "2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d",
+    "password_safe_version": "3.72.1",
+    "tclkit_sha256": "4008f8938ba60edaf9c7c72b1bd5330b4c60c3f4b10d9cd1ef25da0ac06333f1",
+    "tclkit_version": "8.6.9"
+  },
+  "performed_on": "2026-09-01",
+  "platform": "Windows x86_64; CPython 3.14.7",
+  "schema": "password-bonobo-interoperability-transactions-v1",
+  "transactions": [
+    {
+      "backup_sha256": [],
+      "client": "Bonobo 0.1.0",
+      "discarded_sequential_title_sha256": null,
+      "exact_no_edit_result": "match",
+      "no_edit_sha256": "85a588c6c6f21f10d995a2338432f5badc2399d33ead03403fc1cf8cae769973",
+      "normalization": "none outside randomized envelope",
+      "normalized_baseline_sha256": null,
+      "source_fixture": "gorilla-6728e85.psafe3",
+      "source_sha256": "3a7772a31398aa5edf88646b4254fe93b5116ab9e19073c0408287a2cc1853ad",
+      "title_edit_sha256": "095dba4eb3c68c252a546419ee5547eb9de1085cfe8adc9528f6afadbc7c3450",
+      "title_only_result": "match"
+    },
+    {
+      "backup_sha256": [],
+      "client": "Bonobo 0.1.0",
+      "discarded_sequential_title_sha256": null,
+      "exact_no_edit_result": "match",
+      "no_edit_sha256": "1ec7164b780e7fe871346631b4a5a87b661dd56cf27e57611aa1c8be87734812",
+      "normalization": "none outside randomized envelope",
+      "normalized_baseline_sha256": null,
+      "source_fixture": "official-unknown-0302.psafe3",
+      "source_sha256": "4e58f02225ad4782b33eebb3996644cdedb81b67eee65836759171d0c17ba3d3",
+      "title_edit_sha256": "e140be1f2e0d2508f246ca15873b4f07d07e05aace62dbb3459181596c5d8e29",
+      "title_only_result": "match"
+    },
+    {
+      "backup_sha256": [],
+      "client": "Bonobo 0.1.0",
+      "discarded_sequential_title_sha256": null,
+      "exact_no_edit_result": "match",
+      "no_edit_sha256": "9a94784cb28618dd1c8128d91a3c94ab2c0a138111de1e4cd21cf6e0ad53a038",
+      "normalization": "none outside randomized envelope",
+      "normalized_baseline_sha256": null,
+      "source_fixture": "passwordsafe-current.psafe3",
+      "source_sha256": "a5f856c99e70f801b4286f5f6f89c96c257b1a81ec1109fc80c1b2e3d24b8b47",
+      "title_edit_sha256": "900502b4ae87229e07fde272318fd884749807b104f52670c7220550f4b90488",
+      "title_only_result": "match"
+    },
+    {
+      "backup_sha256": [],
+      "client": "Gorilla 6728e85",
+      "discarded_sequential_title_sha256": null,
+      "exact_no_edit_result": "match from normalized baseline",
+      "no_edit_sha256": "3bc5b67095c98dec2efaa7d8b426ca568428423c2a1492fe3149ef395688f84e",
+      "normalization": "first save writes 0x0300, adds empty Preferences, and reorders standard record fields",
+      "normalized_baseline_sha256": "3effff0ff5fbf92ec00c3f827ac396a4319c765fa1957a051f133c20e21ef720",
+      "source_fixture": "bonobo-0311.psafe3",
+      "source_sha256": "97900c193c2b4a67e345519f4f50de1fb6af7d86951ae8c541981bb85f1ed0f0",
+      "title_edit_sha256": "ebc5f716a0a12a776f32f39385bb6569f4397304e1c945b6053a9cec842467ca",
+      "title_only_result": "match from normalized baseline"
+    },
+    {
+      "backup_sha256": [],
+      "client": "Password Safe 3.72.1",
+      "discarded_sequential_title_sha256": "3868b6ac3b15d771c67449f0a3f6930741504d18546d0d8db60eb6d149290826",
+      "exact_no_edit_result": "match from normalized baseline",
+      "no_edit_sha256": "110acf0856030eaa21cff6f6d8a4514f49125696906b4b3e4959e66b0f86c283",
+      "normalization": "first save adds and reorders writer-owned headers; sequential saves update Last Save Time",
+      "normalized_baseline_sha256": "7842d0c0cb3b8be4f65d07b775b3a00bca4f8b68768b574decdc124f1c96e68f",
+      "source_fixture": "bonobo-0311.psafe3",
+      "source_sha256": "97900c193c2b4a67e345519f4f50de1fb6af7d86951ae8c541981bb85f1ed0f0",
+      "title_edit_sha256": "fcbf28255b69d28404d6e868df39e48c6668ab2095db7ecc6889e00e8fd72ec5",
+      "title_only_result": "match from paired normalized baseline"
+    }
+  ]
+}

@@ -24,6 +24,82 @@ DOCUMENTATION_TOOLS = frozenset({"pandoc", "xelatex", "pdfinfo", "pdftoppm"})
 ACTION_USE_LINE = re.compile(r"(?m)^\s*-?\s*uses:\s*(.*?)\s*$")
 PINNED_ACTION_REVISION = re.compile(r"[0-9a-f]{40}")
 REQUIREMENT_NAME = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[^]]+\])?")
+INTEROP_ASSET_FACTS: Mapping[str, Mapping[str, str]] = {
+    **{
+        f"tests/fixtures/synthetic/passwordsafe/bonobo-0311{suffix}": {
+            "Version": "0.1.0 / 0x0311",
+            "Origin": "Bonobo VaultService",
+        }
+        for suffix in (".psafe3", ".manifest.json")
+    },
+    **{
+        f"tests/fixtures/synthetic/passwordsafe/passwordsafe-current{suffix}": {
+            "Version": "3.72.1 / 0x0311",
+            "Origin": "Bonobo synthetic output via Password Safe 3.72.1",
+        }
+        for suffix in (".psafe3", ".manifest.json")
+    },
+    **{
+        f"tests/fixtures/synthetic/passwordsafe/gorilla-6728e85{suffix}": {
+            "Version": "6728e85 / 0x0300",
+            "Origin": "Bonobo synthetic output via Gorilla 6728e85",
+        }
+        for suffix in (".psafe3", ".manifest.json")
+    },
+    **{
+        f"tests/fixtures/synthetic/passwordsafe/official-unknown-0302{suffix}": {
+            "Version": "formatV3.txt / 0x0302",
+            "Origin": "Bonobo independent PasswordSafe V3 constructor",
+        }
+        for suffix in (".psafe3", ".manifest.json")
+    },
+    "tests/fixtures/synthetic/passwordsafe/interop-transactions.json": {
+        "Version": "2026-09-01",
+        "Origin": "Bonobo cross-client synthetic transactions",
+    },
+}
+INTEROP_COMMON_ASSET_FACTS = {
+    "Terms": "GPL-3.0-or-later",
+    "Use": "FX",
+    "Dist": "S",
+    "Evidence": "R",
+    "Review": "V",
+}
+INTEROP_PRODUCER_FACTS: Mapping[str, Mapping[str, str]] = {
+    "Password Safe": {
+        "Version": "3.72.1",
+        "Artifact": "pwsafe64-3.72.1-bin.zip",
+        "Identity": "2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d",
+        "Origin": "https://github.com/pwsafe/pwsafe/releases/download/3.72.1/pwsafe64-3.72.1-bin.zip",
+        "Terms": "Artistic-2.0",
+        "Use": "BT",
+        "Dist": "N",
+        "Evidence": "V",
+        "Review": "V",
+    },
+    "Tclkit": {
+        "Version": "8.6.9",
+        "Artifact": "tclkit-8.6.9-win64-x86_64.exe",
+        "Identity": "4008f8938ba60edaf9c7c72b1bd5330b4c60c3f4b10d9cd1ef25da0ac06333f1",
+        "Origin": "https://gorilla.dp100.com/downloads/tclkit/tclkit-8.6.9-win64-x86_64.exe",
+        "Terms": "NOASSERTION",
+        "Use": "BT",
+        "Dist": "N",
+        "Evidence": "V",
+        "Review": "P",
+    },
+    "Gorilla": {
+        "Version": "6728e85",
+        "Artifact": "read-only source checkout",
+        "Identity": "6728e85c05ac25357b8f19f541487b9d26a97402",
+        "Origin": "https://github.com/zdia/gorilla.git",
+        "Terms": "GPL-2.0-or-later",
+        "Use": "BT",
+        "Dist": "N",
+        "Evidence": "V",
+        "Review": "V",
+    },
+}
 
 
 
@@ -243,6 +319,36 @@ def check_botan_provenance_sources(pin_source: str, ledger_source: str) -> tuple
 
 
 
+#### Require exact identities and review states for non-distributed interoperability producers.
+####
+def check_interop_producer_provenance(ledger_source: str) -> tuple[ProvenanceViolation, ...]:
+    rows = _ledger_table(ledger_source, "Interoperability producer tools", "Name")
+    required_columns = (
+        "Name",
+        "Version",
+        "Artifact",
+        "Identity",
+        "Origin",
+        "Terms",
+        "Use",
+        "Dist",
+        "Evidence",
+        "Review",
+    )
+    violations = list(
+        _check_complete_rows(rows, "Name", required_columns, "interoperability producer")
+    )
+    rows_by_name = {row.get("Name", ""): row for row in rows}
+    if frozenset(rows_by_name) != frozenset(INTEROP_PRODUCER_FACTS):
+        violations.append(ProvenanceViolation("interoperability producer tool set is stale"))
+    for name, expected in INTEROP_PRODUCER_FACTS.items():
+        row = rows_by_name.get(name)
+        if row is None or any(row.get(column) != value for column, value in expected.items()):
+            violations.append(ProvenanceViolation(f"interoperability producer facts are stale: {name}"))
+    return tuple(violations)
+
+
+
 #### Return direct relationship prose and exact declaration text for one resolved package.
 ####
 def _expected_direct_cells(
@@ -446,6 +552,15 @@ def check_provenance_sources(
             violations.append(
                 ProvenanceViolation(f"repository asset {path} distribution must be S+W")
             )
+        interop_facts = INTEROP_ASSET_FACTS.get(path)
+        if interop_facts is not None:
+            expected_facts = {**INTEROP_COMMON_ASSET_FACTS, **interop_facts}
+            if any(row.get(column) != value for column, value in expected_facts.items()):
+                violations.append(
+                    ProvenanceViolation(
+                        f"repository interoperability asset facts are stale: {path}"
+                    )
+                )
     return tuple(violations)
 
 
@@ -492,6 +607,7 @@ def check_repository_provenance(repository_root: Path) -> tuple[ProvenanceViolat
             _tracked_paths(repository_root),
         ),
         *check_botan_provenance_sources(botan_pin_path.read_text(encoding="utf-8"), ledger_source),
+        *check_interop_producer_provenance(ledger_source),
     )
 
 
@@ -507,7 +623,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(violation.message)
     if violations:
         return 1
-    print("provenance ledger: package, action, documentation-tool, and asset coverage is current")
+    print("provenance ledger: package, action, producer-tool, documentation-tool, and asset coverage is current")
     return 0
 
 

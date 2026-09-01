@@ -1,5 +1,6 @@
 """Verify the repository-specific Python source structure policy."""
 
+import tomllib
 from pathlib import Path
 
 from tools.check_python_structure import check_paths, check_source
@@ -197,6 +198,22 @@ def identity(value: str) -> str:
     messages = tuple(violation.message for violation in check_source(Path("spacing.py"), source))
 
     assert messages == ("declaration has more than three preceding blank lines",)
+
+
+
+#### Keep the formatter from separating declaration comments from their callables.
+####
+def test_autopep8_preserves_documented_declaration_units() -> None:
+    configuration = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert set(configuration["tool"]["autopep8"]["ignore"]) >= {
+        "E266",
+        "E301",
+        "E302",
+        "E303",
+        "E305",
+        "E306",
+    }
 
 
 

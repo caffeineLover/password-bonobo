@@ -1,0 +1,132 @@
+{
+  "authority": "Independent PasswordSafe V3 fixture authority",
+  "authority_version": "formatV3.txt",
+  "creation_method": "independent-format-constructor",
+  "encrypted_sha256": "4e58f02225ad4782b33eebb3996644cdedb81b67eee65836759171d0c17ba3d3",
+  "entries": [
+    {
+      "field_ordinal": 0,
+      "length": 2,
+      "payload_sha256": "ee9040f65c341855e070ff438eb0ea9d5b831b2a2c270fb7ef592d750408e3b3",
+      "record_ordinal": null,
+      "section": "header",
+      "type": "0x00"
+    },
+    {
+      "field_ordinal": 1,
+      "length": 16,
+      "payload_sha256": "e3e6ae2cd3a325471ec97b9509e0438f638bedbba15e00f71d07ccdf50ca4437",
+      "record_ordinal": null,
+      "section": "header",
+      "type": "0x01"
+    },
+    {
+      "field_ordinal": 2,
+      "length": 26,
+      "payload_sha256": "d49f20876efeafd9f2930a71ade2b195370b52d355ee6c20652ccf38179ed669",
+      "record_ordinal": null,
+      "section": "header",
+      "type": "0x09"
+    },
+    {
+      "field_ordinal": 3,
+      "length": 4,
+      "payload_sha256": "353b234f621678e7b53323fb66bfd3f8a6c524d0edbf54bda3015670c7b9f56d",
+      "record_ordinal": null,
+      "section": "header",
+      "type": "0xe0"
+    },
+    {
+      "field_ordinal": 4,
+      "length": 0,
+      "payload_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "record_ordinal": null,
+      "section": "header",
+      "type": "0xff"
+    },
+    {
+      "field_ordinal": 0,
+      "length": 16,
+      "payload_sha256": "f963e82c7f249f67fa19d085d97af0a53a546e8bd9a12c36170e2f5e58984ef3",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x01"
+    },
+    {
+      "field_ordinal": 1,
+      "length": 9,
+      "payload_sha256": "4a85827ad80e8635fb4a2b41a3fce1d0f23ba1eb27db0aa84113a7b0ca415d42",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x02"
+    },
+    {
+      "field_ordinal": 2,
+      "length": 17,
+      "payload_sha256": "86fb957f51c6b49e30835f9d33ab6393d6ff994a48f0f12d98364fc5544514bc",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x03"
+    },
+    {
+      "field_ordinal": 3,
+      "length": 15,
+      "payload_sha256": "a2b6903fb1cee7187b8a67d9071a89ef3ca952fb1f7767b6f59ea82b83526397",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x04"
+    },
+    {
+      "field_ordinal": 4,
+      "length": 21,
+      "payload_sha256": "c358716897f110a0533e19e74dbe37b77017417cd52baf21baa92129b57c064c",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x06"
+    },
+    {
+      "field_ordinal": 5,
+      "length": 29,
+      "payload_sha256": "f4b88ee8a165a45c7106220b9e3e3d1536480571b21d2dbd21071358343849cb",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x0d"
+    },
+    {
+      "field_ordinal": 6,
+      "length": 32,
+      "payload_sha256": "f51a90b8a5cd1aea3f53f6e370b6140e75b66431eb88157f97b96718360c7c4d",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0x05"
+    },
+    {
+      "field_ordinal": 7,
+      "length": 5,
+      "payload_sha256": "40433d171d8d32f94f4362650d75b694274fb021c94514d7c515ebd5b91c488c",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0xe1"
+    },
+    {
+      "field_ordinal": 8,
+      "length": 0,
+      "payload_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "record_ordinal": 0,
+      "section": "record",
+      "type": "0xff"
+    }
+  ],
+  "field_count": 14,
+  "fixture": "official-unknown-0302.psafe3",
+  "format_version": "0x0302",
+  "header_field_count": 5,
+  "passphrase_input": "stdin",
+  "platform": "Windows x86_64 synthetic constructor",
+  "record_count": 1,
+  "schema": "password-bonobo-interoperability-manifest-v1",
+  "tooling": [
+    "official formatV3.txt",
+    "independent Python constructor with Botan 3.13.0 primitive"
+  ]
+}

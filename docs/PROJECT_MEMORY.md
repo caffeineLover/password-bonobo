@@ -13,15 +13,45 @@ This file is Markdown-only.  Do not create a second project-memory location or a
 
 ## Immediate checkpoint
 
-Branch `feature/lossless-passwordsafe-core` has completed Tasks 1 through 12 of the approved lossless PasswordSafe core
-plan.  Task 13 is next.
+Branch `feature/lossless-passwordsafe-core` has completed the Task 13 implementation of the approved lossless
+PasswordSafe core plan. Follow-up review corrections and the complete release-equivalent gate pass are finished. The
+exact next action is final staged-diff review and the independent Task 13 commit.
 
 Checkpoint `669506e` consolidated the retired split identity/state/decisions/verification records into this file and
 deleted the obsolete folder.  It also made `docs/superpowers/specs/` Markdown-only, removed its TeX/PDF derivatives,
 updated the policy/tool/tests/plans/REUSE metadata, and passed the verification recorded below.
 
-No Task 13 implementation has started.  The next action is Task 13 Step 1: inspect its exact manifest, authority, and
-provenance requirements, then write the failing tests before implementing fixtures or verification code.
+`tools/verify_passwordsafe_interop.py` reads a fabricated passphrase only from standard input, emits ordered redacted
+hash evidence, performs bounded exact comparison, and permits only an explicit `record:N:title` delta. Four encrypted
+fixture/manifest pairs now exist under `tests/fixtures/synthetic/passwordsafe/`: Bonobo `0x0311`, Password Safe 3.72.1
+`0x0311`, Gorilla `6728e85` `0x0300`, and an independent official-format `0x0302` unknown-field fixture. Their exact
+encrypted hashes are recorded and gate-checked in the linked manifests and compatibility oracle catalog.
+
+Bonobo opened all three external fixtures; strict no-edit and title-only comparisons passed, including exact unknown
+header `0xE0` and record `0xE1` preservation. Password Safe and Gorilla opened the Bonobo fixture. Paired transactions
+from each external client's normalized baseline changed only the title outside writer-owned fields. Password Safe
+adds/reorders headers and updates Last Save Time. Gorilla writes only `0x0300`, adds empty Preferences, and reorders
+standard record fields. The plan was corrected from its false Gorilla `0x0302` assumption; no Bonobo validation was
+weakened.
+
+The compatibility gate now requires the exact four paired stems, authorities, format levels, independently pinned
+encrypted digests, closed manifest schema, and oracle links using bounded reads. It also pins the complete transaction
+record digest, closes its external-artifact schema, and verifies the exact unique client/source/hash relationships. The
+verifier hashes the exact authenticated snapshot, eliminating a later path-replacement binding. A real Botan test
+authenticates all four checked-in fixtures and regenerates every ordered redacted entry. That test uses the established
+`BONOBO_TEST_BOTAN_LIBRARY` contract and fails rather than skips in CI. The desktop workflow now builds the pinned host
+Botan library and supplies its resolved output path to the suite.
+
+The provenance gate enforces reviewed producer/version/distribution facts for the eight paired artifacts and the
+redacted transaction record. It separately gates exact Password Safe archive, Tclkit executable, and Gorilla checkout
+identities, filenames, origins, terms, distribution status, evidence, and review state. Tclkit aggregate terms remain
+truthfully `NOASSERTION` with review pending; neither producer binary is distributed.
+
+The independent review reported no Critical issues. Its first pass identified five Important evidence gaps, all fixed
+through real-fixture authentication, independent digest pins, authenticated-snapshot hashing, closed schemas, the
+redacted transaction record, and this reconciled memory. Its follow-up identified the formerly optional/wrongly named
+Botan CI contract and insufficient transaction/producer identity gates; both are now corrected as described above.
+The final pass reported no Critical or Important findings; its sole Minor wording correction is incorporated.
 
 ## Product contract and authoritative documents
 
@@ -66,17 +96,30 @@ and approved-design Markdown-only `669506e`.
 
 ## Last proven verification
 
-Task 12's complete Windows/CPython 3.14.7 suite collected 597 tests and reported 585 passed, 12 platform-specific
-skips, and 79% coverage in 101.94 seconds.  The property/resource/large-vault selection passed 16 tests; the fuzz
-integration pair passed; the deterministic runner processed 10,000 inputs across four corpus seeds.  The large-vault
-test stayed below `4 * max_inline_payload_bytes + 8 * io_chunk_bytes` and found no fabricated plaintext marker in
-private working or recovery artifacts.
+The 2026-09-01 Task 13 baseline on Windows/CPython 3.14.7 collected 609 tests and reported 597 passed, 12
+platform-specific skips, and 79% coverage in 105.87 seconds.  The property/resource/large-vault selection passed 16
+tests; the fuzz integration pair passed; the deterministic runner processed 10,000 inputs across four corpus seeds.
+The large-vault test stayed below `4 * max_inline_payload_bytes + 8 * io_chunk_bytes` and found no fabricated plaintext
+marker in private working or recovery artifacts.
 
 At the 2026-09-01 single-memory/approved-design checkpoint, all 26 document-policy tests passed.  Ruff and strict mypy
 passed for the two changed Python files; the Python structure checker, provenance, tracked-file policy, and staged and
 unstaged whitespace checks passed; REUSE 3.3 classified 103/103 files.  Filesystem inspection found zero TeX/PDF files
 in every Markdown-only directory, no split-memory directory, no HANDOFF artifact, and no stale split-memory reference.
 Hosted CI has not yet been observed after publication; these are local results.
+
+The final 2026-09-01 Windows/CPython 3.14.7 full suite explicitly used the resolved Botan test library, collected 635
+tests, and reported 623 passed, 12 platform-specific skips, 79% coverage, and zero failures in 104.01 seconds. The
+focused Botan-build, interop, compatibility, and provenance selection passed 65 tests, including real Botan
+authentication, complete ordered-manifest regeneration for all four fixtures, exact transaction/provenance gates, and
+the authenticated-snapshot path-replacement test. The compatibility regression selection passed another 20 tests
+after two narrowly scoped Bandit `B105` false-positive suppressions for public `password_safe_*` metadata values.
+
+Autopep8 produced no staged-checkpoint drift. Ruff and strict mypy passed 69 source files. The Python structure,
+tracked-file, compatibility, provenance, Bandit, and pip-audit gates exited zero; compatibility reports 66 behaviors,
+45 features, and 55 oracles. Pip-audit found no known third-party vulnerabilities and skipped only the local unpublished
+`password-bonobo` project. REUSE 3.3 classified 114/114 files. The source distribution and wheel built successfully,
+and the wheel gate accepted `password_bonobo-0.1.0-py3-none-any.whl`. Whitespace checks are clean.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -103,21 +146,17 @@ the same metadata.
   unresolved and block external contributions and an iOS distribution build.
 - Some Gorilla behaviors remain Unverified and cannot establish parity until black-box evidence is reviewed.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
-- Tasks 13 through 15 still own independent interoperability, platform/cross-build gates, operational documentation,
-  and the complete release checkpoint.
+- Task 13 needs only final staged-diff review and its commit. Tasks 14 and 15 own platform/cross-build gates, operational
+  documentation, and the complete release checkpoint.
 
 ## Exact continuation order after this checkpoint
 
-1. Task 13 Steps 1 and 2: create failing manifest/authority/provenance tests for exact fixture stems
-   `bonobo-0311`, `passwordsafe-current`, `gorilla-6728e85`, and `official-unknown-0302`; prove failure is only absent
-   fixtures/manifests.
-2. Task 13 Step 3: implement the safe manifest extractor/comparator using standard-input fabricated passphrases,
-   ordinal/type/length/SHA-256 output, typed-value redaction, and one explicitly named field edit.
-3. Task 13 Steps 4 and 5: independently produce the four synthetic vaults and ordered manifests, then perform only
-   disposable no-edit/title-edit transactions at each declared compatibility level.
-4. Update canonical compatibility/provenance Markdown, typed gates, and REUSE.  Any plan reference to deleted
-   derivatives or automatic document generation is superseded by the explicit Markdown policy above.
-5. Run focused interop, compatibility, provenance, tracked-file, REUSE, static, security, package, and full-suite gates;
-   record exact evidence here and commit Task 13 independently.
-6. Continue Tasks 14 and 15 in order.  Do not start client applications, provider coordination, or URL-audit behavior
+1. Review the final Task 13 staged diff and commit it independently as `test: qualify PasswordSafe interoperability`.
+2. Execute Task 14's remaining test-driven desktop host and Android/iOS cross-build gate work, beginning with the
+   target-command tests. The host library output protocol and desktop workflow supply step landed early to make Task
+   13's real-fixture test mandatory in clean-clone CI.
+3. Complete Task 14's workflow, provenance, REUSE, platform-gate verification, memory update, review, and independent
+   commit.
+4. Execute Task 15's operational documentation and release checkpoint in order. Do not start client applications,
+   provider coordination, or URL-audit behavior
    before Task 15 closes.

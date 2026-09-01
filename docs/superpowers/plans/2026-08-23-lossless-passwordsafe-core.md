@@ -1190,9 +1190,11 @@ field delta and writer-owned envelope changes.
 
 - [ ] **Step 4: Produce each fixture independently**
 
-Create Bonobo `0x0311`, Password Safe current, and Gorilla `0x0302` vaults with database UUID
+Create Bonobo `0x0311`, Password Safe current, and Gorilla's actual `0x0300` output vaults with database UUID
 `11111111-1111-4111-8111-111111111111`, record UUID
 `22222222-2222-4222-8222-222222222222`, `.example.invalid` URL data, and standard fields accepted by each client.
+The pinned Gorilla writer downgrades its saved output to `0x0300`, so its independent seed must contain only fields
+legal at that level; record the downgrade instead of weakening Bonobo's unsupported-content handling.
 Independently construct `official-unknown-0302.psafe3` from the published V3 format description with the dossier's
 fabricated unknown `0xE0/0xE1` bytes; do not call Bonobo product reader/writer code.  Record exact client or independent
 authority, version, OS/tooling, encrypted SHA-256, and ordered redacted manifest.

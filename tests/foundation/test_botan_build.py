@@ -189,6 +189,38 @@ def test_main_reports_cache_creation_failure_without_traceback(
 
 
 
+#### Publish the resolved host library through GitHub's file-based output protocol.
+####
+def test_main_writes_github_output_library(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    library = (tmp_path / "output" / "lib" / "libbotan-3.so").resolve()
+    library.parent.mkdir(parents=True)
+    library.write_bytes(b"synthetic shared library")
+    github_output = tmp_path / "github-output.txt"
+    monkeypatch.setattr(botan_build, "build_botan", lambda *_arguments: library)
+
+    result = main(
+        [
+            "--target",
+            "host",
+            "--output",
+            str(tmp_path / "output"),
+            "--github-output",
+            str(github_output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out == f"{library} Botan 3.13.0\n"
+    assert captured.err == ""
+    assert github_output.read_text(encoding="utf-8") == f"library={library}\n"
+
+
+
 #### Translate output-directory creation failure before configuring the verified source.
 ####
 #### The output boundary is caller selected.  A blocking file must produce a typed

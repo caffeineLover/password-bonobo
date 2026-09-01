@@ -40,6 +40,40 @@ username `sample-user-two`, password `fabricated-credential-two`, URL `https://b
 note `fabricated note B`. A semantic manifest records database and record UUIDs, every standard field, every unknown
 field type and byte sequence, and the declared format level. A separate SHA-256 value records each encrypted file.
 
+## Implemented interoperability evidence
+
+The Task 13 evidence bundle contains four independently produced encrypted fixtures. Each linked manifest records the
+producer and version, exact encrypted SHA-256, declared format level, and ordered field lengths and payload hashes. It
+contains no passphrase or typed field value.
+
+- [Bonobo 0x0311 manifest](../../../tests/fixtures/synthetic/passwordsafe/bonobo-0311.manifest.json): encrypted
+  SHA-256 `97900c193c2b4a67e345519f4f50de1fb6af7d86951ae8c541981bb85f1ed0f0`.
+- [Password Safe 3.72.1 manifest](../../../tests/fixtures/synthetic/passwordsafe/passwordsafe-current.manifest.json):
+  encrypted SHA-256 `a5f856c99e70f801b4286f5f6f89c96c257b1a81ec1109fc80c1b2e3d24b8b47`.
+- [Gorilla 6728e85 manifest](../../../tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.manifest.json): encrypted
+  SHA-256 `3a7772a31398aa5edf88646b4254fe93b5116ab9e19073c0408287a2cc1853ad`.
+- [Independent 0x0302 unknown-field manifest](../../../tests/fixtures/synthetic/passwordsafe/official-unknown-0302.manifest.json):
+  encrypted SHA-256 `4e58f02225ad4782b33eebb3996644cdedb81b67eee65836759171d0c17ba3d3`.
+
+The [redacted 2026-09-01 transaction record](../../../tests/fixtures/synthetic/passwordsafe/interop-transactions.json),
+SHA-256 `ab79f9765c2a0376db9e5cd9ac327c3bd2c7953a6f4e7eba8809c141803fe3ef`,
+retains the external distribution hashes, every encrypted before/after hash, exact comparison result, and empty backup
+artifact observations from the manually executed qualification run. Bonobo opened all three externally authored
+fixtures. Its no-edit saves preserved the complete ordered semantic
+manifest, and its title-only saves changed only the named title payload; the independent `0x0302` fixture retained
+unknown header type `0xE0` and record type `0xE1` exactly. Password Safe 3.72.1 and the pinned Gorilla revision both
+opened the Bonobo fixture. Paired no-edit and title-only transactions from each client's normalized baseline changed
+only the title outside writer-owned envelope fields.
+
+The external writers have explicit normalization boundaries. Password Safe adds and reorders writer-owned headers,
+including Last Save Time, on its first save. Gorilla writes V3 level `0x0300`, adds an empty Preferences header, and
+reorders standard record fields. It cannot emit `0x0302`; therefore its fixture is the actual legal `0x0300` output,
+not the plan's earlier assumed level. These observed transformations do not relax Bonobo's exact unknown-field and
+format-level preservation oracle. Together with the automated malformed-Version, integrity-mismatch,
+unsupported-major, and missing-Version fail-closed cases, this bundle supplies the recorded evidence for
+`GOR-TEST-003`, `GOR-TEST-005`, `GOR-TEST-028`, `GOR-TEST-029`, `GOR-TEST-043`, `GOR-TEST-048`, `GOR-TEST-051`, and
+`GOR-TEST-052`.
+
 ## Gorilla and PasswordSafe compatibility oracles
 
 ### GOR-TEST-001 - Create, save, and reopen a vault

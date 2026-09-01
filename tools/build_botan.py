@@ -333,7 +333,7 @@ def build_botan(target: str, output_directory: Path, cache_directory: Path) -> P
         try:
             configure_result = subprocess.run(  # nosec B603
                 command,
-            cwd=toolchain_source_directory,
+                cwd=toolchain_source_directory,
                 capture_output=True,
                 check=False,
                 text=True,
@@ -365,6 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--target", choices=("host", *TARGET_PROFILES), default="host")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=Path(".cache/botan"))
+    parser.add_argument("--github-output", type=Path)
     arguments = parser.parse_args(argv)
     try:
         target_argument = cast(str, arguments.target)
@@ -382,6 +383,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(error, file=sys.stderr)
         return 1
     pin = load_source_pin(PIN_PATH)
+    github_output = cast(Path | None, arguments.github_output)
+    if github_output is not None:
+        try:
+            with github_output.open("a", encoding="utf-8", newline="\n") as output_stream:
+                output_stream.write(f"library={library_path}\n")
+        except OSError:
+            print("GitHub output publication failed", file=sys.stderr)
+            return 1
     print(f"{library_path} Botan {pin.version}")
     return 0
 

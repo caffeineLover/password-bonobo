@@ -21,11 +21,18 @@ jobs:
           python-version: "3.14"
           enable-cache: true
       - run: uv sync --locked --all-groups
+      - id: botan
+        shell: pwsh
+        run: >-
+          uv run python -m tools.build_botan --target host --output build/botan
+          --github-output $env:GITHUB_OUTPUT
       - run: uv run autopep8 --in-place --recursive src tests tools
       - run: git diff --exit-code -- src tests tools
       - run: uv run ruff check src tests tools
       - run: uv run mypy src tests tools
       - run: uv run python -m pytest
+        env:
+          BONOBO_TEST_BOTAN_LIBRARY: ${{ steps.botan.outputs.library }}
       - run: uv run python -m tools.check_python_structure src tests tools
       - run: uv run python -m tools.check_compatibility
       - run: uv run python -m tools.check_provenance

@@ -116,6 +116,14 @@ the work remains explicitly staged or conflicted and silent discard is blocked.
 `GOR-FEAT-045` isolates `GOR-BEH-063` as an Excluded Gorilla-only characterization.  It is neither a modernized Bonobo
 merge behavior nor a cross-implementation passing oracle.
 
+Task 13 qualifies O2's lossless core against four synthetic encrypted fixtures: Bonobo `0x0311`, Password Safe
+3.72.1 `0x0311`, pinned Gorilla `0x0300`, and an independently constructed `0x0302` fixture containing unknown header
+and record fields. The linked manifests and transaction boundaries are recorded in
+[the oracle catalog](./test-oracles.md#implemented-interoperability-evidence). Gorilla's actual writer level is
+`0x0300`; its first-save normalization is evidence about that client and does not weaken the Required or Excluded
+Bonobo outcomes in `GOR-FEAT-001`, `GOR-FEAT-003`, `GOR-FEAT-005`, `GOR-FEAT-028`, `GOR-FEAT-029`, and
+`GOR-FEAT-043`.
+
 ## Evidence-gap register
 
 - GAP-018: backup enablement is contradictory; a disabled-preference black-box observation is missing.

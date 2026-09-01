@@ -125,10 +125,25 @@ does not.
 |Botan|SHA-256|12f5a835 8890bbee 82edfe9d 2e7769b0 a610b6dd 0e0698ae a13d20a6 75d84620|BSD-2-Clause|A|P+R|P|
 |Botan|Modules|ffi,twofish|BSD-2-Clause|A|P+R|P|
 
+## Interoperability producer tools
+
+These tools were used only to produce or independently exercise fixed synthetic interoperability evidence. They are
+not tracked in the repository or copied into Bonobo distributions. Artifact identities were measured locally before
+use. Password Safe's bundled `LICENSE` identifies Artistic License 2.0 terms, and the pinned Gorilla checkout states
+GPL version 2 or later. The downloaded Tclkit executable did not establish its aggregate terms, so that terms review
+remains explicitly pending.
+
+|Name|Version|Artifact|Identity|Origin|Terms|Use|Dist|Evidence|Review|
+|---|---|---|---|---|---|---|---|---|---|
+|Password Safe|3.72.1|pwsafe64-3.72.1-bin.zip|2fe5c8e170ffc0c946d8d19b7b09680e965b15b5a8cfbb70d62d4faea1b74f9d|https://github.com/pwsafe/pwsafe/releases/download/3.72.1/pwsafe64-3.72.1-bin.zip|Artistic-2.0|BT|N|V|V|
+|Tclkit|8.6.9|tclkit-8.6.9-win64-x86_64.exe|4008f8938ba60edaf9c7c72b1bd5330b4c60c3f4b10d9cd1ef25da0ac06333f1|https://gorilla.dp100.com/downloads/tclkit/tclkit-8.6.9-win64-x86_64.exe|NOASSERTION|BT|N|V|P|
+|Gorilla|6728e85|read-only source checkout|6728e85c05ac25357b8f19f541487b9d26a97402|https://github.com/zdia/gorilla.git|GPL-2.0-or-later|BT|N|V|V|
+
 ## Repository assets
 
 The checker derives this inventory from tracked paths below `LICENSES/`, `docs/pandoc/`, and `tests/fixtures/`, plus
-every tracked `py.typed` marker.  No third-party UI asset, font, image, translation, or Gorilla asset is tracked.
+every tracked `py.typed` marker. No third-party UI asset, font, image, translation, or implementation source from
+Gorilla or Password Safe is tracked.
 
 The PasswordSafe cryptographic vector contains only fabricated inputs.  Its expected SHA-256 output was independently
 derived from the public PasswordSafe construction without product code and is used for deterministic cryptographic
@@ -137,6 +152,16 @@ conformance testing.
 The PasswordSafe reader vector contains only fabricated expected metadata, redacted semantic-manifest hashes, and
 mutation descriptions.  It contains no encrypted product output and is checked against vaults constructed at test time
 by the independent specification helper.
+
+The interoperability fixtures contain only fixed fabricated data. Bonobo produced one fixture through its service;
+Password Safe 3.72.1 and pinned Gorilla produced one encrypted output each from Bonobo-authored synthetic seeds; the
+fourth was constructed independently from the published V3 format. Their paired manifests contain producer facts,
+encrypted hashes, field lengths, and payload hashes but no passphrase or typed field value. The client-produced vaults
+are outputs of the fabricated test transaction, not copied client implementation expression.
+
+The interoperability transaction record contains only client/tool versions, distribution and encrypted artifact
+hashes, exact-comparison results, and the observation that neither external run left a backup artifact. It contains no
+vault path, passphrase, decrypted field value, client binary, or third-party implementation material.
 
 The four PasswordSafe fuzz-corpus seeds are Bonobo-authored hexadecimal encodings of empty, tag-only, hostile declared
 length, and fabricated XOR-backend V3 inputs.  They contain no user data or third-party client output and are replayed
@@ -150,11 +175,20 @@ and deterministically mutated only by the parser-resilience runner.
 |`src/bonobo_core/py.typed`|Current revision|Bonobo|GPL-3.0-or-later|TM|S+W|R|V|
 |`tests/fixtures/python_structure/documented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/python_structure/undocumented.py.txt`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/bonobo-0311.manifest.json`|0.1.0 / 0x0311|Bonobo VaultService|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/bonobo-0311.psafe3`|0.1.0 / 0x0311|Bonobo VaultService|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/crypto-vectors.json`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/declared-length.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/empty.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/tag-only.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/fuzz-corpus/valid-xor-v3.hex`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.manifest.json`|6728e85 / 0x0300|Bonobo synthetic output via Gorilla 6728e85|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.psafe3`|6728e85 / 0x0300|Bonobo synthetic output via Gorilla 6728e85|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/interop-transactions.json`|2026-09-01|Bonobo cross-client synthetic transactions|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/official-unknown-0302.manifest.json`|formatV3.txt / 0x0302|Bonobo independent PasswordSafe V3 constructor|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/official-unknown-0302.psafe3`|formatV3.txt / 0x0302|Bonobo independent PasswordSafe V3 constructor|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/passwordsafe-current.manifest.json`|3.72.1 / 0x0311|Bonobo synthetic output via Password Safe 3.72.1|GPL-3.0-or-later|FX|S|R|V|
+|`tests/fixtures/synthetic/passwordsafe/passwordsafe-current.psafe3`|3.72.1 / 0x0311|Bonobo synthetic output via Password Safe 3.72.1|GPL-3.0-or-later|FX|S|R|V|
 |`tests/fixtures/synthetic/passwordsafe/reader-vectors.json`|Current revision|Bonobo|GPL-3.0-or-later|FX|S|R|V|
 
 ## Distribution conclusions and review status

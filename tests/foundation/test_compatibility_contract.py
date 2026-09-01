@@ -1,10 +1,14 @@
 """Verify compatibility traceability and the clean-room expression boundary."""
 
 import hashlib
+import json
+from collections.abc import Mapping
 from pathlib import Path
 
 from tools.check_compatibility import (
     check_clean_room_source,
+    check_interop_fixture_evidence,
+    check_interop_transaction_evidence,
     check_local_evidence_corpus,
     check_repository_contract,
     check_traceability_sources,
@@ -15,6 +19,67 @@ from tools.check_compatibility import (
 FEATURE_HEADER = """| ID | Feature family | Disposition | Evidence | Owner | Platforms | Data-loss | Security | Tests |
 |---|---|---|---|---|---|---|---|---|
 """
+
+
+
+#### Write the exact four synthetic fixture pairs used by compatibility-gate tests.
+####
+def _write_interop_fixture_evidence(repository_root: Path) -> tuple[str, Mapping[str, str]]:
+    fixture_root = repository_root / "tests" / "fixtures" / "synthetic" / "passwordsafe"
+    fixture_root.mkdir(parents=True)
+    expectations = {
+        "bonobo-0311": ("Bonobo", "0x0311"),
+        "passwordsafe-current": ("Password Safe 3.72.1", "0x0311"),
+        "gorilla-6728e85": ("Gorilla 6728e85", "0x0300"),
+        "official-unknown-0302": (
+            "Independent PasswordSafe V3 fixture authority",
+            "0x0302",
+        ),
+    }
+    references: list[str] = []
+    approved_hashes: dict[str, str] = {}
+    for index, (stem, (authority, format_version)) in enumerate(expectations.items()):
+        fixture = fixture_root / f"{stem}.psafe3"
+        fixture.write_bytes(f"fabricated encrypted fixture {index}".encode())
+        manifest = fixture_root / f"{stem}.manifest.json"
+        encrypted_sha256 = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        approved_hashes[stem] = encrypted_sha256
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema": "password-bonobo-interoperability-manifest-v1",
+                    "fixture": fixture.name,
+                    "authority": authority,
+                    "authority_version": "synthetic-version",
+                    "creation_method": "independent-format-constructor",
+                    "format_version": format_version,
+                    "encrypted_sha256": encrypted_sha256,
+                    "entries": [],
+                    "field_count": 0,
+                    "header_field_count": 0,
+                    "passphrase_input": "stdin",
+                    "platform": "synthetic platform",
+                    "record_count": 0,
+                    "tooling": ["synthetic tool"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        references.extend((manifest.relative_to(repository_root).as_posix(), encrypted_sha256))
+    return "\n".join(references), approved_hashes
+
+
+
+#### Copy the approved redacted transaction record into an isolated gate fixture.
+####
+def _write_interop_transaction_evidence(repository_root: Path) -> tuple[str, str]:
+    relative_path = Path("tests/fixtures/synthetic/passwordsafe/interop-transactions.json")
+    source = (Path.cwd() / relative_path).read_bytes()
+    destination = repository_root / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(source)
+    digest = hashlib.sha256(source).hexdigest()
+    return f"{relative_path.as_posix()}\n{digest}\n", digest
 
 
 
@@ -282,6 +347,140 @@ def test_traceability_rejects_malformed_feature_identifier() -> None:
     assert messages == (
         "feature row GOR-FEAT-99 has malformed identifier; expected GOR-FEAT-NNN",
     )
+
+
+
+#### Accept exact encrypted hashes, authorities, levels, and oracle-document links.
+####
+def test_interop_fixture_evidence_accepts_complete_redacted_pairs(tmp_path: Path) -> None:
+    oracles, approved_hashes = _write_interop_fixture_evidence(tmp_path)
+
+    assert check_interop_fixture_evidence(
+        tmp_path,
+        oracles,
+        approved_hashes=approved_hashes,
+    ) == ()
+
+
+
+#### Reject a stale encrypted digest and an evidence pair absent from the oracle document.
+####
+def test_interop_fixture_evidence_rejects_digest_and_traceability_drift(tmp_path: Path) -> None:
+    oracles, approved_hashes = _write_interop_fixture_evidence(tmp_path)
+    manifest = (
+        tmp_path
+        / "tests"
+        / "fixtures"
+        / "synthetic"
+        / "passwordsafe"
+        / "bonobo-0311.manifest.json"
+    )
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["encrypted_sha256"] = "0" * 64
+    document["passphrase"] = "unexpected plaintext slot"
+    manifest.write_text(json.dumps(document), encoding="utf-8")
+    oracles = oracles.replace(
+        "tests/fixtures/synthetic/passwordsafe/gorilla-6728e85.manifest.json",
+        "",
+    )
+
+    messages = tuple(
+        violation.message
+        for violation in check_interop_fixture_evidence(
+            tmp_path,
+            oracles,
+            approved_hashes=approved_hashes,
+        )
+    )
+
+    assert "interoperability manifest digest does not match fixture: bonobo-0311" in messages
+    assert "interoperability manifest top-level schema is not closed: bonobo-0311" in messages
+    assert "interoperability manifest is not linked from the oracle catalog: gorilla-6728e85" in messages
+
+
+
+#### Reject coordinated fixture-and-manifest drift against the independently pinned digest.
+####
+def test_interop_fixture_evidence_rejects_coordinated_digest_drift(tmp_path: Path) -> None:
+    oracles, approved_hashes = _write_interop_fixture_evidence(tmp_path)
+    fixture_root = tmp_path / "tests" / "fixtures" / "synthetic" / "passwordsafe"
+    fixture = fixture_root / "bonobo-0311.psafe3"
+    manifest = fixture_root / "bonobo-0311.manifest.json"
+    fixture.write_bytes(b"coordinated replacement")
+    replacement_hash = hashlib.sha256(fixture.read_bytes()).hexdigest()
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["encrypted_sha256"] = replacement_hash
+    manifest.write_text(json.dumps(document), encoding="utf-8")
+    oracles = oracles.replace(approved_hashes["bonobo-0311"], replacement_hash)
+
+    messages = tuple(
+        violation.message
+        for violation in check_interop_fixture_evidence(
+            tmp_path,
+            oracles,
+            approved_hashes=approved_hashes,
+        )
+    )
+
+    assert "interoperability fixture does not match approved digest: bonobo-0311" in messages
+
+
+
+#### Accept only the approved transaction identity, schema, and client/source relationships.
+####
+def test_interop_transaction_evidence_accepts_approved_record(tmp_path: Path) -> None:
+    oracles, approved_digest = _write_interop_transaction_evidence(tmp_path)
+
+    assert check_interop_transaction_evidence(
+        tmp_path,
+        oracles,
+        approved_digest=approved_digest,
+    ) == ()
+
+
+
+#### Reject coordinated transaction drift even when the modified JSON remains redacted and valid.
+####
+def test_interop_transaction_evidence_rejects_approved_digest_drift(tmp_path: Path) -> None:
+    oracles, approved_digest = _write_interop_transaction_evidence(tmp_path)
+    path = tmp_path / "tests/fixtures/synthetic/passwordsafe/interop-transactions.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["transactions"][0]["no_edit_sha256"] = "0" * 64
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    messages = tuple(
+        violation.message
+        for violation in check_interop_transaction_evidence(
+            tmp_path,
+            oracles,
+            approved_digest=approved_digest,
+        )
+    )
+
+    assert "interoperability transaction record does not match approved digest" in messages
+
+
+
+#### Reject an unreviewed producer field even when a caller approves the rewritten file digest.
+####
+def test_interop_transaction_evidence_closes_external_artifact_schema(tmp_path: Path) -> None:
+    oracles, _approved_digest = _write_interop_transaction_evidence(tmp_path)
+    path = tmp_path / "tests/fixtures/synthetic/passwordsafe/interop-transactions.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["external_artifacts"]["unexpected"] = "unreviewed"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    rewritten_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    messages = tuple(
+        violation.message
+        for violation in check_interop_transaction_evidence(
+            tmp_path,
+            oracles,
+            approved_digest=rewritten_digest,
+        )
+    )
+
+    assert "interoperability transaction external-artifact schema is not closed" in messages
 
 
 
