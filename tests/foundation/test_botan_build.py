@@ -251,6 +251,134 @@ def test_build_reports_output_creation_failure(tmp_path: Path, monkeypatch: pyte
 
 
 
+#### Retain actionable configure output without exposing build-owned absolute paths.
+####
+def test_configuration_failure_reports_safe_native_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_directory = tmp_path / "private-cache"
+    cache_directory.mkdir()
+    archive = create_tar_xz(
+        cache_directory / "Botan-3.13.0.tar.xz",
+        {"Botan-3.13.0/configure.py": b"verified configure source"},
+    )
+    pin = source_pin_for_archive(archive)
+    pin_path = tmp_path / "botan-source.json"
+    write_source_pin(pin_path, pin)
+    monkeypatch.setattr(botan_build, "PIN_PATH", pin_path)
+    output_directory = tmp_path / "private-output"
+    compiler = tmp_path / "private-toolchain" / "clang++"
+    compiler.parent.mkdir()
+    compiler.write_bytes(b"synthetic compiler")
+    sdk = tmp_path / "private-toolchain" / "iPhoneOS.sdk"
+    sdk.mkdir()
+    monkeypatch.setattr(
+        botan_build,
+        "resolve_target_toolchain",
+        lambda _target: (
+            f"--cc-bin={compiler}",
+            f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk), '-arch', 'arm64'))}",
+        ),
+    )
+
+
+
+    #### Return one failed configure result containing both private paths and the native cause.
+    ####
+    def fail_configuration(
+        command: tuple[str, ...],
+        **arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        source_directory = Path(str(arguments["cwd"]))
+        diagnostic = (
+            f"{source_directory / 'configure.py'}: output {output_directory}; compiler {compiler}; SDK {sdk}\n"
+            "configure.py: error: unsupported synthetic compiler option\n"
+        )
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=diagnostic)
+
+    monkeypatch.setattr(subprocess, "run", fail_configuration)
+
+    with pytest.raises(BotanBuildError) as captured:
+        build_botan("linux-x86_64", output_directory, cache_directory)
+
+    message = str(captured.value)
+    assert "Botan configuration failed" in message
+    assert "unsupported synthetic compiler option" in message
+    assert str(cache_directory) not in message
+    assert str(output_directory) not in message
+    assert str(compiler) not in message
+    assert str(sdk) not in message
+
+
+
+#### Retain actionable compiler output when configuration completed successfully.
+####
+def test_compilation_failure_reports_safe_native_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_directory = tmp_path / "private-cache"
+    cache_directory.mkdir()
+    archive = create_tar_xz(
+        cache_directory / "Botan-3.13.0.tar.xz",
+        {"Botan-3.13.0/configure.py": b"verified configure source"},
+    )
+    pin = source_pin_for_archive(archive)
+    pin_path = tmp_path / "botan-source.json"
+    write_source_pin(pin_path, pin)
+    monkeypatch.setattr(botan_build, "PIN_PATH", pin_path)
+    output_directory = tmp_path / "private-output"
+    compiler = tmp_path / "private-toolchain" / "clang++"
+    compiler.parent.mkdir()
+    compiler.write_bytes(b"synthetic compiler")
+    sdk = tmp_path / "private-toolchain" / "iPhoneOS.sdk"
+    sdk.mkdir()
+    monkeypatch.setattr(
+        botan_build,
+        "resolve_target_toolchain",
+        lambda _target: (
+            f"--cc-bin={compiler}",
+            f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk), '-arch', 'arm64'))}",
+        ),
+    )
+    invocation = 0
+
+
+
+    #### Succeed at configuration, then fail compilation with one synthetic linker cause.
+    ####
+    def fail_compilation(
+        command: tuple[str, ...],
+        **arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal invocation
+        invocation += 1
+        if invocation == 1:
+            return subprocess.CompletedProcess(command, 0, stdout="configured\n", stderr="")
+        source_directory = Path(str(arguments["cwd"]))
+        diagnostic = (
+            f"make failed while building {source_directory} into {output_directory} with {compiler} and {sdk}\n"
+            "ld: synthetic archive is incompatible\n"
+        )
+        return subprocess.CompletedProcess(command, 2, stdout="", stderr=diagnostic)
+
+    monkeypatch.setattr(subprocess, "run", fail_compilation)
+
+    with pytest.raises(BotanBuildError) as captured:
+        build_botan("linux-x86_64", output_directory, cache_directory)
+
+    message = str(captured.value)
+    assert "Botan compilation failed" in message
+    assert "make failed" in message
+    assert "synthetic archive is incompatible" in message
+    assert str(cache_directory) not in message
+    assert str(output_directory) not in message
+    assert str(compiler) not in message
+    assert str(sdk) not in message
+
+
+
 #### Select the installed library when the generated build tree retains an identical staging copy.
 ####
 #### Botan installs the Windows deliverable below `bin` but leaves a byte-identical
@@ -283,6 +411,28 @@ def test_find_shared_library_rejects_ambiguous_installed_tier(tmp_path: Path) ->
 
     with pytest.raises(BotanBuildError, match="Botan shared library was not produced"):
         find_shared_library(bin_directory.parent)
+
+
+
+#### Report a bounded allowlisted artifact location when the expected installation tiers are empty.
+####
+def test_shared_library_failure_reports_installed_botan_artifact(tmp_path: Path) -> None:
+    output_directory = tmp_path / "botan-output"
+    unexpected_tier = output_directory / "lib64"
+    unexpected_tier.mkdir(parents=True)
+    (unexpected_tier / "libbotan-3.so.3").write_bytes(b"synthetic shared library")
+    (unexpected_tier / "libbotan-3-customer-secret.so").write_bytes(b"deceptive prefix")
+    (unexpected_tier / "private-vault-name.txt").write_bytes(b"unrelated")
+
+    with pytest.raises(BotanBuildError) as captured:
+        find_shared_library(output_directory)
+
+    message = str(captured.value)
+    assert "Botan shared library was not produced" in message
+    assert "lib64/libbotan-3.so.3" in message
+    assert "libbotan-3-customer-secret.so" not in message
+    assert "private-vault-name.txt" not in message
+    assert str(output_directory) not in message
 
 
 
@@ -740,6 +890,63 @@ def test_ios_smoke_link_keeps_resolved_abi_flags(tmp_path: Path) -> None:
     )
 
     assert commands[0][1:5] == ("-isysroot", str(sdk.resolve()), "-arch", "arm64")
+
+
+
+#### Retain the bounded linker cause while redacting every native path and terminal control byte.
+####
+def test_mobile_smoke_failure_reports_safe_bounded_diagnostic(tmp_path: Path) -> None:
+    output_directory = tmp_path / "private-output"
+    (output_directory / "include" / "botan-3" / "botan").mkdir(parents=True)
+    library = output_directory / "lib" / "libbotan-3.a"
+    library.parent.mkdir()
+    library.write_bytes(b"synthetic library")
+    compiler = tmp_path / "private-toolchain" / "clang++"
+    compiler.parent.mkdir()
+    compiler.write_bytes(b"synthetic compiler")
+    sdk = tmp_path / "private-toolchain" / "iPhoneOS.sdk"
+    sdk.mkdir()
+
+
+
+    #### Return a long failed-link result with actionable text at the tail.
+    ####
+    def fail_link(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        control_characters = "".join(chr(value) for value in range(32) if value != 10) + chr(127)
+        diagnostic = (
+            "\x1b[31m"
+            + ("discarded-prefix " * 220)
+            + f"\n{compiler}: {sdk}: {library}: {output_directory}\n"
+            + control_characters
+            + "ld: undefined symbol: botan_block_cipher_init\n"
+        )
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=diagnostic)
+
+    with pytest.raises(BotanBuildError) as captured:
+        botan_build.link_mobile_smoke_program(
+            "ios-arm64",
+            output_directory,
+            library,
+            (
+                f"--cc-bin={compiler.resolve()}",
+                f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk.resolve()), '-arch', 'arm64'))}",
+            ),
+            runner=fail_link,
+        )
+
+    message = str(captured.value)
+    assert message.startswith("mobile smoke link failed")
+    assert "undefined symbol: botan_block_cipher_init" in message
+    assert str(output_directory) not in message
+    assert str(compiler) not in message
+    assert str(sdk) not in message
+    assert str(library) not in message
+    assert all(character == "\n" or ord(character) >= 32 for character in message)
+    assert "\x7f" not in message
+    assert len(message) <= len("mobile smoke link failed\n") + 2_048
 
 
 

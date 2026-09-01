@@ -14,6 +14,7 @@ import hmac
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess  # nosec B404
@@ -44,6 +45,13 @@ FINAL_LIBRARY_LOCATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 ExecutableFinder = Callable[..., str | None]
 MOBILE_TARGETS = frozenset({"android-arm64", "ios-arm64"})
+MAX_NATIVE_DIAGNOSTIC_CHARS: int = 2_048
+MAX_NATIVE_ARTIFACTS: int = 8
+NATIVE_ARTIFACT_TIERS: tuple[str, ...] = ("bin", "lib", "lib64", "work")
+BOTAN_ARTIFACT_NAME_PATTERN: re.Pattern[str] = re.compile(
+    r"^(?:(?:lib)?botan-3\.(?:dll|lib)|libbotan-3\.a|libbotan-3\.so(?:\.[0-9]+){0,3}|"
+    r"libbotan-3(?:\.[0-9]+){0,3}\.dylib)$"
+)
 BOTAN_FFI_SMOKE_SOURCE = """#include <botan/ffi.h>
 
 int main(void) {
@@ -85,6 +93,85 @@ class BotanSourcePin:
     signature: str
     sha256: str
     modules: tuple[str, ...]
+
+
+
+#### Append bounded native output to one stable failure category after redacting known private paths.
+####
+#### Configure, compiler, and linker diagnostics describe only the fixed public Botan build.  Path replacement occurs
+#### before tail selection so a truncation boundary cannot reveal a partial source, output, SDK, or toolchain path.
+#### Terminal control bytes are discarded before the text crosses the command-line boundary.
+####
+def _native_failure_message(
+    category: str,
+    result: subprocess.CompletedProcess[str],
+    private_paths: Sequence[Path],
+) -> str:
+    diagnostic = "\n".join(part.strip() for part in (result.stdout or "", result.stderr or "") if part.strip())
+    if not diagnostic:
+        return category
+    diagnostic = diagnostic.replace("\r\n", "\n").replace("\r", "\n")
+    variants = {
+        variant
+        for path in private_paths
+        for variant in (str(path), path.as_posix(), str(path).replace("\\", "/"), str(path).replace("/", "\\"))
+        if variant
+    }
+    flags = re.IGNORECASE if platform.system() == "Windows" else 0
+    for variant in sorted(variants, key=len, reverse=True):
+        diagnostic = re.sub(re.escape(variant), "<redacted-path>", diagnostic, flags=flags)
+    diagnostic = "".join(
+        character
+        for character in diagnostic
+        if character == "\n" or 32 <= ord(character) < 127
+    ).strip()
+    if not diagnostic:
+        return category
+    return f"{category}\n{diagnostic[-MAX_NATIVE_DIAGNOSTIC_CHARS:]}"
+
+
+
+#### Extract only absolute compiler and ABI paths from one validated target-toolchain option sequence.
+####
+#### The target resolvers construct these options from resolved paths.  Ignoring non-path flags prevents ordinary
+#### compiler words such as `make` or `arm64` from being removed from actionable native diagnostics.
+####
+def _toolchain_private_paths(toolchain_options: Sequence[str]) -> tuple[Path, ...]:
+    private_paths: list[Path] = []
+    for option in toolchain_options:
+        arguments: tuple[str, ...] = ()
+        if option.startswith("--cc-bin="):
+            arguments = (option.removeprefix("--cc-bin="),)
+        elif option.startswith("--cc-abi-flags="):
+            try:
+                arguments = tuple(shlex.split(option.removeprefix("--cc-abi-flags=")))
+            except ValueError:
+                continue
+        private_paths.extend(Path(argument) for argument in arguments if Path(argument).is_absolute())
+    return tuple(private_paths)
+
+
+
+#### Return a bounded relative inventory of Botan artifacts from fixed build and installation tiers.
+####
+#### Only conservative Botan-like basenames are retained.  Unrelated caller-controlled filenames and the absolute
+#### output directory never cross the diagnostic boundary.
+####
+def _native_artifact_evidence(output_directory: Path) -> tuple[str, ...]:
+    evidence: set[str] = set()
+    try:
+        for tier in NATIVE_ARTIFACT_TIERS:
+            for path in (output_directory / tier).glob("*botan-3*"):
+                name = path.name
+                if (
+                    len(name) <= 128
+                    and BOTAN_ARTIFACT_NAME_PATTERN.fullmatch(name) is not None
+                    and (path.is_file() or path.is_symlink())
+                ):
+                    evidence.add(f"{tier}/{name}")
+    except OSError:
+        return ()
+    return tuple(sorted(evidence)[:MAX_NATIVE_ARTIFACTS])
 
 
 
@@ -549,7 +636,21 @@ def link_mobile_smoke_program(
     except OSError as error:
         raise BotanBuildError("mobile smoke compiler is unavailable") from error
     if result.returncode != 0 or not linked_path.is_file():
-        raise BotanBuildError("mobile smoke link failed")
+        raise BotanBuildError(
+            _native_failure_message(
+                "mobile smoke link failed",
+                result,
+                (
+                    compiler,
+                    output_directory,
+                    include_directory,
+                    source_path,
+                    library_path,
+                    linked_path,
+                    *_toolchain_private_paths(toolchain_options),
+                ),
+            )
+        )
     return linked_path
 
 
@@ -603,7 +704,9 @@ def find_shared_library(output_directory: Path) -> Path:
     except OSError as error:
         raise BotanBuildError("Botan shared library discovery failed") from error
     if len(candidates) != 1:
-        raise BotanBuildError("Botan shared library was not produced")
+        evidence = _native_artifact_evidence(output_directory)
+        suffix = f"; observed Botan artifacts: {', '.join(evidence)}" if evidence else ""
+        raise BotanBuildError(f"Botan shared library was not produced{suffix}")
     return candidates[0]
 
 
@@ -641,8 +744,8 @@ def resolve_cli_paths(output_directory: Path, cache_directory: Path) -> tuple[Pa
 #### Build the verified source for one target and return its installed library path.
 ####
 #### The caller owns the output directory selection.  This routine keeps sources in the ignored cache, configures a
-#### minimized host-shared or mobile-static build, suppresses compiler chatter, and reports a stable failure category
-#### if a tool exits nonzero.
+#### minimized host-shared or mobile-static build and reports a stable failure category plus bounded path-redacted
+#### native evidence if a tool exits nonzero.
 ####
 def build_botan(
     target: str,
@@ -654,6 +757,7 @@ def build_botan(
     if smoke_link and target not in MOBILE_TARGETS:
         raise BotanBuildError("mobile smoke target is unsupported")
     toolchain_options = resolve_target_toolchain(target)
+    toolchain_private_paths = _toolchain_private_paths(toolchain_options)
     pin = load_source_pin(PIN_PATH)
     archive_path = download_verified_archive(pin, cache_directory)
     with extract_fresh_verified_source(archive_path, pin, cache_directory) as source_directory:
@@ -680,7 +784,21 @@ def build_botan(
         except OSError as error:
             raise BotanBuildError("Botan configuration command is unavailable") from error
         if configure_result.returncode != 0:
-            raise BotanBuildError("Botan configuration failed")
+            raise BotanBuildError(
+                _native_failure_message(
+                    "Botan configuration failed",
+                    configure_result,
+                    (
+                        cache_directory,
+                        source_directory,
+                        toolchain_source_directory,
+                        output_directory,
+                        toolchain_output_directory,
+                        Path(sys.executable),
+                        *toolchain_private_paths,
+                    ),
+                )
+            )
         compile_command = build_command(target, toolchain_output_directory / "work")
         compile_environment = None
         if target == "windows-x86_64":
@@ -699,7 +817,23 @@ def build_botan(
         except OSError as error:
             raise BotanBuildError("Botan compilation command is unavailable") from error
         if compile_result.returncode != 0:
-            raise BotanBuildError("Botan compilation failed")
+            compile_executable = Path(compile_command[0])
+            compile_executable_paths = (compile_executable,) if compile_executable.is_absolute() else ()
+            raise BotanBuildError(
+                _native_failure_message(
+                    "Botan compilation failed",
+                    compile_result,
+                    (
+                        cache_directory,
+                        source_directory,
+                        toolchain_source_directory,
+                        output_directory,
+                        toolchain_output_directory,
+                        *toolchain_private_paths,
+                        *compile_executable_paths,
+                    ),
+                )
+            )
         library_path = (
             find_static_library(output_directory)
             if target in MOBILE_TARGETS

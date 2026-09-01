@@ -19,15 +19,22 @@ the five exact Windows x86-64, macOS arm64, Linux x86-64, Android arm64, and iOS
 shared libraries; mobile profiles install static libraries and optionally compile/link a raw Twofish FFI probe. Android
 requires the exact NDK API 28 compiler before source acquisition. iOS requires macOS and fixed iPhoneOS `xcrun`
 discovery. Dedicated hosted Android and iOS jobs exercise those gates, while the desktop matrix builds and tests with
-its resolved host library. Task 15 implementation, release verification, and independent review were committed at
+its resolved host library. The first hosted run passed Android and exposed the four platform failures summarized below.
+Task 15 implementation, release verification, and independent review were committed at
 `5e1d5d7`. The safe demonstration, operational guide, root status, contributor validation, legal note, and REUSE
-coverage complete the approved lossless PasswordSafe core plan. Hosted results have not yet been observed.
+coverage complete the approved lossless PasswordSafe core plan.
 
 Local `main` now tracks `origin/main` at `https://github.com/caffeineLover/password-bonobo.git`. The remote's unrelated
 initial GPLv3 `LICENSE` commit `7cb8203` was fetched and joined to the completed local history by merge commit `11f0ea7`.
 The merged result passed 645 tests with 12 expected platform-specific skips and 79% coverage in 107.71 seconds, plus
-Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates. Nothing has been
-pushed; local `main` remains ahead of `origin/main`.
+Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates. Commit `963441d` is
+pushed and synchronized with `origin/main`.
+
+Hosted run `33549509896` then passed Android arm64 but failed the iOS smoke link, macOS strict mypy, Ubuntu host-library
+discovery, and Windows test suite. Published `main` cannot diagnose the iOS failure because it captures and discards
+native stderr. Branch `fix/native-build-diagnostics` now retains at most 2,048 characters of path-redacted,
+control-stripped configure/compiler/linker evidence and reports a bounded allowlist of relative Botan artifacts from
+fixed output tiers. It does not change target profiles, build commands, library selection, or smoke-link semantics.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -164,6 +171,16 @@ and staged/unstaged whitespace checks all passed. The only pip-audit skip is the
 Independent review reported no Critical or Important findings. Its sole remaining Minor note is that the private-
 directory rollback path is implemented but not directly fault-injected by the example tests.
 
+The 2026-09-01 native-diagnostics repair added four red-first boundary regressions and passed all 39 build-driver tests.
+The full Windows/CPython 3.14.7 suite used the previously verified Botan 3.13 DLL and reported 649 passed, 12 expected
+platform-specific skips, 79% coverage, and zero failures in 110.35 seconds. Autopep8, Ruff, strict mypy over 71 files,
+Python structure, compatibility, provenance, tracked-file, Bandit, pip-audit, REUSE 118/118, source-distribution build,
+wheel build, wheel inspection, and whitespace checks all exited zero. The hosted failure causes remain unaltered until
+this diagnostic commit is integrated, pushed, and rerun. Independent review first identified missing cross-toolchain
+path redaction, an overly broad artifact-name filter, retained tab controls, and over-redaction of relative `make` text;
+red-first tests and implementation corrections closed all four. Follow-up review reported no Critical, Important, or
+Minor findings and assessed the repair ready to merge.
+
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
 the same metadata.
@@ -191,9 +208,15 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted desktop/mobile Task 14 jobs have not yet been observed after publication.
+- Hosted run `33549509896` failed four of five jobs. Android passed; iOS native linker output is hidden, macOS mypy sees
+  unsupported Windows-only stub members, Ubuntu cannot locate the installed Botan shared library, and Windows hosted
+  temporary directories do not satisfy the production owner-only DACL validation used by tests.
 
 ## Exact continuation order after this checkpoint
 
-1. The next approved subproject is a separate design and plan for the vault application core and
-   desktop foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
+1. Integrate and push `fix/native-build-diagnostics`, then rerun hosted CI to expose the exact iOS linker and Ubuntu
+   installation evidence.
+2. Repair and verify the macOS typing, Ubuntu discovery, Windows test DACL, and newly exposed iOS linker causes one at
+   a time.
+3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
+   foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
