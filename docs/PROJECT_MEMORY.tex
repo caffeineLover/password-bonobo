@@ -85,18 +85,35 @@
 }
 \section{Password Bonobo Project Memory}\label{password-bonobo-project-memory}
 
-Last updated: 2026-08-22
+Last updated: 2026-08-31
 
 \subsection{Overview and current state}\label{overview-and-current-state}
 
 Password Bonobo is an original, local-file-first password manager with a typed Python core and platform-appropriate
-clients. Its repository foundation and neutral compatibility dossier are locally verified. Product behavior remains
-unimplemented: the package cannot open, edit, save, or audit a vault. CI targets Windows, macOS, and Linux but has not
-yet run.
+clients. The repository foundation and neutral compatibility dossier are locally verified. Branch
+\nolinkurl{feature/lossless-passwordsafe-core} has completed Tasks 1 through 10 of the approved lossless PasswordSafe
+core plan: Botan-backed cryptography, secret ownership, ordered lossless documents, schema and custom fields,
+authenticated reading, validated writing, revision-safe sessions, and transactional local storage with encrypted
+recovery.
 
-The next approved subproject is \textbf{Lossless PasswordSafe core}. It owns typed parsing and writing, validation,
-unknown-field preservation, transactional local files, and conformance, fuzz, and round-trip tests. Do not begin client
-or URL-audit behavior ahead of that boundary.
+The core is not yet publicly usable. Task 11 must assemble the service facade and public exports, followed by the
+property/fuzz/resource, interoperability, platform-CI, documentation, and release checkpoints in Tasks 12 through 15. Do
+not begin client or URL-audit behavior ahead of that boundary.
+
+\subsection{Active work}\label{active-work}
+
+Resume from clean commit \passthrough{\lstinline!32e2d82!} on \nolinkurl{feature/lossless-passwordsafe-core}. The
+complete baseline on 2026-08-31 was 556 passed and 12 platform-specific skips under CPython 3.14.7. In the current
+shell, invoke uv as \passthrough{\lstinline!python -m uv!} because the module is installed but the
+\passthrough{\lstinline!uv!} console executable is not discoverable on \passthrough{\lstinline!PATH!}.
+
+Task 11\textquotesingle s approved facade cannot be implemented safely against the current Tasks 7 through 10
+interfaces: they can open and rewrite an existing vault and replace an existing destination, but they cannot create a
+new destination, rotate salt and passphrase material, perform an independent export, or advance a
+session\textquotesingle s published baseline. The user approved amending Task 11 to add the minimal supported primitives
+in \passthrough{\lstinline!reader.py!}, \passthrough{\lstinline!writer.py!}, \nolinkurl{storage.py}, and
+\nolinkurl{session.py} before implementing \nolinkurl{service.py}. Continue test-first and do not bypass private
+constructors or duplicate security-sensitive publication logic in the facade.
 
 \subsection{Required read order}\label{required-read-order}
 
@@ -108,8 +125,7 @@ Before substantial work, read this file completely, then read these durable reco
 \item
   \href{project-memory/PROJECT.md}{Project identity} for the product contract and authoritative design links.
 \item
-  \href{project-memory/STATE.md}{Current state} for completed foundation work, active risks, and the next approved
-  scope.
+  \href{project-memory/STATE.md}{Current state} for completed core work, active risks, and the next approved scope.
 \item
   \href{project-memory/DECISIONS.md}{Decisions} for clean-room, tooling, licensing, and generated-document constraints.
 \item
