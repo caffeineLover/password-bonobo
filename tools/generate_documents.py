@@ -40,6 +40,7 @@ MARKDOWN_ONLY_DOCUMENT_DIRECTORIES = frozenset({
     Path("docs/legal"),
     Path("docs/specs"),
     Path("docs/superpowers/plans"),
+    Path("docs/superpowers/specs"),
 })
 
 

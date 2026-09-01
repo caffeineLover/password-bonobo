@@ -89,6 +89,20 @@ def test_document_manifest_rejects_markdown_only_plan_selection(tmp_path: Path) 
 
 
 
+#### Refuse approved-design selection while the user requires that directory to remain Markdown-only.
+####
+def test_document_manifest_rejects_markdown_only_superpowers_spec_selection(tmp_path: Path) -> None:
+    specs_root = tmp_path / "docs" / "superpowers" / "specs"
+    specs_root.mkdir(parents=True)
+    markdown_path = specs_root / "design.md"
+    markdown_path.write_text("# Design\n", encoding="utf-8")
+    markdown_path.with_suffix(".tex").write_text("generated\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Markdown-only"):
+        discover_document_specs(tmp_path, (Path("docs/superpowers/specs/design.md"),))
+
+
+
 #### Discover every nested Markdown and LaTeX pair in stable relative-path order.
 ####
 def test_document_manifest_discovers_every_pair(tmp_path: Path) -> None:
@@ -452,3 +466,51 @@ def test_repository_plan_documents_have_no_latex_or_pdf_derivatives() -> None:
 
     assert tuple(plans_root.glob("*.tex")) == ()
     assert tuple(plans_root.glob("*.pdf")) == ()
+
+
+
+#### Keep approved designs Markdown-only until the user explicitly reverses that policy.
+####
+def test_repository_superpowers_specs_have_no_latex_or_pdf_derivatives() -> None:
+    specs_root = Path.cwd() / "docs" / "superpowers" / "specs"
+
+    assert tuple(specs_root.glob("*.tex")) == ()
+    assert tuple(specs_root.glob("*.pdf")) == ()
+
+
+
+#### Keep one Markdown-only project memory and reject the retired split-memory directory.
+####
+def test_repository_uses_one_markdown_only_project_memory() -> None:
+    docs_root = Path.cwd() / "docs"
+
+    assert (docs_root / "PROJECT_MEMORY.md").is_file()
+    assert not (docs_root / "PROJECT_MEMORY.tex").exists()
+    assert not (docs_root / "PROJECT_MEMORY.pdf").exists()
+    assert not (docs_root / "project-memory").exists()
+
+
+
+#### Keep all live Markdown references on the one canonical project-memory file.
+####
+def test_repository_has_no_retired_project_memory_references() -> None:
+    repository_root = Path.cwd()
+    stale_reference = "docs/project-memory/"
+
+    tracked_markdown = subprocess.run(
+        ("git", "ls-files", "-z", "--", "*.md"),
+        cwd=repository_root,
+        check=True,
+        capture_output=True,
+    ).stdout
+
+    referenced_by = tuple(
+        relative_path
+        for encoded_path in tracked_markdown.split(b"\0")
+        if encoded_path
+        for relative_path in (Path(encoded_path.decode("utf-8")),)
+        for path in (repository_root / relative_path,)
+        if stale_reference in path.read_text(encoding="utf-8")
+    )
+
+    assert referenced_by == ()

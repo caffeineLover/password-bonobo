@@ -1,6 +1,6 @@
 # Project Agent Instructions
 
-Instructions version: 0.7.0
+Instructions version: 0.8.0
 
 Before working on this project, read and follow the shared standards router at
 `E:\home\Code\Code Agent Prompts\docs\prompts\AGENTS.md`.
@@ -12,8 +12,8 @@ in this file or the repository's enforced configuration.
 ## Project-Specific Instructions
 
 Use `docs/PROJECT_MEMORY.md` as this repository's sole persistent continuation and handoff record.  Read it completely
-before resumed or substantial work, follow its linked-record read order, and reconcile it against the repository and
-Git state before relying on it.
+before resumed or substantial work, and reconcile it against the repository and Git state before relying on it.  Do
+not create a second project-memory file or folder.
 
 Update `docs/PROJECT_MEMORY.md` throughout active work at every meaningful checkpoint and before any interruption.  It
 must state the current task, the last verified result, work in progress, the exact immediate next actions in order, and
@@ -37,5 +37,8 @@ create or retain `.tex` or `.pdf` files there, and do not pass a specification M
 
 Everything under `docs/superpowers/plans/` is Markdown-only until explicitly reversed.  Do not create or retain `.tex`
 or `.pdf` files there, and do not pass an implementation-plan Markdown source to the generator.
+
+Everything under `docs/superpowers/specs/` is Markdown-only until explicitly reversed.  Do not create or retain `.tex`
+or `.pdf` files there, and do not pass an approved-design Markdown source to the generator.
 
 Do not place project-specific changes in the shared standards repository.

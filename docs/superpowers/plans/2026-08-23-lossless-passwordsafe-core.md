@@ -82,7 +82,6 @@ session mutations, and transaction coordinator.  A narrow `ctypes` adapter deleg
 - Create: `tests/foundation/test_botan_build.py`
 - Modify: `.gitignore`
 - Modify: `docs/legal/dependency-asset-provenance-ledger.md`
-- Modify: `docs/legal/dependency-asset-provenance-ledger.tex`
 - Modify: `tools/check_provenance.py`
 - Modify: `tests/foundation/test_provenance_ledger.py`
 - Modify: `REUSE.toml`
@@ -182,15 +181,10 @@ Run: `uv run python -m tools.check_provenance`
 
 Run: `uv run reuse --no-multiprocessing lint`
 
-Run: `uv run python -m tools.generate_documents --write`
-
-Run: `uv run python -m tools.generate_documents --verify`
-
 ```bash
 git add .gitignore REUSE.toml tools/botan-source.json tools/build_botan.py \
   tools/check_provenance.py tests/foundation/test_botan_build.py \
-  tests/foundation/test_provenance_ledger.py docs/legal/dependency-asset-provenance-ledger.md \
-  docs/legal/dependency-asset-provenance-ledger.tex
+  tests/foundation/test_provenance_ledger.py docs/legal/dependency-asset-provenance-ledger.md
 git commit -m "build: pin verified Botan backend"
 ```
 
@@ -1067,7 +1061,6 @@ git commit -m "feat: expose lossless PasswordSafe service"
 - Create: `tests/fixtures/synthetic/passwordsafe/fuzz-corpus/`
 - Create: `tools/run_passwordsafe_fuzz.py`
 - Modify: `docs/legal/dependency-asset-provenance-ledger.md`
-- Modify: `docs/legal/dependency-asset-provenance-ledger.tex`
 - Modify: `tools/check_provenance.py`
 - Modify: `REUSE.toml`
 
@@ -1137,14 +1130,9 @@ uv run python -m tools.run_passwordsafe_fuzz `
   --iterations 10000
 ```
 
-Run: `uv run python -m tools.generate_documents --write`
-
-Run: `uv run python -m tools.generate_documents --verify`
-
 ```bash
 git add pyproject.toml uv.lock REUSE.toml src tests/passwordsafe tools/run_passwordsafe_fuzz.py \
-  tools/check_provenance.py docs/legal/dependency-asset-provenance-ledger.md \
-  docs/legal/dependency-asset-provenance-ledger.tex
+  tools/check_provenance.py docs/legal/dependency-asset-provenance-ledger.md
 git commit -m "test: prove PasswordSafe parser resilience"
 ```
 
@@ -1161,11 +1149,8 @@ git commit -m "test: prove PasswordSafe parser resilience"
 - Create: `tests/fixtures/synthetic/passwordsafe/official-unknown-0302.psafe3`
 - Create: `tests/fixtures/synthetic/passwordsafe/*.manifest.json`
 - Modify: `docs/compatibility/gorilla/test-oracles.md`
-- Modify: `docs/compatibility/gorilla/test-oracles.tex`
 - Modify: `docs/compatibility/gorilla/feature-parity-matrix.md`
-- Modify: `docs/compatibility/gorilla/feature-parity-matrix.tex`
 - Modify: `docs/legal/dependency-asset-provenance-ledger.md`
-- Modify: `docs/legal/dependency-asset-provenance-ledger.tex`
 - Modify: `tools/check_compatibility.py`
 - Modify: `tools/check_provenance.py`
 - Modify: `REUSE.toml`
@@ -1229,15 +1214,10 @@ Run: `uv run python -m tools.check_provenance`
 
 Run: `git ls-files -z | uv run python -m tools.check_tracked_files`
 
-Run: `uv run python -m tools.generate_documents --write`
-
-Run: `uv run python -m tools.generate_documents --verify`
-
 ```bash
 git add REUSE.toml tools/verify_passwordsafe_interop.py tools/check_compatibility.py tools/check_provenance.py \
   tests/passwordsafe/test_interop_manifests.py tests/fixtures/synthetic/passwordsafe \
-  docs/compatibility/gorilla docs/legal/dependency-asset-provenance-ledger.md \
-  docs/legal/dependency-asset-provenance-ledger.tex
+  docs/compatibility/gorilla docs/legal/dependency-asset-provenance-ledger.md
 git commit -m "test: qualify PasswordSafe interoperability"
 ```
 
@@ -1250,9 +1230,7 @@ git commit -m "test: qualify PasswordSafe interoperability"
 - Modify: `tools/build_botan.py`
 - Modify: `tests/foundation/test_botan_build.py`
 - Modify: `docs/legal/dependency-asset-provenance-ledger.md`
-- Modify: `docs/legal/dependency-asset-provenance-ledger.tex`
-- Modify: `docs/project-memory/VERIFICATION.md`
-- Modify: `docs/project-memory/VERIFICATION.tex`
+- Modify: `docs/PROJECT_MEMORY.md`
 - Modify: `REUSE.toml`
 
 **Interfaces:**
@@ -1303,14 +1281,9 @@ Run: `uv run pytest tests/foundation/test_botan_build.py tests/passwordsafe -v`
 
 Run: `uv run python -m tools.check_provenance`
 
-Run: `uv run python -m tools.generate_documents --write`
-
-Run: `uv run python -m tools.generate_documents --verify`
-
 ```bash
 git add .github/workflows/foundation.yml REUSE.toml tools/build_botan.py tests/foundation/test_botan_build.py \
-  docs/legal/dependency-asset-provenance-ledger.md docs/legal/dependency-asset-provenance-ledger.tex \
-  docs/project-memory/VERIFICATION.md docs/project-memory/VERIFICATION.tex
+  docs/legal/dependency-asset-provenance-ledger.md docs/PROJECT_MEMORY.md
 git commit -m "ci: qualify PasswordSafe core platforms"
 ```
 
@@ -1320,21 +1293,12 @@ git commit -m "ci: qualify PasswordSafe core platforms"
 
 **Files:**
 - Create: `docs/guides/lossless-passwordsafe-core.md`
-- Create: `docs/guides/lossless-passwordsafe-core.tex`
 - Create: `examples/passwordsafe_core_demo.py`
 - Create: `tests/passwordsafe/test_example.py`
 - Modify: `README.md`
 - Modify: `CONTRIBUTING.md`
 - Modify: `docs/PROJECT_MEMORY.md`
-- Modify: `docs/PROJECT_MEMORY.tex`
-- Modify: `docs/project-memory/STATE.md`
-- Modify: `docs/project-memory/STATE.tex`
-- Modify: `docs/project-memory/DECISIONS.md`
-- Modify: `docs/project-memory/DECISIONS.tex`
-- Modify: `docs/project-memory/VERIFICATION.md`
-- Modify: `docs/project-memory/VERIFICATION.tex`
 - Modify: `docs/legal/dependency-asset-provenance-ledger.md`
-- Modify: `docs/legal/dependency-asset-provenance-ledger.tex`
 - Modify: `REUSE.toml`
 
 **Interfaces:**
@@ -1378,15 +1342,13 @@ external-change failures, CPython zeroization limits, and that the core has no p
 - [ ] **Step 5: Update project memory and status truthfully**
 
 Record the implementing branch/commit range, delivered APIs, Botan pin, verified platforms, interoperability clients,
-test counts, coverage, residual risks, and the next approved subproject.  Remove the obsolete foundation branch name
-from `STATE.md`.
+test counts, coverage, residual risks, and the next approved subproject in `docs/PROJECT_MEMORY.md`.
 
-- [ ] **Step 6: Generate and visually inspect all documentation**
+- [ ] **Step 6: Review canonical Markdown documentation**
 
-Run: `uv run python -m tools.generate_documents --write --render`
-
-Inspect every page of the new guide and changed memory/legal/compatibility documents.  Correct canonical Markdown,
-regenerate, and repeat until there are no overflow, clipped text, split tables, missing glyphs, or unresolved links.
+Review the new guide and changed memory/legal/compatibility Markdown directly.  Correct broken links, stale paths,
+formatting defects, and inaccurate status.  Do not create TeX or PDF derivatives unless the user explicitly requests
+them by document.
 
 - [ ] **Step 7: Run the complete release gate**
 
@@ -1407,7 +1369,6 @@ uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
 uv run python -m tools.check_wheel dist
-uv run python -m tools.generate_documents --verify
 ```
 
 - [ ] **Step 8: Review the final diff and commit documentation/delivery evidence**

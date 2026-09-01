@@ -53,7 +53,7 @@ Password Bonobo/
 |-- README.md                             # Product intent, status, and safe development entry points.
 |-- REUSE.toml                            # License annotations for non-source files.
 |-- SECURITY.md                           # Private reporting and sensitive-data rules.
-|-- docs/PROJECT_MEMORY.md / .tex         # Canonical durable-memory entry point and generated source.
+|-- docs/PROJECT_MEMORY.md                # Sole durable state, decision, and verification record.
 |-- pyproject.toml                        # Package metadata and all Python tool configuration.
 |-- uv.lock                               # Reproducible development dependency lock.
 |-- .github/workflows/foundation.yml      # Three-platform quality and package workflow.
@@ -68,11 +68,6 @@ Password Bonobo/
 |-- docs/pandoc/
 |   |-- pdf-header.tex                    # Shared code and table wrapping for generated review documents.
 |   `-- pdf-layout.lua                    # Breakable identifiers and bounded wide-table columns.
-|-- docs/project-memory/
-|   |-- DECISIONS.md / DECISIONS.tex
-|   |-- PROJECT.md / PROJECT.tex
-|   |-- STATE.md / STATE.tex
-|   `-- VERIFICATION.md / VERIFICATION.tex
 |-- src/bonobo_core/
 |   |-- __init__.py                       # Typed package identity only.
 |   `-- py.typed                          # PEP 561 marker.
@@ -102,11 +97,8 @@ The sibling research checkout defaults to `../Password Bonobo Research/gorilla` 
 - Track: `AGENTS.md`
 - Track: `docs/specs/password-bonobo-url-audit-design.md`
 - Track: `docs/specs/password-bonobo-python-reimplementation-design.md`
-- Track: `docs/specs/password-bonobo-python-reimplementation-design.tex`
 - Track: `docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md`
-- Track: `docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.tex`
 - Track: `docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.md`
-- Track: `docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.tex`
 
 **Interfaces:**
 
@@ -1035,16 +1027,11 @@ path = [
     "REUSE.toml",
     "SECURITY.md",
     "docs/legal/app-store-distribution-exception-plan.md",
-    "docs/legal/app-store-distribution-exception-plan.tex",
     "docs/legal/source-provenance-policy.md",
-    "docs/legal/source-provenance-policy.tex",
     "docs/specs/password-bonobo-python-reimplementation-design.md",
-    "docs/specs/password-bonobo-python-reimplementation-design.tex",
     "docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.md",
-    "docs/specs/password-bonobo-repository-foundation-compatibility-dossier-spec.tex",
     "docs/specs/password-bonobo-url-audit-design.md",
     "docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.md",
-    "docs/superpowers/plans/2026-08-22-repository-foundation-compatibility-dossier.tex",
     "pyproject.toml",
     "src/bonobo_core/__init__.py",
     "src/bonobo_core/py.typed",
@@ -1468,18 +1455,11 @@ git commit -m "docs: define Gorilla parity and test oracles"
 
 - Create: `.github/workflows/foundation.yml`
 - Create: `docs/PROJECT_MEMORY.md`
-- Create: `docs/PROJECT_MEMORY.tex`
-- Create: `docs/project-memory/PROJECT.md`
-- Create: `docs/project-memory/STATE.md`
-- Create: `docs/project-memory/DECISIONS.md`
-- Create: `docs/project-memory/VERIFICATION.md`
-- Create: same-basename LaTeX for each project-memory Markdown file
 - Create: `docs/pandoc/pdf-header.tex`
 - Create: `docs/pandoc/pdf-layout.lua`
-- Create: same-basename LaTeX for substantial compatibility and approved design documents that do not yet have it
 - Modify: `README.md`
 - Modify: `REUSE.toml`
-- Modify: this plan Markdown and LaTeX to synchronize the enforced Task 9 commands
+- Modify: this plan Markdown to synchronize the enforced Task 9 commands
 
 **Interfaces:**
 
@@ -1535,23 +1515,14 @@ Verify the two pinned action commits against their official Git refs before comm
 `refs/tags/v6` resolved to annotated tag object `d0d8abe699bfb85fec6de9f7adb5ae17292296ff`, while peeled
 `refs/tags/v6^{}` and release `refs/tags/v6.8.0` resolved to commit
 `d0cc045d04ccac9d8b7881df0226f9e82c39688e`.  Pin the setup action to that full commit SHA, following GitHub's
-official action-hardening guidance, and record both object types in `docs/project-memory/VERIFICATION.md`.  Do not
+official action-hardening guidance, and record both object types in `docs/PROJECT_MEMORY.md`.  Do not
 introduce floating tags.
 
 - [x] **Step 2: Write durable project identity and current state**
 
-Create memory files with these responsibilities:
-
-- `docs/PROJECT_MEMORY.md`: canonical future-agent entry point, current durable summary, and required read order for
-  the four focused records.
-- `PROJECT.md`: product purpose, supported platforms, local-file-first rule, no-loss rule, licensing intent, and links
-  to approved specifications.
-- `STATE.md`: subproject 1 status, current branch, completed artifacts, active risks, and next approved subproject
-  `Lossless PasswordSafe core`.
-- `DECISIONS.md`: dated records for clean-room source boundary, Gorilla pin, Python 3.14, tool choices, Git boundary,
-  generated-document policy, and external contribution hold.
-- `VERIFICATION.md`: exact commands, dates, results, environment limitations, PDF page counts, and CI action pin
-  evidence.
+Use `docs/PROJECT_MEMORY.md` as the sole durable record.  It owns product purpose, current state, completed work,
+decisions, exact verification evidence, active risks, and the ordered continuation queue.  Do not create a second
+memory file or directory.
 
 Do not include raw command transcripts, machine-specific research paths, credentials, or copied upstream content.
 
@@ -1576,45 +1547,19 @@ uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
 uv run python -m tools.check_wheel dist
-uv run python -m tools.generate_documents --verify
 ```
 
 Link the canonical `docs/PROJECT_MEMORY.md` entry point and state explicitly that these commands never require the
 Gorilla checkout.
 
-- [x] **Step 4: Generate LaTeX and PDFs for substantial new documents**
+- [x] **Step 4: Review canonical Markdown documents**
 
-Run the tracked exact generator with `uv run python -m tools.generate_documents --write --render`.  It uses
-`docs/pandoc/pdf-header.tex` and `docs/pandoc/pdf-layout.lua`, creates every same-basename `.tex`, performs at least two
-XeLaTeX passes plus a bounded third when requested, writes useful logs and a manifest below `tmp/pdfs/`, and copies
-ignored PDFs beside their Markdown sources.
-At minimum this includes:
+Historical note: this task originally generated broad TeX/PDF derivatives.  Those derivatives were later removed at
+the user's direction.  The current policy is Markdown-only unless the user explicitly requests TeX or PDF for a named
+document; do not rerun the old bulk-generation workflow.
 
-- The subproject specification.
-- The approved program and URL-audit designs.
-- This implementation plan.
-- The upstream baseline.
-- The behavior dossier.
-- The feature-parity matrix.
-- The test-oracle catalog.
-- Both legal policies.
-- The canonical project-memory entry point.
-- All four project-memory documents.
-
-Run XeLaTeX until references stabilize.  Render every final PDF page with `pdftoppm`, inspect every page, and correct
-all clipping, overlap, glyph, hierarchy, and page-transition defects.  Explicitly confirm that code and command
-listings wrap within the page.  Add only Markdown, LaTeX, and the shared render-source header to Git.
-
-Before Step 5, update the explicit `REUSE.toml` annotation list without a directory wildcard.  Add every new
-Bonobo-authored tracked path from Tasks 6-9:
-
-- `docs/compatibility/gorilla/upstream-baseline.md` and its generated `.tex` companion.
-- `docs/compatibility/gorilla/behavior-dossier.md` and its generated `.tex` companion.
-- `docs/compatibility/gorilla/feature-parity-matrix.md` and its generated `.tex` companion.
-- `docs/compatibility/gorilla/test-oracles.md` and its generated `.tex` companion.
-- `.github/workflows/foundation.yml`, `docs/PROJECT_MEMORY.md`, `docs/PROJECT_MEMORY.tex`, the four
-  `docs/project-memory` Markdown/LaTeX pairs, `docs/pandoc/pdf-header.tex`, and `docs/pandoc/pdf-layout.lua`.
-- Any additional generated source files created in scope.
+Before Step 5, update the explicit `REUSE.toml` annotation list without a directory wildcard.  Include the canonical
+Markdown documents and the shared Pandoc support files that remain tracked.
 
 Preserve this fail-closed rule: a new path must fail REUSE until deliberately classified.
 
@@ -1622,8 +1567,8 @@ Stage every intended Task 9 file before the release gate so REUSE inspects the a
 PDFs or the external Gorilla checkout.
 
 ```powershell
-git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMORY.md docs/PROJECT_MEMORY.tex `
-  docs/project-memory docs/pandoc docs/compatibility docs/legal docs/specs docs/superpowers/plans
+git add REUSE.toml .github/workflows/foundation.yml README.md docs/PROJECT_MEMORY.md `
+  docs/pandoc docs/compatibility docs/legal docs/specs docs/superpowers/plans
 ```
 
 - [x] **Step 5: Run the complete local release gate**
@@ -1646,16 +1591,15 @@ uv run pip-audit
 uv run reuse --no-multiprocessing lint
 uv build
 uv run python -m tools.check_wheel dist
-uv run python -m tools.generate_documents --verify
 git diff --cached --check
 git status --short
 ```
 
 Expected: every validation command passes.  The artifact check requires the GPL text and typing marker in both source
 distribution and wheel, plus exact PEP 639 wheel metadata and license bytes.  `git status` lists only intended
-Markdown/LaTeX changes and ignored PDFs do not appear.
+Markdown and source changes; ignored PDFs do not appear.
 
-- [x] **Step 6: Commit CI, memory, and generated LaTeX sources**
+- [x] **Step 6: Commit CI, memory, and policy sources**
 
 Run:
 

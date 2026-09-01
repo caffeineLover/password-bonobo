@@ -9,8 +9,8 @@ project does not yet provide a usable vault.
 
 The approved program design is in `docs/specs/password-bonobo-python-reimplementation-design.md`.
 
-Future work starts with the durable [project memory](docs/PROJECT_MEMORY.md), which routes to the authoritative
-identity, state, decisions, and verification records.
+Future work starts with the single durable [project memory](docs/PROJECT_MEMORY.md), which contains current state,
+decisions, verification, exact continuation order, and authoritative links.
 
 ## Source boundary
 
@@ -66,8 +66,8 @@ uv run python -m tools.generate_documents --document docs/path/to/document.md --
 ```
 
 Repeat `--document` for each separately approved source.  There is no repository-wide generation mode, and the
-Gorilla compatibility, legal, specification, and implementation-plan documents are Markdown-only, so do not select
-their sources unless that restriction is explicitly reversed.
+Gorilla compatibility, legal, specification, implementation-plan, and approved-design documents are Markdown-only, so
+do not select their sources unless that restriction is explicitly reversed.
 
 Run the complete local validation sequence from the repository root:
 
