@@ -172,6 +172,10 @@ REUSE 3.3 for 114 files all pass.  No derivative was generated.  The current act
 generator, test, memory, REUSE, and three specification-LaTeX deletion changes; run tracked-file and staged whitespace
 checks; inspect the patch; and commit this bounded Markdown-only checkpoint.
 
+The specifications Markdown-only policy, three tracked LaTeX deletions, six-file derivative removal, and enforced
+generator/test boundary are committed as `925e8c6`.  All recorded gates above are green, and no derivative was
+generated.  Resume Task 13 Step 1 after reconciling a clean tree.
+
 Continue in this exact order:
 
 1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
