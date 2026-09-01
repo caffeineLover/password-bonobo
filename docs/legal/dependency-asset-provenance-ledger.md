@@ -114,7 +114,10 @@ Botan is the direct native runtime dependency that provides the sole production 
 source archive at `https://botan.randombit.net/releases/Botan-3.13.0.tar.xz` is SHA-256 verified before extraction.
 The provenance gate requires this row to match the version, archive filename, digest, and minimized modules in
 `tools/botan-source.json`.  Release application artifacts bundle an appropriate shared library; the pure Python wheel
-does not.
+does not.  CI builds minimized `ffi,twofish` profiles for Windows x86-64, macOS arm64, and Linux x86-64 and executes
+the core suite against each resulting host shared library.  Android arm64 API 28 and iOS arm64 gates instead build a
+static library and compile/link a raw Twofish FFI probe with the platform toolchain.  Those mobile gates establish only
+compile/link compatibility; they do not qualify runtime behavior, physical devices, packaging, or distribution terms.
 
 |Name|Fact|Value|Terms|Dist|Evidence|Review|
 |---|---|---|---|---|---|---|

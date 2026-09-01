@@ -43,3 +43,33 @@ jobs:
       - run: uv run reuse --no-multiprocessing lint
       - run: uv build
       - run: uv run python -m tools.check_wheel dist
+
+  android-cross:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, verified 2026-08-22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0, verified 2026-08-22
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - name: Cross-build and link Android arm64 Botan probe
+        shell: pwsh
+        run: |
+          if (-not $env:ANDROID_NDK_LATEST_HOME) { throw "runner Android NDK is unavailable" }
+          $env:ANDROID_NDK_ROOT = $env:ANDROID_NDK_LATEST_HOME
+          uv run python -m tools.build_botan --target android-arm64 --output build/botan-android --smoke-link
+
+  ios-cross:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, verified 2026-08-22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0, verified 2026-08-22
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - name: Cross-build and link iOS arm64 Botan probe
+        run: uv run python -m tools.build_botan --target ios-arm64 --output build/botan-ios --smoke-link

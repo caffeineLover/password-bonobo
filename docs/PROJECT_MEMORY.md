@@ -13,9 +13,13 @@ This file is Markdown-only.  Do not create a second project-memory location or a
 
 ## Immediate checkpoint
 
-Branch `feature/lossless-passwordsafe-core` has completed the Task 13 implementation of the approved lossless
-PasswordSafe core plan. Follow-up review corrections and the complete release-equivalent gate pass are finished. The
-exact next action is final staged-diff review and the independent Task 13 commit.
+Branch `feature/lossless-passwordsafe-core` completed and independently committed Task 13 of the approved lossless
+PasswordSafe core plan at `a91977d`. Task 14 is active at final verification and review. Its build driver now exposes
+the five exact Windows x86-64, macOS arm64, Linux x86-64, Android arm64, and iOS arm64 profiles. Desktop profiles install
+shared libraries; mobile profiles install static libraries and optionally compile/link a raw Twofish FFI probe. Android
+requires the exact NDK API 28 compiler before source acquisition. iOS requires macOS and fixed iPhoneOS `xcrun`
+discovery. Dedicated hosted Android and iOS jobs exercise those gates, while the desktop matrix builds and tests with
+its resolved host library. Hosted results have not yet been observed.
 
 Checkpoint `669506e` consolidated the retired split identity/state/decisions/verification records into this file and
 deleted the obsolete folder.  It also made `docs/superpowers/specs/` Markdown-only, removed its TeX/PDF derivatives,
@@ -89,10 +93,14 @@ GPL-3.0-or-later.  The possible iOS distribution exception remains unresolved an
   external-change detection, and the reviewed public `VaultService` create/open/save/rotate/export/recovery API.
 - Task 12 adds typed Hypothesis strategies, exact round-trip/targeted-edit properties, hostile-length allocation proofs,
   a dependency-free deterministic fuzz corpus/runner, and a bounded-memory encrypted-only large-vault proof.
+- Task 13 adds independently produced Bonobo, Password Safe, Gorilla, and specification fixtures; authenticated
+  redacted manifests; exact no-edit/title-edit transaction evidence; and gated producer provenance.
+- Task 14 work in progress adds exact desktop/mobile Botan target profiles, fail-closed cross-toolchain discovery,
+  Windows MSVC environment bootstrapping, mobile compile/link probes, and dedicated hosted workflow jobs.
 
 Key checkpoints: continuity `4013f8a`; Task 11 `8c2b30e`; Task 12/workflow `08c2107`; Gorilla derivatives `b77077c`;
 legal Markdown-only `2be2512`; specifications Markdown-only `925e8c6`; plans Markdown-only `3df88b4`; single memory
-and approved-design Markdown-only `669506e`.
+and approved-design Markdown-only `669506e`; Task 13 interoperability `a91977d`.
 
 ## Last proven verification
 
@@ -121,6 +129,18 @@ tracked-file, compatibility, provenance, Bandit, and pip-audit gates exited zero
 `password-bonobo` project. REUSE 3.3 classified 114/114 files. The source distribution and wheel built successfully,
 and the wheel gate accepted `password_bonobo-0.1.0-py3-none-any.whl`. Whitespace checks are clean.
 
+Task 14's 2026-09-01 Windows checkpoint built the minimized pinned Botan 3.13.0 `ffi,twofish` host shared library from
+source using an isolated, discovered x64 MSVC developer environment. The resulting
+`build/botan-task14-host/bin/botan-3.dll` reported Botan 3.13.0. With that exact DLL configured, the focused build and
+PasswordSafe selection collected 566 tests and reported 554 passed, 12 platform-specific skips, and zero failures in
+102.26 seconds. The 35 build-driver tests, Ruff, strict mypy, Python structure checker, parsed workflow schema,
+provenance gate, and REUSE 114/114 check all passed. Android/iOS toolchain behavior is unit-tested locally but awaits
+hosted execution on the declared runners. Independent review caught and corrected Clang language selection leaking
+from the generated C source onto the static archive; the command now enforces `-x c` for the source and resets with
+`-x none` before the archive. Red-first regression coverage locks that boundary. Final review reported no Critical or
+Important findings; its sole Minor note is that workflow tests use substring assertions, while a separate YAML parse
+confirmed the jobs are structurally valid.
+
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
 the same metadata.
@@ -146,17 +166,13 @@ the same metadata.
   unresolved and block external contributions and an iOS distribution build.
 - Some Gorilla behaviors remain Unverified and cannot establish parity until black-box evidence is reviewed.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
-- Task 13 needs only final staged-diff review and its commit. Tasks 14 and 15 own platform/cross-build gates, operational
-  documentation, and the complete release checkpoint.
+- Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
+  establish execution on physical Android/iOS devices.
+- Task 15 owns operational documentation and the complete release checkpoint.
 
 ## Exact continuation order after this checkpoint
 
-1. Review the final Task 13 staged diff and commit it independently as `test: qualify PasswordSafe interoperability`.
-2. Execute Task 14's remaining test-driven desktop host and Android/iOS cross-build gate work, beginning with the
-   target-command tests. The host library output protocol and desktop workflow supply step landed early to make Task
-   13's real-fixture test mandatory in clean-clone CI.
-3. Complete Task 14's workflow, provenance, REUSE, platform-gate verification, memory update, review, and independent
-   commit.
-4. Execute Task 15's operational documentation and release checkpoint in order. Do not start client applications,
+1. Complete Task 14's final repository gates, independent review, memory reconciliation, and independent commit.
+2. Execute Task 15's operational documentation and release checkpoint in order. Do not start client applications,
    provider coordination, or URL-audit behavior
    before Task 15 closes.

@@ -1,7 +1,8 @@
-"""Fetch, verify, safely build, and locate the pinned Botan shared library.
+"""Fetch, verify, safely build, and locate the pinned Botan library.
 
-The command stores its verified upstream source archive in the ignored Botan cache and installs only a minimized shared
-library into an explicitly selected build output.  It never accepts a runtime download location or emits source paths.
+The command stores its verified upstream source archive in the ignored Botan cache and installs a minimized host shared
+library or mobile static archive into an explicitly selected build output. It never accepts a runtime download location
+or emits source paths.
 """
 
 from __future__ import annotations
@@ -11,13 +12,15 @@ import ctypes
 import hashlib
 import hmac
 import json
+import os
 import platform
+import shlex
 import shutil
 import subprocess  # nosec B404
 import sys
 import tarfile
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,16 +31,40 @@ from urllib.request import urlopen
 
 PIN_PATH = Path(__file__).with_name("botan-source.json")
 TARGET_PROFILES: dict[str, tuple[str, ...]] = {
-    "windows": ("--cc=msvc", "--os=windows", "--cpu=x86_64"),
-    "macos": ("--cc=clang", "--os=darwin"),
-    "linux": ("--cc=gcc", "--os=linux"),
-    "android": ("--cc=clang", "--os=android", "--cpu=arm64"),
-    "ios": ("--cc=clang", "--os=ios", "--cpu=arm64"),
+    "windows-x86_64": ("--cc=msvc", "--os=windows", "--cpu=x86_64"),
+    "macos-arm64": ("--cc=clang", "--os=darwin", "--cpu=arm64"),
+    "linux-x86_64": ("--cc=gcc", "--os=linux", "--cpu=x86_64"),
+    "android-arm64": ("--cc=clang", "--os=android", "--cpu=arm64"),
+    "ios-arm64": ("--cc=clang", "--os=ios", "--cpu=arm64"),
 }
 FINAL_LIBRARY_LOCATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("bin", ("botan-3.dll", "libbotan-3.dll")),
     ("lib", ("libbotan-3.dylib", "libbotan-3.so*")),
 )
+CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
+ExecutableFinder = Callable[..., str | None]
+MOBILE_TARGETS = frozenset({"android-arm64", "ios-arm64"})
+BOTAN_FFI_SMOKE_SOURCE = """#include <botan/ffi.h>
+
+int main(void) {
+    botan_block_cipher_t cipher = 0;
+    const uint8_t key[32] = {0};
+    const uint8_t input[16] = {0};
+    uint8_t output[16] = {0};
+    if (botan_block_cipher_init(&cipher, "Twofish") != 0) {
+        return 1;
+    }
+    if (botan_block_cipher_set_key(cipher, key, sizeof(key)) != 0) {
+        botan_block_cipher_destroy(cipher);
+        return 2;
+    }
+    if (botan_block_cipher_encrypt_blocks(cipher, input, output, 1) != 0) {
+        botan_block_cipher_destroy(cipher);
+        return 3;
+    }
+    return botan_block_cipher_destroy(cipher) == 0 ? 0 : 4;
+}
+"""
 
 
 
@@ -233,16 +260,138 @@ def windows_toolchain_path(path: Path) -> Path:
 
 
 
+#### Return an isolated MSVC developer environment discovered through Visual Studio Installer.
+####
+#### Normal PowerShell and hosted-runner processes do not inherit compiler variables. The fixed vswhere query selects
+#### the newest installation with the x64 C++ toolchain, and VsDevCmd initializes only the child NMake environment.
+####
+def windows_msvc_environment(
+    *,
+    environment: Mapping[str, str] | None = None,
+    runner: CommandRunner = subprocess.run,
+) -> dict[str, str]:
+    selected_environment = os.environ if environment is None else environment
+    program_files = selected_environment.get("ProgramFiles(x86)", "")
+    if not program_files:
+        raise BotanBuildError("MSVC developer environment is unavailable")
+    try:
+        vswhere = (
+            Path(program_files)
+            / "Microsoft Visual Studio"
+            / "Installer"
+            / "vswhere.exe"
+        ).resolve()
+    except OSError as error:
+        raise BotanBuildError("MSVC developer environment is unavailable") from error
+    if not vswhere.is_file():
+        raise BotanBuildError("MSVC developer environment is unavailable")
+    query = (
+        str(vswhere),
+        "-latest",
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property",
+        "installationPath",
+    )
+    try:
+        query_result = runner(
+            query,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError as error:
+        raise BotanBuildError("MSVC developer environment is unavailable") from error
+    installations = tuple(line.strip() for line in query_result.stdout.splitlines() if line.strip())
+    if query_result.returncode != 0 or len(installations) != 1:
+        raise BotanBuildError("MSVC developer environment is unavailable")
+    try:
+        developer_command = (
+            Path(installations[0]) / "Common7" / "Tools" / "VsDevCmd.bat"
+        ).resolve()
+    except OSError as error:
+        raise BotanBuildError("MSVC developer environment is unavailable") from error
+    if not developer_command.is_file():
+        raise BotanBuildError("MSVC developer environment is unavailable")
+    initialize = (
+        "cmd.exe",
+        "/d",
+        "/c",
+        str(developer_command),
+        "-no_logo",
+        "-arch=x64",
+        "-host_arch=x64",
+        "&&",
+        "set",
+    )
+    try:
+        environment_result = runner(
+            initialize,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError as error:
+        raise BotanBuildError("MSVC developer environment is unavailable") from error
+    if environment_result.returncode != 0:
+        raise BotanBuildError("MSVC developer environment is unavailable")
+    resolved_environment = dict(selected_environment)
+    for line in environment_result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key:
+            resolved_environment[key] = value
+    casefolded = {key.casefold(): value for key, value in resolved_environment.items()}
+    for required in ("PATH", "INCLUDE", "LIB"):
+        value = casefolded.get(required.casefold(), "")
+        if not value:
+            raise BotanBuildError("MSVC developer environment is unavailable")
+        resolved_environment[required] = value
+    return resolved_environment
+
+
+
+#### Resolve NMake against the child developer PATH before CreateProcess starts.
+####
+#### Windows executable lookup occurs in the parent process before the child replacement environment is active, so an
+#### absolute verified tool path is required even though the developer PATH is also passed to the compiler process.
+####
+def resolve_windows_nmake(
+    environment: Mapping[str, str],
+    *,
+    executable_finder: ExecutableFinder = shutil.which,
+) -> Path:
+    found = executable_finder("nmake", path=environment.get("PATH", ""))
+    if not found:
+        raise BotanBuildError("Botan compilation command is unavailable")
+    try:
+        nmake = Path(found).resolve()
+    except OSError as error:
+        raise BotanBuildError("Botan compilation command is unavailable") from error
+    if not nmake.is_file():
+        raise BotanBuildError("Botan compilation command is unavailable")
+    return nmake
+
+
+
 #### Produce the required stable cross-platform Botan configure command.
 ####
 #### The source directory is used as the command working directory; all generated build and installation output remains
 #### under the explicitly supplied output directory.  The target profiles are part of the approved native ABI contract.
 ####
-def configure_command(target: str, source_directory: Path, output_directory: Path) -> tuple[str, ...]:
+def configure_command(
+    target: str,
+    source_directory: Path,
+    output_directory: Path,
+    *,
+    toolchain_options: Sequence[str] = (),
+) -> tuple[str, ...]:
     profile = TARGET_PROFILES.get(target)
     if profile is None:
         raise BotanBuildError("unsupported Botan build target")
     build_directory = output_directory / "work"
+    build_target = "static" if target in MOBILE_TARGETS else "shared"
     return (
         sys.executable,
         str(source_directory / "configure.py"),
@@ -250,9 +399,158 @@ def configure_command(target: str, source_directory: Path, output_directory: Pat
         f"--with-build-dir={build_directory}",
         "--minimized-build",
         "--enable-modules=ffi,twofish",
-        "--build-targets=shared",
+        f"--build-targets={build_target}",
         *profile,
+        *toolchain_options,
     )
+
+
+
+#### Resolve target-specific cross-compilers before any source acquisition or extraction.
+####
+#### Host profiles use the runner's normal compiler lookup. Android binds API 28 to the NDK's exact arm64 compiler;
+#### iOS accepts only Xcode's iPhoneOS clang and SDK as reported by fixed xcrun commands on macOS.
+####
+def resolve_target_toolchain(
+    target: str,
+    *,
+    environment: Mapping[str, str] | None = None,
+    system: str | None = None,
+    runner: CommandRunner = subprocess.run,
+) -> tuple[str, ...]:
+    if target not in TARGET_PROFILES:
+        raise BotanBuildError("unsupported Botan build target")
+    selected_environment = os.environ if environment is None else environment
+    selected_system = platform.system() if system is None else system
+    if target == "android-arm64":
+        ndk_value = selected_environment.get("ANDROID_NDK_ROOT", "")
+        host_tags = {
+            "Windows": "windows-x86_64",
+            "Darwin": "darwin-x86_64",
+            "Linux": "linux-x86_64",
+        }
+        host_tag = host_tags.get(selected_system)
+        if not ndk_value or host_tag is None:
+            raise BotanBuildError("Android NDK toolchain is unavailable")
+        try:
+            compiler = (
+                Path(ndk_value)
+                / "toolchains"
+                / "llvm"
+                / "prebuilt"
+                / host_tag
+                / "bin"
+                / "aarch64-linux-android28-clang++"
+            ).resolve()
+        except OSError as error:
+            raise BotanBuildError("Android NDK toolchain is unavailable") from error
+        if not compiler.is_file():
+            raise BotanBuildError("Android NDK toolchain is unavailable")
+        return (f"--cc-bin={compiler}",)
+    if target != "ios-arm64":
+        return ()
+    if selected_system != "Darwin":
+        raise BotanBuildError("iOS toolchain requires macOS")
+
+    commands = (
+        ("xcrun", "--sdk", "iphoneos", "--find", "clang++"),
+        ("xcrun", "--sdk", "iphoneos", "--show-sdk-path"),
+    )
+    outputs: list[str] = []
+    for command in commands:
+        try:
+            result = runner(command, capture_output=True, check=False, text=True)
+        except OSError as error:
+            raise BotanBuildError("iOS toolchain is unavailable") from error
+        output = result.stdout.strip()
+        if result.returncode != 0 or not output:
+            raise BotanBuildError("iOS toolchain is unavailable")
+        outputs.append(output)
+    try:
+        compiler = Path(outputs[0]).resolve()
+        sdk = Path(outputs[1]).resolve()
+    except OSError as error:
+        raise BotanBuildError("iOS toolchain is unavailable") from error
+    if not compiler.is_file() or not sdk.is_dir():
+        raise BotanBuildError("iOS toolchain is unavailable")
+    return (
+        f"--cc-bin={compiler}",
+        f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk), '-arch', 'arm64'))}",
+    )
+
+
+
+#### Compile and link a foreign-architecture C probe without attempting to execute it.
+####
+#### The probe proves the installed headers and exact library expose the approved raw Twofish FFI. The compiler and
+#### optional ABI flags must come from the already validated target-toolchain result, not a second ambient lookup.
+####
+def link_mobile_smoke_program(
+    target: str,
+    output_directory: Path,
+    library_path: Path,
+    toolchain_options: Sequence[str],
+    *,
+    runner: CommandRunner = subprocess.run,
+) -> Path:
+    if target not in MOBILE_TARGETS:
+        raise BotanBuildError("mobile smoke target is unsupported")
+    compiler_values = tuple(
+        option.removeprefix("--cc-bin=")
+        for option in toolchain_options
+        if option.startswith("--cc-bin=")
+    )
+    abi_values = tuple(
+        option.removeprefix("--cc-abi-flags=")
+        for option in toolchain_options
+        if option.startswith("--cc-abi-flags=")
+    )
+    if len(compiler_values) != 1 or len(abi_values) > 1:
+        raise BotanBuildError("mobile smoke toolchain is invalid")
+    compiler = Path(compiler_values[0])
+    include_directory = output_directory / "include" / "botan-3"
+    if not compiler.is_file() or not library_path.is_file() or not include_directory.is_dir():
+        raise BotanBuildError("mobile smoke inputs are unavailable")
+    try:
+        abi_arguments = tuple(shlex.split(abi_values[0])) if abi_values else ()
+    except ValueError as error:
+        raise BotanBuildError("mobile smoke toolchain is invalid") from error
+
+    smoke_directory = output_directory / "smoke"
+    source_path = smoke_directory / "botan-ffi-smoke.c"
+    linked_path = smoke_directory / "botan-ffi-smoke"
+    try:
+        smoke_directory.mkdir(parents=True, exist_ok=True)
+        source_path.write_text(BOTAN_FFI_SMOKE_SOURCE, encoding="utf-8", newline="\n")
+    except OSError as error:
+        raise BotanBuildError("mobile smoke preparation failed") from error
+    command = (
+        str(compiler),
+        *abi_arguments,
+        "-std=c11",
+        f"-I{include_directory}",
+        "-x",
+        "c",
+        str(source_path),
+        "-x",
+        "none",
+        str(library_path),
+        "-o",
+        str(linked_path),
+    )
+    try:
+        result = runner(
+            command,
+            cwd=smoke_directory,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError as error:
+        raise BotanBuildError("mobile smoke compiler is unavailable") from error
+    if result.returncode != 0 or not linked_path.is_file():
+        raise BotanBuildError("mobile smoke link failed")
+    return linked_path
 
 
 
@@ -260,10 +558,19 @@ def configure_command(target: str, source_directory: Path, output_directory: Pat
 ####
 def host_target() -> str:
     system = platform.system()
-    host_targets = {"Windows": "windows", "Darwin": "macos", "Linux": "linux"}
-    target = host_targets.get(system)
+    machine = platform.machine().casefold()
+    host_targets = {
+        ("Windows", "amd64"): "windows-x86_64",
+        ("Windows", "x86_64"): "windows-x86_64",
+        ("Darwin", "arm64"): "macos-arm64",
+        ("Linux", "x86_64"): "linux-x86_64",
+        ("Linux", "amd64"): "linux-x86_64",
+    }
+    target = host_targets.get((system, machine))
     if target is None:
-        raise BotanBuildError("unsupported Botan host platform")
+        if system not in {"Windows", "Darwin", "Linux"}:
+            raise BotanBuildError("unsupported Botan host platform")
+        raise BotanBuildError("unsupported Botan host architecture")
     return target
 
 
@@ -272,7 +579,7 @@ def host_target() -> str:
 ####
 def build_command(target: str, build_directory: Path) -> tuple[str, ...]:
     makefile = build_directory / "Makefile"
-    if target == "windows":
+    if target == "windows-x86_64":
         return ("nmake", "/f", str(makefile), "install")
     return ("make", "-f", str(makefile), "install")
 
@@ -301,6 +608,23 @@ def find_shared_library(output_directory: Path) -> Path:
 
 
 
+#### Locate the single installed static archive used only by mobile link gates.
+####
+def find_static_library(output_directory: Path) -> Path:
+    try:
+        candidates = tuple(
+            path
+            for path in (output_directory / "lib").glob("libbotan-3.a")
+            if path.is_file()
+        )
+    except OSError as error:
+        raise BotanBuildError("Botan static library discovery failed") from error
+    if len(candidates) != 1:
+        raise BotanBuildError("Botan static library was not produced")
+    return candidates[0]
+
+
+
 #### Resolve caller-controlled CLI paths without leaking filesystem exceptions at the command boundary.
 ####
 #### Path resolution can itself fail before the build starts.  Preserve the operating-system error as the typed cause
@@ -314,12 +638,22 @@ def resolve_cli_paths(output_directory: Path, cache_directory: Path) -> tuple[Pa
 
 
 
-#### Build the verified source for one target and return its installed shared-library path.
+#### Build the verified source for one target and return its installed library path.
 ####
 #### The caller owns the output directory selection.  This routine keeps sources in the ignored cache, configures a
-#### minimized shared build, suppresses compiler chatter, and reports a stable failure category if a tool exits nonzero.
+#### minimized host-shared or mobile-static build, suppresses compiler chatter, and reports a stable failure category
+#### if a tool exits nonzero.
 ####
-def build_botan(target: str, output_directory: Path, cache_directory: Path) -> Path:
+def build_botan(
+    target: str,
+    output_directory: Path,
+    cache_directory: Path,
+    *,
+    smoke_link: bool = False,
+) -> Path:
+    if smoke_link and target not in MOBILE_TARGETS:
+        raise BotanBuildError("mobile smoke target is unsupported")
+    toolchain_options = resolve_target_toolchain(target)
     pin = load_source_pin(PIN_PATH)
     archive_path = download_verified_archive(pin, cache_directory)
     with extract_fresh_verified_source(archive_path, pin, cache_directory) as source_directory:
@@ -329,7 +663,12 @@ def build_botan(target: str, output_directory: Path, cache_directory: Path) -> P
             raise BotanBuildError("Botan output directory preparation failed") from error
         toolchain_source_directory = windows_toolchain_path(source_directory)
         toolchain_output_directory = windows_toolchain_path(output_directory)
-        command = configure_command(target, toolchain_source_directory, toolchain_output_directory)
+        command = configure_command(
+            target,
+            toolchain_source_directory,
+            toolchain_output_directory,
+            toolchain_options=toolchain_options,
+        )
         try:
             configure_result = subprocess.run(  # nosec B603
                 command,
@@ -342,19 +681,38 @@ def build_botan(target: str, output_directory: Path, cache_directory: Path) -> P
             raise BotanBuildError("Botan configuration command is unavailable") from error
         if configure_result.returncode != 0:
             raise BotanBuildError("Botan configuration failed")
+        compile_command = build_command(target, toolchain_output_directory / "work")
+        compile_environment = None
+        if target == "windows-x86_64":
+            compile_environment = windows_msvc_environment()
+            nmake = resolve_windows_nmake(compile_environment)
+            compile_command = (str(nmake), *compile_command[1:])
         try:
             compile_result = subprocess.run(  # nosec B603
-                build_command(target, toolchain_output_directory / "work"),
+                compile_command,
                 cwd=toolchain_source_directory,
                 capture_output=True,
                 check=False,
+                env=compile_environment,
                 text=True,
             )
         except OSError as error:
             raise BotanBuildError("Botan compilation command is unavailable") from error
         if compile_result.returncode != 0:
             raise BotanBuildError("Botan compilation failed")
-        return find_shared_library(output_directory)
+        library_path = (
+            find_static_library(output_directory)
+            if target in MOBILE_TARGETS
+            else find_shared_library(output_directory)
+        )
+        if smoke_link:
+            link_mobile_smoke_program(
+                target,
+                output_directory,
+                library_path,
+                toolchain_options,
+            )
+        return library_path
 
 
 
@@ -366,6 +724,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=Path(".cache/botan"))
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--smoke-link", action="store_true")
     arguments = parser.parse_args(argv)
     try:
         target_argument = cast(str, arguments.target)
@@ -378,6 +737,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             target,
             output_directory,
             cache_directory,
+            smoke_link=cast(bool, arguments.smoke_link),
         )
     except BotanBuildError as error:
         print(error, file=sys.stderr)

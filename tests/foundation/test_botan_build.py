@@ -6,6 +6,8 @@ import hashlib
 import io
 import json
 import platform
+import shlex
+import subprocess
 import tarfile
 from pathlib import Path
 
@@ -200,7 +202,11 @@ def test_main_writes_github_output_library(
     library.parent.mkdir(parents=True)
     library.write_bytes(b"synthetic shared library")
     github_output = tmp_path / "github-output.txt"
-    monkeypatch.setattr(botan_build, "build_botan", lambda *_arguments: library)
+    monkeypatch.setattr(
+        botan_build,
+        "build_botan",
+        lambda *_arguments, **_keywords: library,
+    )
 
     result = main(
         [
@@ -241,7 +247,7 @@ def test_build_reports_output_creation_failure(tmp_path: Path, monkeypatch: pyte
     output_directory.write_text("blocking file", encoding="utf-8")
 
     with pytest.raises(BotanBuildError, match="Botan output directory preparation failed"):
-        build_botan("linux", output_directory, cache_directory)
+        build_botan("linux-x86_64", output_directory, cache_directory)
 
 
 
@@ -335,6 +341,105 @@ def test_windows_toolchain_path_removes_spaces(tmp_path: Path) -> None:
 
 
 
+#### Import the installed MSVC developer environment without mutating the parent process.
+####
+def test_windows_msvc_environment_uses_verified_visual_studio_tools(tmp_path: Path) -> None:
+    program_files = tmp_path / "Program Files (x86)"
+    vswhere = program_files / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    installation = tmp_path / "Microsoft Visual Studio" / "18" / "Community"
+    developer_command = installation / "Common7" / "Tools" / "VsDevCmd.bat"
+    vswhere.parent.mkdir(parents=True)
+    vswhere.write_bytes(b"synthetic vswhere")
+    developer_command.parent.mkdir(parents=True)
+    developer_command.write_bytes(b"synthetic developer command")
+    commands: list[tuple[str, ...]] = []
+
+
+
+    #### Record Visual Studio environment-discovery commands and return fixtures.
+    ####
+    def run_command(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        stdout = (
+            f"{installation}\n"
+            if command[0] == str(vswhere)
+            else "Path=C:\\synthetic\\msvc\nINCLUDE=C:\\synthetic\\include\nLIB=C:\\synthetic\\lib\n"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    resolved = botan_build.windows_msvc_environment(
+        environment={"ProgramFiles(x86)": str(program_files), "SYSTEMROOT": "C:\\Windows"},
+        runner=run_command,
+    )
+
+    assert resolved["PATH"] == "C:\\synthetic\\msvc"
+    assert resolved["INCLUDE"] == "C:\\synthetic\\include"
+    assert resolved["LIB"] == "C:\\synthetic\\lib"
+    assert commands[0][0] == str(vswhere)
+    assert str(developer_command) in commands[1]
+
+
+
+#### Reject an incomplete developer environment before invoking NMake.
+####
+def test_windows_msvc_environment_requires_compile_and_link_paths(tmp_path: Path) -> None:
+    program_files = tmp_path / "Program Files (x86)"
+    vswhere = program_files / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    installation = tmp_path / "Visual Studio"
+    developer_command = installation / "Common7" / "Tools" / "VsDevCmd.bat"
+    vswhere.parent.mkdir(parents=True)
+    vswhere.write_bytes(b"synthetic vswhere")
+    developer_command.parent.mkdir(parents=True)
+    developer_command.write_bytes(b"synthetic developer command")
+
+
+
+    #### Return an incomplete Visual Studio developer environment fixture.
+    ####
+    def run_command(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        stdout = f"{installation}\n" if command[0] == str(vswhere) else "Path=C:\\synthetic\\msvc\n"
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    with pytest.raises(BotanBuildError, match="MSVC developer environment is unavailable"):
+        botan_build.windows_msvc_environment(
+            environment={"ProgramFiles(x86)": str(program_files)},
+            runner=run_command,
+        )
+
+
+
+#### Resolve NMake explicitly because CreateProcess does not search the child's replacement PATH.
+####
+def test_windows_nmake_resolution_uses_developer_environment_path(tmp_path: Path) -> None:
+    nmake = tmp_path / "Visual Studio" / "nmake.exe"
+    nmake.parent.mkdir(parents=True)
+    nmake.write_bytes(b"synthetic nmake")
+    calls: list[tuple[str, str | None]] = []
+
+
+
+    #### Record the executable lookup and return the synthetic nmake path.
+    ####
+    def find_executable(name: str, *, path: str | None = None) -> str | None:
+        calls.append((name, path))
+        return str(nmake)
+
+    resolved = botan_build.resolve_windows_nmake(
+        {"PATH": "C:\\synthetic\\msvc"},
+        executable_finder=find_executable,
+    )
+
+    assert resolved == nmake
+    assert calls == [("nmake", "C:\\synthetic\\msvc")]
+
+
+
 #### Generate the approved compiler, operating-system, and CPU profile for every target.
 ####
 #### A profile substitution can silently produce an unusable binary or omit the
@@ -343,11 +448,11 @@ def test_windows_toolchain_path_removes_spaces(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("target", "expected_profile"),
     (
-        ("windows", ("--cc=msvc", "--os=windows", "--cpu=x86_64")),
-        ("macos", ("--cc=clang", "--os=darwin")),
-        ("linux", ("--cc=gcc", "--os=linux")),
-        ("android", ("--cc=clang", "--os=android", "--cpu=arm64")),
-        ("ios", ("--cc=clang", "--os=ios", "--cpu=arm64")),
+        ("windows-x86_64", ("--cc=msvc", "--os=windows", "--cpu=x86_64")),
+        ("macos-arm64", ("--cc=clang", "--os=darwin", "--cpu=arm64")),
+        ("linux-x86_64", ("--cc=gcc", "--os=linux", "--cpu=x86_64")),
+        ("android-arm64", ("--cc=clang", "--os=android", "--cpu=arm64")),
+        ("ios-arm64", ("--cc=clang", "--os=ios", "--cpu=arm64")),
     ),
 )
 def test_configure_command_uses_approved_target_profile(
@@ -363,4 +468,345 @@ def test_configure_command_uses_approved_target_profile(
     assert all(option in command for option in expected_profile)
     assert "--minimized-build" in command
     assert "--enable-modules=ffi,twofish" in command
-    assert "--build-targets=shared" in command
+    expected_build_target = (
+        "--build-targets=static"
+        if target in {"android-arm64", "ios-arm64"}
+        else "--build-targets=shared"
+    )
+    assert expected_build_target in command
+    assert not any("tls" in argument for argument in command)
+
+
+
+#### Select the one installed static archive used by mobile link smoke gates.
+####
+def test_find_static_library_selects_installed_archive(tmp_path: Path) -> None:
+    library = tmp_path / "botan-output" / "lib" / "libbotan-3.a"
+    library.parent.mkdir(parents=True)
+    library.write_bytes(b"synthetic static archive")
+
+    assert botan_build.find_static_library(library.parents[1]) == library
+
+
+
+#### Resolve Android API 28's exact arm64 compiler below the caller-supplied NDK.
+####
+def test_android_toolchain_resolves_pinned_api_compiler(tmp_path: Path) -> None:
+    ndk_root = tmp_path / "android-ndk"
+    compiler = (
+        ndk_root
+        / "toolchains"
+        / "llvm"
+        / "prebuilt"
+        / "linux-x86_64"
+        / "bin"
+        / "aarch64-linux-android28-clang++"
+    )
+    compiler.parent.mkdir(parents=True)
+    compiler.write_bytes(b"synthetic compiler")
+
+    options = botan_build.resolve_target_toolchain(
+        "android-arm64",
+        environment={"ANDROID_NDK_ROOT": str(ndk_root)},
+        system="Linux",
+    )
+
+    assert options == (f"--cc-bin={compiler.resolve()}",)
+
+
+
+#### Fail a missing Android toolchain before attempting source acquisition.
+####
+def test_android_toolchain_failure_precedes_source_acquisition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ANDROID_NDK_ROOT", raising=False)
+    monkeypatch.setattr(
+        botan_build,
+        "load_source_pin",
+        lambda _path: pytest.fail("source pin must not be read"),
+    )
+
+    with pytest.raises(BotanBuildError, match="Android NDK toolchain is unavailable"):
+        build_botan("android-arm64", tmp_path / "output", tmp_path / "cache")
+
+
+
+#### Resolve iPhoneOS clang and its SDK through fixed xcrun commands.
+####
+def test_ios_toolchain_resolves_clang_and_sdk(tmp_path: Path) -> None:
+    compiler = tmp_path / "Xcode" / "clang++"
+    sdk = tmp_path / "Xcode" / "iPhoneOS.sdk"
+    compiler.parent.mkdir(parents=True)
+    compiler.write_bytes(b"synthetic compiler")
+    sdk.mkdir()
+    commands: list[tuple[str, ...]] = []
+
+
+
+    #### Record xcrun discovery commands and return synthetic tool paths.
+    ####
+    def run_xcrun(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        output = str(compiler) if command[-1] == "clang++" else str(sdk)
+        return subprocess.CompletedProcess(command, 0, stdout=f"{output}\n", stderr="")
+
+    options = botan_build.resolve_target_toolchain(
+        "ios-arm64",
+        environment={},
+        system="Darwin",
+        runner=run_xcrun,
+    )
+
+    assert commands == [
+        ("xcrun", "--sdk", "iphoneos", "--find", "clang++"),
+        ("xcrun", "--sdk", "iphoneos", "--show-sdk-path"),
+    ]
+    assert options == (
+        f"--cc-bin={compiler.resolve()}",
+        f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk.resolve()), '-arch', 'arm64'))}",
+    )
+
+
+
+#### Reject iOS cross-build requests on a non-macOS host before running xcrun.
+####
+def test_ios_toolchain_rejects_non_macos_host() -> None:
+
+
+
+    #### Fail if the rejected request attempts to invoke xcrun.
+    ####
+    def reject_run(*_arguments: object, **_keywords: object) -> subprocess.CompletedProcess[str]:
+        pytest.fail("xcrun must not run outside macOS")
+
+    with pytest.raises(BotanBuildError, match="iOS toolchain requires macOS"):
+        botan_build.resolve_target_toolchain(
+            "ios-arm64",
+            environment={},
+            system="Linux",
+            runner=reject_run,
+        )
+
+
+
+#### Include only the already resolved target-specific compiler options in configuration.
+####
+def test_configure_command_appends_resolved_toolchain_options() -> None:
+    options = (
+        "--cc-bin=/synthetic/clang++",
+        "--cc-abi-flags=-isysroot /synthetic/iPhoneOS.sdk -arch arm64",
+    )
+
+    command = configure_command(
+        "ios-arm64",
+        Path("/synthetic/botan-source"),
+        Path("/synthetic/botan-output"),
+        toolchain_options=options,
+    )
+
+    assert command[-2:] == options
+
+
+
+#### Map only the host architectures represented by the approved native profiles.
+####
+@pytest.mark.parametrize(
+    ("system", "machine", "expected"),
+    (
+        ("Windows", "AMD64", "windows-x86_64"),
+        ("Darwin", "arm64", "macos-arm64"),
+        ("Linux", "x86_64", "linux-x86_64"),
+    ),
+)
+def test_host_target_requires_approved_architecture(
+    system: str,
+    machine: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(platform, "system", lambda: system)
+    monkeypatch.setattr(platform, "machine", lambda: machine)
+
+    assert botan_build.host_target() == expected
+
+
+
+#### Reject an Intel macOS runner rather than silently producing the wrong host ABI.
+####
+def test_host_target_rejects_unapproved_architecture(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+
+    with pytest.raises(BotanBuildError, match="unsupported Botan host architecture"):
+        botan_build.host_target()
+
+
+
+#### Compile and link a generated C probe against the exact mobile Botan library.
+####
+def test_mobile_smoke_link_uses_twofish_ffi_and_resolved_toolchain(tmp_path: Path) -> None:
+    output_directory = tmp_path / "botan-output"
+    include_directory = output_directory / "include" / "botan-3" / "botan"
+    include_directory.mkdir(parents=True)
+    (include_directory / "ffi.h").write_text("synthetic header", encoding="utf-8")
+    library = output_directory / "lib" / "libbotan-3.a"
+    library.parent.mkdir()
+    library.write_bytes(b"synthetic library")
+    compiler = tmp_path / "ndk" / "aarch64-linux-android28-clang++"
+    compiler.parent.mkdir()
+    compiler.write_bytes(b"synthetic compiler")
+    commands: list[tuple[str, ...]] = []
+
+
+
+    #### Record the Android compiler invocation and synthesize its output.
+    ####
+    def run_compiler(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        linked_output = Path(command[command.index("-o") + 1])
+        linked_output.write_bytes(b"synthetic linked probe")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    linked_probe = botan_build.link_mobile_smoke_program(
+        "android-arm64",
+        output_directory,
+        library,
+        (f"--cc-bin={compiler.resolve()}",),
+        runner=run_compiler,
+    )
+
+    source = (output_directory / "smoke" / "botan-ffi-smoke.c").read_text(encoding="utf-8")
+    command = commands[0]
+    assert linked_probe == output_directory / "smoke" / "botan-ffi-smoke"
+    assert linked_probe.is_file()
+    assert command[0] == str(compiler.resolve())
+    source_index = command.index(str(output_directory / "smoke" / "botan-ffi-smoke.c"))
+    library_index = command.index(str(library))
+    assert command[source_index - 2:source_index] == ("-x", "c")
+    assert command[library_index - 2:library_index] == ("-x", "none")
+    assert f"-I{output_directory / 'include' / 'botan-3'}" in command
+    assert str(library) in command
+    assert "botan_block_cipher_init" in source
+    assert "botan_block_cipher_set_key" in source
+    assert "botan_block_cipher_encrypt_blocks" in source
+    assert "botan_block_cipher_destroy" in source
+
+
+
+#### Preserve iPhoneOS sysroot and architecture flags in the final link command.
+####
+def test_ios_smoke_link_keeps_resolved_abi_flags(tmp_path: Path) -> None:
+    output_directory = tmp_path / "botan-output"
+    (output_directory / "include" / "botan-3" / "botan").mkdir(parents=True)
+    library = output_directory / "lib" / "libbotan-3.a"
+    library.parent.mkdir()
+    library.write_bytes(b"synthetic library")
+    compiler = tmp_path / "Xcode" / "clang++"
+    compiler.parent.mkdir()
+    compiler.write_bytes(b"synthetic compiler")
+    sdk = tmp_path / "Xcode" / "iPhoneOS.sdk"
+    sdk.mkdir()
+    commands: list[tuple[str, ...]] = []
+
+
+
+    #### Record the iOS compiler invocation and synthesize its output.
+    ####
+    def run_compiler(
+        command: tuple[str, ...],
+        **_arguments: object,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        Path(command[command.index("-o") + 1]).write_bytes(b"linked")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    botan_build.link_mobile_smoke_program(
+        "ios-arm64",
+        output_directory,
+        library,
+        (
+            f"--cc-bin={compiler.resolve()}",
+            f"--cc-abi-flags={shlex.join(('-isysroot', str(sdk.resolve()), '-arch', 'arm64'))}",
+        ),
+        runner=run_compiler,
+    )
+
+    assert commands[0][1:5] == ("-isysroot", str(sdk.resolve()), "-arch", "arm64")
+
+
+
+#### Reject a smoke-link request for a host profile before writing a probe.
+####
+def test_mobile_smoke_link_rejects_host_target(tmp_path: Path) -> None:
+    with pytest.raises(BotanBuildError, match="mobile smoke target is unsupported"):
+        botan_build.link_mobile_smoke_program(
+            "linux-x86_64",
+            tmp_path / "output",
+            tmp_path / "libbotan-3.so",
+            (),
+        )
+
+
+
+#### Forward the explicit smoke-link request only through the mobile build invocation.
+####
+def test_main_forwards_mobile_smoke_link(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    library = (tmp_path / "output" / "lib" / "libbotan-3.a").resolve()
+    library.parent.mkdir(parents=True)
+    library.write_bytes(b"synthetic library")
+    calls: list[tuple[str, bool]] = []
+
+
+
+    #### Record CLI build forwarding and return the synthetic library.
+    ####
+    def fake_build(
+        target: str,
+        _output: Path,
+        _cache: Path,
+        *,
+        smoke_link: bool = False,
+    ) -> Path:
+        calls.append((target, smoke_link))
+        return library
+
+    monkeypatch.setattr(botan_build, "build_botan", fake_build)
+
+    result = main(
+        [
+            "--target",
+            "android-arm64",
+            "--output",
+            str(tmp_path / "output"),
+            "--smoke-link",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [("android-arm64", True)]
+    assert capsys.readouterr().out == f"{library} Botan 3.13.0\n"
+
+
+
+#### Keep both mobile compile/link jobs and their platform toolchain handoffs in hosted CI.
+####
+def test_workflow_contains_android_and_ios_smoke_jobs() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "foundation.yml").read_text(encoding="utf-8")
+
+    assert "android-cross:" in workflow
+    assert "$env:ANDROID_NDK_ROOT = $env:ANDROID_NDK_LATEST_HOME" in workflow
+    assert "--target android-arm64 --output build/botan-android --smoke-link" in workflow
+    assert "ios-cross:" in workflow
+    assert "--target ios-arm64 --output build/botan-ios --smoke-link" in workflow
