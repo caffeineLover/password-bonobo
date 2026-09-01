@@ -150,6 +150,11 @@ directory remains Markdown-only as well.  Ruff, mypy, structure, and REUSE were 
 current action is to stage the exact policy, generator, test, ledger, memory, and three legal-LaTeX deletion changes;
 run tracked-file and staged whitespace checks; inspect the staged patch; and commit this bounded checkpoint.
 
+The legal Markdown-only policy, three tracked LaTeX deletions, generator/test enforcement, and fuzz-corpus provenance
+repair are committed as `2be2512`.  The three ignored legal PDFs were deleted before that commit.  All recorded gates
+above are green, and no LaTeX or PDF was generated.  After restart or continuation, reconcile a clean tree and proceed
+with Task 13 Step 1 in the exact order below.
+
 Continue in this exact order:
 
 1. Reconcile `git status`, commits `b77077c` and `08c2107`, and the four Markdown-only Gorilla records against this
