@@ -38,6 +38,23 @@ def test_document_manifest_discovers_every_pair(tmp_path: Path) -> None:
 
 
 
+#### Keep the live project-memory checkpoint as Markdown-only agent state rather than a generated review document.
+####
+def test_document_manifest_excludes_markdown_only_project_memory(tmp_path: Path) -> None:
+    docs_root = tmp_path / "docs"
+    docs_root.mkdir()
+    (docs_root / "PROJECT_MEMORY.md").write_text("# Project Memory\n", encoding="utf-8")
+    guide_path = docs_root / "guide.md"
+    guide_path.write_text("# Guide\n", encoding="utf-8")
+    guide_path.with_suffix(".tex").write_text("generated\n", encoding="utf-8")
+
+    specs = discover_document_specs(tmp_path)
+
+    assert check_document_coverage(tmp_path) == ()
+    assert tuple(spec.markdown_relative_path.as_posix() for spec in specs) == ("docs/guide.md",)
+
+
+
 #### Honor Git's document boundary while retaining non-ignored untracked authoring input.
 ####
 def test_document_manifest_honors_git_document_boundary(tmp_path: Path) -> None:
@@ -83,6 +100,28 @@ def test_document_manifest_honors_git_document_boundary(tmp_path: Path) -> None:
         "docs/draft.md",
         "docs/owned.md",
     )
+
+
+
+#### Ignore cached paths whose paired document sources were deleted from the working tree but are not yet staged.
+####
+def test_document_manifest_ignores_unstaged_paired_deletions(tmp_path: Path) -> None:
+    subprocess.run(("git", "init", "--quiet", str(tmp_path)), check=True)
+    docs_root = tmp_path / "docs"
+    docs_root.mkdir()
+    markdown_path = docs_root / "retired.md"
+    tex_path = markdown_path.with_suffix(".tex")
+    markdown_path.write_text("# Retired\n", encoding="utf-8")
+    tex_path.write_text("generated\n", encoding="utf-8")
+    subprocess.run(
+        ("git", "-C", str(tmp_path), "add", "docs/retired.md", "docs/retired.tex"),
+        check=True,
+    )
+    markdown_path.unlink()
+    tex_path.unlink()
+
+    assert check_document_coverage(tmp_path) == ()
+    assert discover_document_specs(tmp_path) == ()
 
 
 

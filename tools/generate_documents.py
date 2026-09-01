@@ -34,6 +34,7 @@ LATEX_WARNING = re.compile(
 )
 MISSING_TEX_MESSAGE = "Markdown document has no same-basename repository-owned LaTeX source"
 MISSING_MARKDOWN_MESSAGE = "LaTeX document has no same-basename repository-owned Markdown source"
+MARKDOWN_ONLY_DOCUMENTS = frozenset({Path("docs/PROJECT_MEMORY.md")})
 
 
 
@@ -77,6 +78,16 @@ class DocumentManifestEntry:
 ####
 def _is_document_tex(relative_path: Path) -> bool:
     return relative_path.parent != Path("docs/pandoc")
+
+
+
+#### Return whether one source participates in exact LaTeX and review-PDF generation.
+####
+#### The live project-memory checkpoint is intentionally Markdown-only because agents update it throughout active work.
+####
+def _is_generated_document_source(repository_root: Path, source_path: Path) -> bool:
+    relative_path = source_path.relative_to(repository_root)
+    return relative_path.with_suffix(".md") not in MARKDOWN_ONLY_DOCUMENTS
 
 
 
@@ -162,11 +173,20 @@ def _git_document_source_paths(repository_root: Path) -> tuple[Path, ...] | None
 def _document_source_paths(repository_root: Path) -> tuple[Path, ...]:
     git_paths = _git_document_source_paths(repository_root)
     if git_paths is not None:
-        return git_paths
+        return tuple(
+            path
+            for path in git_paths
+            if path.is_file()
+            if _is_generated_document_source(repository_root, path)
+        )
     docs_root = repository_root / "docs"
     if not docs_root.is_dir():
         return ()
-    return tuple(sorted((*docs_root.rglob("*.md"), *docs_root.rglob("*.tex"))))
+    return tuple(
+        path
+        for path in sorted((*docs_root.rglob("*.md"), *docs_root.rglob("*.tex")))
+        if _is_generated_document_source(repository_root, path)
+    )
 
 
 

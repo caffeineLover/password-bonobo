@@ -13,25 +13,53 @@ reviewed public service facade.
 
 The package is now version `0.1.0`.  `VaultService` supports new-vault creation, open/save, master-passphrase rotation,
 version-targeted export, recovery discovery, and explicit recovery restore while retaining authenticated baseline and
-lossless-document guarantees.  Tasks 12 through 15 still own property/fuzz/resource evidence, interoperability,
-platform CI, documentation, and the release checkpoint.  Do not begin client or URL-audit behavior ahead of that
-boundary.
+lossless-document guarantees.  Task 12 is now active and Tasks 13 through 15 still own interoperability, platform CI,
+documentation, and the release checkpoint.  Do not begin client or URL-audit behavior ahead of that boundary.
 
-## Active work
+## Active work and exact continuation order
 
-Task 11 is complete at implementation commit `8c2b30e` plus the reboot handoff checkpoint containing this record.  Its
-test-first amendment added minimal
-new-envelope reading/writing, no-replace publication, and published-baseline advancement primitives before assembling
-`service.py`; the facade does not bypass private constructors or duplicate publication logic.  The complete local test
-suite on 2026-09-01 was 578 passed and 12 platform-specific skips under CPython 3.14.7.  Independent review drove
-additional proofs for publication-only save completion, destination-bound recovery, stable in-session handles,
-same-version unknown-field export, iteration-policy preservation, early candidate cleanup, committed-state adoption
-after a post-replace storage report, and retryable cleanup of still-live retired plaintext owners.  The final reviewer
-reported no Critical or Important findings.  The 19-test focused facade/public/package selection, Ruff, strict mypy,
-structure, REUSE, provenance, source/wheel builds, and distribution inspection passed; the full suite and static gates
-were rerun after the final review fix.  Task 12 is next after optionally repeating the packaging/security gates recorded
-in [the reboot handoff](HANDOFF.md).  In the current shell, invoke uv as `python -m uv` because the module is installed
-but the `uv` console executable is not discoverable on `PATH`.
+Task 11 is complete at implementation commit `8c2b30e` plus its final project-memory checkpoint.  Independent review
+reported no Critical or Important findings.  On 2026-09-01, the resumed session reconfirmed a clean starting tree and a
+full baseline of 578 passed with 12 platform-specific skips under CPython 3.14.7.  The current maintenance checkpoint
+consolidates all future handoffs into this Markdown file, removes every `HANDOFF` artifact plus generated
+`PROJECT_MEMORY` formats, and excludes this live memory from exact LaTeX/PDF generation.  Its focused generator test was
+observed failing before implementation and then passed.  The first exact `--write` run then exposed a distinct
+Git-discovery defect: cached paths for unstaged deletions were returned after the files no longer existed, causing
+`discover_document_specs()` to open deleted `docs/HANDOFF.md`.  The root cause is confirmed by `git ls-files` returning
+all three deleted tracked paths while `Test-Path` reports false; add a regression for unstaged paired deletions, filter
+discovery to existing files, observe red/green, and rerun the exact generator before proceeding.  That regression was
+observed failing with the same `FileNotFoundError` and now passes after the minimal existence filter; the exact
+`--write` rerun completed for 17 paired documents and its manifest contains zero `HANDOFF` or `PROJECT_MEMORY` sources.
+The non-mutating verification then completed for the same 17-document corpus.  The complete continuity gate reports 580
+passed and 12 platform-specific skips, Ruff clean, strict mypy clean across 60 source files, structure clean, provenance
+current, compatibility at 66 behaviors/45 features/55 oracles, tracked-file policy clean, REUSE 3.3 at 113/113 files,
+and a clean whitespace check.  The current action is to inspect and commit this standalone continuity checkpoint, then
+begin Task 12 Step 1.
+
+Continue in this exact order:
+
+1. Finish and verify the continuity checkpoint: update the paired generated sources affected by durable-state edits,
+   run the focused document-generation tests, structure check, REUSE lint, and document verification, inspect Git, and
+   commit this checkpoint independently.
+2. Execute Task 12 Step 1: add Hypothesis `>=6.161,<7`, update the lock and dependency provenance, review the complete
+   transitive lock delta, and run the provenance checks.
+3. Execute Task 12 Steps 2 and 3 test-first: add failing property/resource tests, confirm their expected failures, then
+   implement typed strategies for supported versions, ordered known/unknown fields, duplicates, mandatory records,
+   custom properties, targeted edits, and bounded synthetic payloads.
+4. Execute Task 12 Step 4 test-first: add the dependency-free fuzz target, deterministic seed corpus, and mutation
+   runner with typed-failure, deadline, and temporary-artifact enforcement.
+5. Execute Task 12 Step 5 test-first: prove opaque large-field open/no-edit-save memory bounds and absence of plaintext
+   fragments in temporary and recovery storage.
+6. Run Task 12 focused generative/fuzz/resource gates, the deterministic 10,000-iteration corpus run, the full quality
+   suite, and document/provenance/build checks; update this file with exact evidence and commit Task 12 independently.
+
+After Task 12, continue Tasks 13, 14, and 15 from the approved plan in order: independent synthetic interoperability,
+platform/release automation and operational documentation, then the final complete-core release checkpoint.  Do not
+start client applications, provider coordination, or URL-audit behavior before Task 15 closes.
+
+In the current shell, invoke uv as `python -m uv` because the module is installed but the `uv` console executable is not
+discoverable on `PATH`.  Update this section before and after every meaningful step above, before long-running gates,
+and immediately before any interruption; always record the last proven result and the next unambiguous action.
 
 ## Required read order
 
@@ -54,6 +82,7 @@ upstream content.
 - Bonobo-authored material is GPL-3.0-or-later.  External contributions remain closed while contributor permissions and
   any App Store distribution exception are unresolved.
 - The tracked exact generator produces review PDFs and renders.  Canonical Markdown and same-basename LaTeX are
-  committed; PDFs, manifests, logs, and renders remain ignored.
+  committed for substantive documents; this live project memory is an explicit Markdown-only exception.  PDFs,
+  manifests, logs, and renders remain ignored.
 - The compatibility contract distinguishes Excluded Gorilla loss characterization from Bonobo's authoritative
   transactional no-loss behavior; the typed compatibility gate must remain green as the dossier evolves.

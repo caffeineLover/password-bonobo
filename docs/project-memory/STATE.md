@@ -36,14 +36,14 @@ a reviewed public service facade.  The package version is `0.1.0`.
   destination-bound, handles remain stable within a live session, same-version unknown fields export losslessly,
   passphrase rotation cannot weaken iterations, early destination failures remove encrypted candidates, post-replace
   failures reconcile the live session to committed disk state, and still-live retired owners remain retryable.
-- Task 11 is recorded by implementation commit `8c2b30e` and the reboot handoff checkpoint containing this state; final
-  independent review reported no Critical or Important findings.
+- Task 11 is recorded by implementation commit `8c2b30e` and its final project-memory checkpoint; final independent
+  review reported no Critical or Important findings.
 
 ## Active work
 
-Task 12 is next after consulting `docs/HANDOFF.md` and, if desired, repeating the listed packaging and security gates:
-add property, fuzz, corruption, and resource-safety evidence around the now-public lossless core.  Preserve the
-established API and security boundaries, keep fixtures synthetic, and commit each approved checkpoint independently.
+Task 12 is active after consulting `docs/PROJECT_MEMORY.md`: add property, fuzz, corruption, and resource-safety
+evidence around the now-public lossless core.  Preserve the established API and security boundaries, keep fixtures
+synthetic, and commit each approved checkpoint independently.
 
 ## Active risks
 
