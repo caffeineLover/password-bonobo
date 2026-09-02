@@ -39,12 +39,10 @@ macOS reports the expected 23 platform-stub mypy errors; and the hosted Windows 
 preparation across 157 tests. Commit `403f638` resolves the macOS failure with narrow typed native-module facades while
 preserving the runtime modules and flags. It is integrated and pushed on `main` with checkpoint `68c1317`.
 
-Hosted run `33564705673` confirmed macOS strict mypy now passes. Android passed again; Ubuntu retained the expected
-shared-library ambiguity; iOS retained the missing C++ runtime link failure; and macOS and Windows reached pytest but
-failed 153 and 157 tests respectively at private artifact preparation. Commit `f32bd0b` reproduces Ubuntu's exact
-unversioned/soname/versioned candidate set in a red regression and deterministically prefers the canonical installed
-linker name while retaining absent/ambiguous failure behavior. It is fast-forwarded into local `main`, verified there,
-and pushed to `origin/main`; the completed worktree and feature branch have been removed.
+Hosted run `33576400850` confirms pushed commit `f32bd0b` fixes Ubuntu's shared-library discovery: the build and all
+static checks pass and pytest now runs. Android passes. iOS retains the missing C++ runtime link failure. The desktop
+pytest results expose three bounded platform issues: Ubuntu reports 2 failures after 645 passes and 19 skips; macOS
+reports 153 failures after 496 passes and 17 skips; Windows reports 157 failures after 500 passes and 9 skips.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -215,6 +213,14 @@ Commit `f32bd0b` was fast-forwarded into local `main` after a fresh pre-merge ru
 skips, 79% coverage, and zero failures in 109.87 seconds. The merged `main` tree repeated that result in 108.46 seconds.
 The clean worktree and merged `fix/linux-botan-discovery` branch were then removed.
 
+Hosted run `33576400850` then proved the discovery repair and bounded the next desktop work. macOS rejects inherited
+extended ACLs present below the hosted temporary directory; its two real native ACL probes fail before private artifact
+creation. Windows rejects the fresh `0o700` directory because the elevated runner can make `BUILTIN\\Administrators`
+the owner even though CPython's protected DACL contains only owner rights, SYSTEM, and Administrators. Ubuntu's first
+failure expects `StorageError` where a successful directory retarget correctly raises `ExternalModificationError`.
+Its second failure exposes an inode-reuse ABA: cleanup can unlink a replacement candidate when the original inode was
+released and immediately reused. These diagnoses await an approved bounded repair design.
+
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
 the same metadata.
@@ -242,13 +248,12 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33564705673` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
-  archive smoke link; Ubuntu discovery rejected the real soname chain addressed by pushed commit `f32bd0b`; and private
-  artifact preparation fails across 153 macOS and 157 Windows tests even though all 650 applicable tests pass locally.
+- Hosted run `33576400850` passes Android and proves Ubuntu discovery fixed, but all three desktop jobs fail in pytest
+  for the bounded ACL/test/ABA causes recorded above. iOS still lacks C++ runtime symbols during its static archive link.
 
 ## Exact continuation order after this checkpoint
 
-1. Verify the Ubuntu repair in the hosted run triggered by the `f32bd0b` push.
-2. Diagnose the shared macOS/Windows private-artifact preparation failures, then repair the iOS C++ runtime link.
+1. Obtain approval for the bounded desktop repair design, implement it red-first, and verify all three desktop jobs.
+2. Repair and verify the iOS C++ runtime link.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
