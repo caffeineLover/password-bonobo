@@ -449,3 +449,131 @@ review authorization and the green package-identity repair above.  The QML
 reset restore is intentionally deferred by one Qt event so the reset has fully
 settled; runtime tests wait on the resulting focus state rather than elapsed
 time.
+
+## Review-fix round 2
+
+This separate repair closes the remaining QML boundary-parser finding against
+review-fix commit `3518167` without changing the product shell or its QML
+surface.
+
+### RED evidence
+
+The exact legal regex-literal bypass was added before scanner changes and run
+with:
+
+```powershell
+python -m uv run --extra desktop --group desktop-test python -m pytest tests/desktop/test_qml_contract.py::test_qml_boundary_parser_finds_forbidden_member_after_regex_literal_brace -q
+```
+
+```text
+FAILED test_qml_boundary_parser_finds_forbidden_member_after_regex_literal_brace
+  AssertionError: assert 'passwordValue' in frozenset({'Text', 'text'})
+1 failed in 0.49s
+EXIT_CODE=1
+```
+
+Companion cases for escaped and character-class braces were also added before
+implementation.  The complete focused file established their RED state and
+the division characterization's pre-existing GREEN state:
+
+```powershell
+python -m uv run --extra desktop --group desktop-test python -m pytest tests/desktop/test_qml_contract.py -q
+```
+
+```text
+FAILED test_qml_boundary_parser_finds_forbidden_member_after_regex_literal_brace
+FAILED test_qml_boundary_parser_finds_forbidden_member_after_escaped_regex_brace
+FAILED test_qml_boundary_parser_finds_forbidden_member_after_regex_class_brace
+3 failed, 5 passed in 0.57s
+EXIT_CODE=1
+```
+
+All three failures returned only `Text` and `text`, proving that a `}` inside a
+regex pattern incorrectly ended the template interpolation before the later
+forbidden member access.
+
+### Implementation and files
+
+- `tests/desktop/test_qml_contract.py` now recognizes a JavaScript regex
+  literal only when the preceding lexical token permits an expression.  A
+  slash following an identifier, number, string, template, regex, or closing
+  delimiter remains division syntax.
+- The regex scan treats escaped characters and complete character classes as
+  pattern content, stops only at an unescaped slash outside a class, consumes
+  alphabetic flags, and falls back to operator handling for an unterminated
+  candidate rather than swallowing the remaining source.
+- Four regressions cover the exact `/}/` bypass, an escaped `\}`, a class-held
+  `}`, and preservation of both division operands plus the later forbidden
+  member.
+- `docs/PROJECT_MEMORY.md` records the completed repair checkpoint.  No QML or
+  product source file changed.
+
+### GREEN verification
+
+The final focused scanner and complete QML contract file passes:
+
+```powershell
+python -m uv run --extra desktop --group desktop-test python -m pytest tests/desktop/test_qml_contract.py -q
+```
+
+```text
+8 passed in 0.52s
+EXIT_CODE=0
+```
+
+Resolved-file QML lint and the complete offscreen desktop suite pass:
+
+```powershell
+$qmlFiles = (Get-ChildItem -LiteralPath 'src\bonobo_desktop\qml' -Filter '*.qml').FullName
+python -m uv run --extra desktop pyside6-qmllint $qmlFiles
+$env:QT_QPA_PLATFORM = 'offscreen'
+python -m uv run --extra desktop --group desktop-test python -X faulthandler -m pytest tests/desktop -q
+```
+
+```text
+QML lint: EXIT_CODE=0
+Desktop: 51 passed in 3.11s
+EXIT_CODE=0
+```
+
+Repository-wide lint, default and three-platform strict typing, structure,
+licensing, and whitespace pass:
+
+```powershell
+python -m uv run ruff check src tests tools
+python -m uv run mypy src tests tools
+python -m uv run mypy --platform win32 src tests tools
+python -m uv run mypy --platform darwin src tests tools
+python -m uv run mypy --platform linux src tests tools
+python -m uv run python tools/check_python_structure.py src tests tools
+python -m uv run reuse --no-multiprocessing lint
+git diff --check
+git diff --cached --check
+```
+
+```text
+Ruff: All checks passed!
+Mypy default: Success: no issues found in 106 source files
+Mypy win32: Success: no issues found in 106 source files
+Mypy darwin: Success: no issues found in 106 source files
+Mypy linux: Success: no issues found in 106 source files
+Structure: EXIT_CODE=0
+REUSE Specification 3.3: 169 / 169 files have copyright and license information
+Unstaged whitespace: EXIT_CODE=0
+Staged whitespace: EXIT_CODE=0
+```
+
+### Boundary self-review and concerns
+
+- The exact valid expression
+  `` `${/}/.test(value) ? desktopController.passwordValue : 0}` `` now exposes
+  `passwordValue` to the forbidden-identifier intersection.
+- Regex contents remain non-code to the boundary gate, including escaped
+  delimiters and character classes.  Division operands remain code and cannot
+  be hidden by blindly consuming from one slash to a later slash.
+- The QML surface, five record roles, local-secret lifecycle, shortcuts,
+  accessibility behavior, and shutdown serialization are untouched.
+- The scanner is deliberately a bounded lexical gate rather than a JavaScript
+  parser.  Its conservative expression-context state covers literals,
+  operands, delimiters, operators, and regex-prefix keywords needed to
+  distinguish this boundary; no remaining Task 7 concern was found.

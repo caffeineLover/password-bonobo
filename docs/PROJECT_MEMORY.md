@@ -2,6 +2,21 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 7 review-fix round 2
+
+The remaining QML boundary-parser finding is reproduced red-first with the
+exact legal template expression containing `/}/` before a forbidden
+`passwordValue` access.  Companion RED cases cover escaped and character-class
+braces; a division characterization remains green.  The minimal scanner fix
+recognizes regex literals only where the preceding JavaScript token permits an
+expression, skips escapes and character classes through the closing slash, and
+leaves `/` after an operand visible as division.  All eight focused QML
+contract tests and all 51 offscreen desktop tests pass.  Resolved-file qmllint,
+Ruff, strict mypy for 106 files under default/win32/darwin/linux, Python
+structure, REUSE 169/169, and unstaged/staged whitespace are clean.  The Task 7
+report records the exact RED/GREEN evidence and self-review.  This checkpoint
+is included in a separate repair commit; Task 8 remains next.
+
 ## Completed Task 7 review-fix round 1
 
 The five requested review repairs are implemented red-first.  QML now retains

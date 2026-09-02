@@ -36,6 +36,55 @@ _FORBIDDEN_BINDING_IDENTIFIERS = frozenset(
     }
 )
 _QML_IDENTIFIER = re.compile(r"\b[A-Za-z_]\w*\b")
+_REGEX_PREFIX_KEYWORDS = frozenset(
+    {
+        "await",
+        "case",
+        "delete",
+        "in",
+        "instanceof",
+        "new",
+        "return",
+        "throw",
+        "typeof",
+        "void",
+        "yield",
+    }
+)
+
+
+
+#### Return the first position after a complete JavaScript regex literal.
+####
+#### Escapes and character classes suppress delimiter meaning inside the
+#### pattern.  An absent closing slash leaves the caller to treat `/` as an
+#### operator instead of swallowing the remaining QML source.
+####
+def _scan_qml_regex_literal(text: str, start: int) -> int | None:
+    index = start + 1
+    in_character_class = False
+    while index < len(text):
+        character = text[index]
+        if character in {"\r", "\n"}:
+            return None
+        if character == "\\":
+            if index + 1 >= len(text) or text[index + 1] in {"\r", "\n"}:
+                return None
+            index += 2
+        elif character == "[" and not in_character_class:
+            in_character_class = True
+            index += 1
+        elif character == "]" and in_character_class:
+            in_character_class = False
+            index += 1
+        elif character == "/" and not in_character_class:
+            index += 1
+            while index < len(text) and text[index].isalpha():
+                index += 1
+            return index
+        else:
+            index += 1
+    return None
 
 
 
@@ -45,6 +94,7 @@ def _scan_qml_code(text: str, start: int = 0, *, interpolation: bool = False) ->
     code: list[str] = []
     index = start
     depth = 1 if interpolation else 0
+    regex_allowed = True
     while index < len(text):
         character = text[index]
         following = text[index + 1] if index + 1 < len(text) else ""
@@ -60,6 +110,7 @@ def _scan_qml_code(text: str, start: int = 0, *, interpolation: bool = False) ->
                 else:
                     index += 1
             code.append(" ")
+            regex_allowed = False
         elif character == "/" and following == "/":
             newline = text.find("\n", index + 2)
             index = len(text) if newline < 0 else newline
@@ -71,19 +122,53 @@ def _scan_qml_code(text: str, start: int = 0, *, interpolation: bool = False) ->
         elif character == "`":
             nested, index = _scan_qml_template(text, index + 1)
             code.extend((" ", nested, " "))
+            regex_allowed = False
+        elif character == "/" and regex_allowed:
+            regex_end = _scan_qml_regex_literal(text, index)
+            if regex_end is None:
+                code.append(character)
+                index += 1
+                regex_allowed = True
+            else:
+                code.append(" ")
+                index = regex_end
+                regex_allowed = False
         elif interpolation and character == "{":
             depth += 1
             code.append(character)
             index += 1
+            regex_allowed = True
         elif interpolation and character == "}":
             depth -= 1
             index += 1
             if depth == 0:
                 return "".join(code), index
             code.append(character)
+            regex_allowed = False
+        elif character.isalpha() or character in {"_", "$"}:
+            identifier_start = index
+            index += 1
+            while index < len(text) and (text[index].isalnum() or text[index] in {"_", "$"}):
+                index += 1
+            identifier = text[identifier_start:index]
+            code.append(identifier)
+            regex_allowed = identifier in _REGEX_PREFIX_KEYWORDS
+        elif character.isdigit():
+            number_start = index
+            index += 1
+            while index < len(text) and (text[index].isalnum() or text[index] in {"_", "."}):
+                index += 1
+            code.append(text[number_start:index])
+            regex_allowed = False
+        elif character in {"+", "-"} and following == character:
+            code.extend((character, following))
+            index += 2
         else:
             code.append(character)
             index += 1
+            if character.isspace():
+                continue
+            regex_allowed = character not in {")", "]", "}", "."}
     return "".join(code), index
 
 
@@ -188,3 +273,47 @@ def test_qml_boundary_parser_finds_forbidden_member_inside_template_interpolatio
 
     assert "safe" not in identifiers
     assert "passwordValue" in identifiers
+
+
+
+#### Keep braces inside JavaScript regex literals from terminating template interpolation.
+####
+def test_qml_boundary_parser_finds_forbidden_member_after_regex_literal_brace() -> None:
+    identifiers = _qml_identifiers(
+        "Text { text: `${/}/.test(value) ? desktopController.passwordValue : 0}` }"
+    )
+
+    assert "passwordValue" in identifiers
+
+
+
+#### Ignore an escaped closing brace inside a JavaScript regex literal.
+####
+def test_qml_boundary_parser_finds_forbidden_member_after_escaped_regex_brace() -> None:
+    identifiers = _qml_identifiers(
+        r"Text { text: `${/\}/.test(value) ? desktopController.passwordValue : 0}` }"
+    )
+
+    assert "passwordValue" in identifiers
+
+
+
+#### Ignore a closing brace inside a JavaScript regex character class.
+####
+def test_qml_boundary_parser_finds_forbidden_member_after_regex_class_brace() -> None:
+    identifiers = _qml_identifiers(
+        "Text { text: `${/[}]/.test(value) ? desktopController.passwordValue : 0}` }"
+    )
+
+    assert "passwordValue" in identifiers
+
+
+
+#### Keep division operands visible instead of consuming them as a regex literal.
+####
+def test_qml_boundary_parser_preserves_division_expression_identifiers() -> None:
+    identifiers = _qml_identifiers(
+        "Text { text: `${numerator / denominator ? desktopController.passwordValue : 0}` }"
+    )
+
+    assert {"numerator", "denominator", "passwordValue"} <= identifiers
