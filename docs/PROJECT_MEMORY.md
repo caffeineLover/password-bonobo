@@ -25,7 +25,7 @@ the approved SDD workspace.  The final post-report static, structure, and diff
 checks passed before commit.  Immediate next action: continue only with
 approved Task 4.  Later approved work remains Tasks 4 through 8 in order.
 
-Review fix round 1 is ready to commit.  A newly added red regression showed
+Review fix round 1 is committed as `fd797a6`.  A newly added red regression showed
 that adding the first record to an empty vault returned a safe unexpected result
 because the facade inferred the revision from an empty per-record map.  The
 facade now reads and privately captures the current public session revision for
@@ -33,8 +33,7 @@ initial projection, refresh, drafts, and zero-record add validation; no revision
 reaches a DTO or snapshot.  The regression passes, as do the application plus
 relevant PasswordSafe selection (76), strict mypy on win32/darwin/linux (83
 files each), Ruff, Python structure, whitespace, and the Botan-backed full
-suite (713 passed, 12 expected skips, 107.48 seconds).  Immediate next actions:
-commit the Task 3 review fix and update this checkpoint with its hash, then
+suite (713 passed, 12 expected skips, 107.48 seconds).  Immediate next action:
 continue only with approved Task 4.
 
 ## Purpose and resume protocol
