@@ -8,6 +8,7 @@ raw exception objects or text.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum, auto
 from threading import Event, Lock
@@ -162,7 +163,9 @@ class FacadeExecutor[FacadeT](QObject):
     _guard: Lock
     _pool: QThreadPool
     _shutdown: bool
+    _shutdown_cleanup_complete: bool
     _tasks: set[object]
+    _terminal: Callable[[FacadeT], None] | None
 
 
 
@@ -175,9 +178,11 @@ class FacadeExecutor[FacadeT](QObject):
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(1)
         self._shutdown = False
+        self._shutdown_cleanup_complete = False
         self._tasks = set()
         self._active_envelope = None
         self._active_task = None
+        self._terminal = None
 
 
 
@@ -233,6 +238,32 @@ class FacadeExecutor[FacadeT](QObject):
                 self._active_envelope = None
                 self._active_task = None
             self._tasks.discard(task)
+            terminal = self._take_terminal_if_ready()
+        self._run_terminal(terminal)
+
+
+
+    #### Consume a pending terminal callback only after shutdown cleanup and active work.
+    ####
+    #### The caller holds the executor guard.  Clearing before invocation makes
+    #### the callback exactly-once even when it fails or shutdown is repeated.
+    ####
+    def _take_terminal_if_ready(self) -> Callable[[FacadeT], None] | None:
+        if not self._shutdown_cleanup_complete or self._active_task is not None:
+            return None
+        terminal = self._terminal
+        self._terminal = None
+        return terminal
+
+
+
+    #### Invoke one terminal facade operation without publishing its diagnostics.
+    ####
+    def _run_terminal(self, terminal: Callable[[FacadeT], None] | None) -> None:
+        if terminal is None:
+            return
+        with suppress(BaseException):
+            terminal(self._facade)
 
 
 
@@ -241,11 +272,12 @@ class FacadeExecutor[FacadeT](QObject):
     #### Waiting is intentionally unbounded because process exit must not cut off
     #### an active save or encrypted suspension after it has begun publication.
     ####
-    def shutdown(self) -> None:
+    def shutdown(self, terminal: Callable[[FacadeT], None] | None = None) -> None:
         with self._guard:
             if self._shutdown:
                 return
             self._shutdown = True
+            self._terminal = terminal
             tasks = tuple(self._tasks)
             active_envelope = self._active_envelope
             active_task = self._active_task
@@ -253,6 +285,10 @@ class FacadeExecutor[FacadeT](QObject):
         self.shutdownStarted.emit()
         for task in tasks:
             cast(_CommandTask[FacadeT], task).cancel_if_pending()
+        with self._guard:
+            self._shutdown_cleanup_complete = True
+            ready_terminal = self._take_terminal_if_ready()
+        self._run_terminal(ready_terminal)
         if active_envelope is not None and active_task is not None:
             envelope = cast(_CommandEnvelope[FacadeT], active_envelope)
             if envelope.shutdown_policy is _ShutdownDrainPolicy.DRAIN:

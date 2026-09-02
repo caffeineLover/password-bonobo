@@ -15,6 +15,7 @@ from bonobo_core.application import (
     ApplicationPhase,
     ApplicationSnapshot,
     CloseChoice,
+    RecordDraft,
     RecordKey,
     VaultApplication,
 )
@@ -292,12 +293,15 @@ class DesktopController(QObject):
 
 
 
-    #### Wipe transient input before closing executor command admission.
+    #### Wipe input before closing admission and serializing an optional terminal boundary.
     ####
     @Slot()
-    def shutdown(self) -> None:
+    def shutdown(
+        self,
+        terminal: Callable[[VaultApplication[VaultSession]], None] | None = None,
+    ) -> None:
         self._clear_passphrase()
-        self._executor.shutdown()
+        self._executor.shutdown(terminal)
 
 
 
@@ -328,6 +332,70 @@ class DesktopController(QObject):
         generation = self._snapshot.generation
         record_key = RecordKey(key)
         return self._submit(lambda application: application.open_website(record_key, generation))
+
+
+
+    #### Confirm primitive local editor fields through one private facade draft.
+    ####
+    #### The QML string exists only for the synchronous slot call.  This method
+    #### immediately moves one UTF-8 bytearray into a closable owner and the
+    #### worker keeps the record key, generation, draft, and secret private.
+    ####
+    @Slot(int, str, str, str, bool, str, result=bool, name="confirmRecord")
+    def confirm_record(
+        self,
+        key: int,
+        title: str,
+        group: str,
+        username: str,
+        protected: bool,
+        password: str,
+    ) -> bool:
+        if (
+            isinstance(key, bool)
+            or not isinstance(key, int)
+            or key < 0
+            or not all(isinstance(value, str) for value in (title, group, username, password))
+            or not isinstance(protected, bool)
+        ):
+            self.commandRejected.emit()
+            return False
+        generation = self._snapshot.generation
+        record_key = None if key == 0 else RecordKey(key)
+        password_owner = (
+            SecretBuffer.take_ownership(bytearray(password, "utf-8"))
+            if record_key is None or password
+            else None
+        )
+        password = ""
+
+
+
+        #### Create and consume the private draft within one serialized command.
+        ####
+        def commit(application: VaultApplication[VaultSession]) -> ApplicationSnapshot:
+            try:
+                started = application.begin_edit(record_key, generation)
+                draft = RecordDraft(
+                    started.key,
+                    started.generation,
+                    title,
+                    group,
+                    username,
+                    protected,
+                )
+                return application.commit_edit(draft, password_owner)
+            except BaseException:
+                if password_owner is not None:
+                    password_owner.close()
+                raise
+
+        accepted = self._executor.submit(commit, canceled=None if password_owner is None else password_owner.close)
+        if not accepted:
+            if password_owner is not None:
+                password_owner.close()
+            self.commandRejected.emit()
+        return accepted
 
 
 

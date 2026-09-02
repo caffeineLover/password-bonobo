@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QObject, QUrl
 from tests.application.fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 from bonobo_core.application import ApplicationPhase, VaultApplication
 from bonobo_core.passwordsafe import SecretBuffer, VaultSession
 from bonobo_desktop import resources
+from bonobo_desktop.controller import DesktopController
 from bonobo_desktop.main import _request_shutdown_lock, main
 
 
@@ -45,3 +46,79 @@ def test_desktop_shutdown_suspends_a_dirty_vault() -> None:
 
     assert service.suspend_calls == 1
     assert application.snapshot.phase is ApplicationPhase.LOCKED
+
+
+
+#### Compose the controller and closed record model before loading the packaged root.
+####
+def test_desktop_main_injects_only_controller_before_qml_load(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import PySide6.QtGui
+    import PySide6.QtQml
+
+    events: list[str] = []
+    context_values: dict[str, object] = {}
+
+
+
+    #### Record the sole QML context object and load order without parsing a real file.
+    ####
+    class FakeEngine:
+
+
+
+        #### Return this recording object as the declarative root context.
+        ####
+        def rootContext(self) -> FakeEngine:  # noqa: N802 - mirrors Qt API.
+            return self
+
+
+
+        #### Capture exactly one named QML boundary object.
+        ####
+        def setContextProperty(self, name: str, value: object) -> None:  # noqa: N802 - mirrors Qt API.
+            events.append("context")
+            context_values[name] = value
+
+
+
+        #### Record that loading occurs only after context injection.
+        ####
+        def load(self, _url: QUrl) -> None:
+            events.append("load")
+
+
+
+        #### Present one inert root object so startup can enter and leave the loop.
+        ####
+        def rootObjects(self) -> list[QObject]:  # noqa: N802 - mirrors Qt API.
+            return [QObject()]
+
+
+
+        #### Mirror deferred QObject cleanup used by the real engine.
+        ####
+        def deleteLater(self) -> None:  # noqa: N802 - mirrors Qt API.
+            events.append("delete")
+
+    session = FakeVaultSession(())
+    monkeypatch.setattr(resources, "main_qml_url", lambda: QUrl("qrc:/fabricated/Main.qml"))
+    monkeypatch.setattr("bonobo_desktop.main._botan_library_path", lambda: Path("fabricated-botan"))
+    monkeypatch.setattr(
+        "bonobo_desktop.main._private_directories",
+        lambda _root: (tmp_path / "work", tmp_path / "recovery"),
+    )
+    monkeypatch.setattr("bonobo_desktop.main.VaultService.with_botan", lambda *_args: FakeVaultService(session))
+    monkeypatch.setattr(PySide6.QtQml, "QQmlApplicationEngine", FakeEngine)
+    qt_application = PySide6.QtGui.QGuiApplication.instance()
+    assert qt_application is not None
+    monkeypatch.setattr(type(qt_application), "exec", lambda _self: 0)
+
+    assert main(["password-bonobo"]) == 0
+
+    assert events[:2] == ["context", "load"]
+    assert set(context_values) == {"desktopController"}
+    assert isinstance(context_values["desktopController"], DesktopController)
+    assert context_values["desktopController"].property("records") is not None

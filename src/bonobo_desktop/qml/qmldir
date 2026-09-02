@@ -1,0 +1,7 @@
+module BonoboDesktop
+Main 1.0 Main.qml
+WelcomeView 1.0 WelcomeView.qml
+UnlockView 1.0 UnlockView.qml
+VaultView 1.0 VaultView.qml
+RecordEditor 1.0 RecordEditor.qml
+DecisionDialog 1.0 DecisionDialog.qml

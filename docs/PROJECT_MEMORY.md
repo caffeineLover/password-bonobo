@@ -2,6 +2,28 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 7 Qt Quick shell
+
+The approved scope correction supplied primitive controller Add/Edit Confirm,
+composition-root wiring, and an executor terminal-callback contract without
+opening the QML boundary.  The four-view shell plus scoped decision dialog is
+implemented with local concealed inputs, exact five-role record presentation,
+complete keyboard actions, accessible names, deterministic tab order, and
+focus retention or search fallback across model resets.  The executor now
+serializes terminal lock after idle, draining, or ordinary active work while
+closing admission and canceling queued ownership first.
+
+The prescribed absent-resource RED, controller/composition REDs, shutdown
+ordering REDs, boundary-parser RED, and filtered-selection focus RED were all
+observed.  Final verification reports resolved-path `qmllint` clean, 38
+offscreen desktop tests passing, Ruff clean, strict scoped desktop mypy clean
+for 17 files, Python structure clean, REUSE 166/166, and clean staged and
+unstaged whitespace.  The repository-wide mypy command and three platform
+forms retain the pre-existing duplicate-module failure reproduced at clean
+`d436908`; the Task 7 report contains exact evidence.  Task 7 is complete; the
+exact next action is Task 8.  Provider, URL-audit, mobile, settings, and
+advanced features remain out of scope.
+
 ## Completed Task 6 review-fix round 1
 
 Review fix round 1 addresses all four Important findings from commit `8f07415`.

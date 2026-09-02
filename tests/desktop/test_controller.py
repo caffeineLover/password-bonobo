@@ -172,6 +172,154 @@ def test_executor_shutdown_does_not_drain_active_non_durability_work(qtbot: QtBo
     facade.release_first.set()
     assert facade.first_completed.wait(5)
     shutdown_thread.join()
+    assert executor._pool.waitForDone(5000)
+
+
+
+#### Run one terminal callback exactly once when shutdown finds the executor idle.
+####
+def test_executor_shutdown_runs_idle_terminal_callback_once() -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    terminal_calls: list[_RecordingFacade] = []
+
+    executor.shutdown(terminal_calls.append)
+    executor.shutdown(terminal_calls.append)
+
+    assert terminal_calls == [facade]
+    assert not executor.submit(lambda target: target.run(2))
+
+
+
+#### Keep terminal callback failures closed while preserving one-way shutdown.
+####
+def test_executor_shutdown_closes_terminal_callback_failure() -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    terminal_calls = 0
+
+
+
+    #### Fail with fabricated diagnostics that must remain inside the executor.
+    ####
+    def terminal(_target: _RecordingFacade) -> None:
+        nonlocal terminal_calls
+        terminal_calls += 1
+        raise RuntimeError("fabricated terminal failure")
+
+    executor.shutdown(terminal)
+    executor.shutdown(terminal)
+
+    assert terminal_calls == 1
+    assert not executor.submit(lambda target: target.run(2))
+
+
+
+#### Drain active durability work before running the terminal callback exactly once.
+####
+def test_executor_shutdown_runs_terminal_after_active_drain(qtbot: QtBot) -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    terminal_finished = Event()
+    shutdown_returned = Event()
+    order: list[str] = []
+
+
+
+    #### Mark the active durability command complete before terminal handling.
+    ####
+    def command(target: _RecordingFacade) -> ApplicationSnapshot:
+        result = target.run(1)
+        order.append("command")
+        return result
+
+    assert executor.submit(command, drain_on_shutdown=True)
+    assert facade.first_entered.wait(5)
+
+
+
+    #### Record exclusive terminal entry after the active command has returned.
+    ####
+    def terminal(_target: _RecordingFacade) -> None:
+        order.append("terminal")
+        terminal_finished.set()
+
+
+
+    #### Observe that durability shutdown includes terminal completion.
+    ####
+    def request_shutdown() -> None:
+        executor.shutdown(terminal)
+        shutdown_returned.set()
+
+    shutdown_thread = Thread(target=request_shutdown)
+    with qtbot.waitSignal(executor.shutdownStarted, timeout=5000):
+        shutdown_thread.start()
+    assert not terminal_finished.is_set()
+    assert not shutdown_returned.is_set()
+    facade.release_first.set()
+    assert terminal_finished.wait(5)
+    assert shutdown_returned.wait(5)
+    shutdown_thread.join()
+    assert executor._pool.waitForDone(5000)
+
+    assert order == ["command", "terminal"]
+    executor.shutdown(terminal)
+    assert order == ["command", "terminal"]
+
+
+
+#### Return promptly for active ordinary work but serialize terminal finalization behind it.
+####
+def test_executor_shutdown_defers_terminal_after_active_non_durability(qtbot: QtBot) -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    terminal_finished = Event()
+    queued_canceled = Event()
+    order: list[str] = []
+
+
+
+    #### Mark the active ordinary command complete before terminal handling.
+    ####
+    def command(target: _RecordingFacade) -> ApplicationSnapshot:
+        result = target.run(1)
+        order.append("command")
+        return result
+
+    assert executor.submit(command)
+    assert facade.first_entered.wait(5)
+
+
+
+    #### Prove transferred ownership is canceled before terminal handling begins.
+    ####
+    def cancel_queued() -> None:
+        order.append("canceled")
+        queued_canceled.set()
+
+    assert executor.submit(lambda target: target.run(2), canceled=cancel_queued)
+
+
+
+    #### Record the terminal boundary only after the ordinary command releases the facade.
+    ####
+    def terminal(_target: _RecordingFacade) -> None:
+        order.append("terminal")
+        terminal_finished.set()
+
+    with qtbot.waitSignal(executor.shutdownStarted, timeout=5000):
+        executor.shutdown(terminal)
+    assert queued_canceled.is_set()
+    assert not terminal_finished.is_set()
+    facade.release_first.set()
+    assert terminal_finished.wait(5)
+    qtbot.waitUntil(lambda: facade.completed == [1], timeout=5000)
+    assert executor._pool.waitForDone(5000)
+
+    assert order == ["canceled", "command", "terminal"]
+    executor.shutdown(terminal)
+    assert order == ["canceled", "command", "terminal"]
 
 
 
@@ -357,4 +505,59 @@ def test_controller_maps_qml_record_key_to_application_key(qtbot: QtBot) -> None
         assert controller.copy_password(1)
 
     assert clipboard.copied == b"fabricated-password"
+    executor.shutdown()
+
+
+
+#### Confirm primitive editor fields through one private generation-bound facade draft.
+####
+def test_controller_confirms_existing_record_without_exposing_draft(qtbot: QtBot) -> None:
+    session = FakeVaultSession((fabricated_record_view(),))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert controller.confirm_record(
+            1,
+            "Updated Portal",
+            "Research",
+            "updated-user",
+            False,
+            "fabricated-new-password",
+        )
+
+    assert session.apply_calls == 1
+    assert session.records_value[0].title == "Updated Portal"
+    assert controller.property("dirty") is True
+    assert not hasattr(controller, "recordDraft")
+    executor.shutdown()
+
+
+
+#### Add a record from primitive fields while keeping the generated key and secret private.
+####
+def test_controller_confirms_new_record_from_zero_key(qtbot: QtBot) -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert controller.confirm_record(
+            0,
+            "Added Portal",
+            "Examples",
+            "added-user",
+            False,
+            "fabricated-added-password",
+        )
+
+    assert session.change_count == 1
+    assert session.records_value[0].title == "Added Portal"
+    assert controller.property("records").rowCount() == 1
     executor.shutdown()

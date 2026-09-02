@@ -1,9 +1,8 @@
 """Compose the optional PySide6 desktop process around the reusable vault facade.
 
 Qt imports stay inside launch functions so installing the base wheel never
-requires desktop bindings.  QML workflows and controller bindings are deferred
-to later desktop tasks; this module owns only startup, safe failed startup, and
-shutdown ordering.
+requires desktop bindings.  This composition root owns safe startup, the closed
+QML controller binding, platform adapters, and shutdown ordering.
 """
 
 from __future__ import annotations
@@ -12,12 +11,16 @@ from contextlib import suppress
 from ctypes.util import find_library
 from pathlib import Path
 from sys import argv as process_argv
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from bonobo_core.application import VaultApplication
 from bonobo_core.passwordsafe import VaultService, VaultSession
 
 from . import resources
+from .browser import QtBrowserPort
+from .clipboard import QtClipboardPort
+from .controller import DesktopController
+from .tasks import FacadeExecutor
 
 
 
@@ -83,16 +86,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     arguments = list(process_argv if argv is None else argv)
     existing_application = QGuiApplication.instance()
-    qt_application = QGuiApplication(arguments) if existing_application is None else existing_application
+    qt_application = (
+        QGuiApplication(arguments)
+        if existing_application is None
+        else cast(QGuiApplication, existing_application)
+    )
     qt_application.setOrganizationName("Password Bonobo")
     qt_application.setApplicationName("Password Bonobo")
 
-    engine = QQmlApplicationEngine()
     qml_url = resources.main_qml_url()
     if qml_url.isEmpty():
-        return 1
-    engine.load(qml_url)
-    if not engine.rootObjects():
         return 1
 
     botan_library = _botan_library_path()
@@ -106,9 +109,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         service = VaultService.with_botan(botan_library, working_directory, recovery_directory)
     except Exception:
         return 1
-    application = VaultApplication(service)
+    clipboard = QtClipboardPort(qt_application.clipboard())
+    browser = QtBrowserPort()
+    application = VaultApplication(service, clipboard=clipboard, browser=browser)
+    executor = FacadeExecutor(application)
+    controller = DesktopController(application, executor)
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("desktopController", controller)
+    engine.load(qml_url)
+    if not engine.rootObjects():
+        controller.shutdown(_request_shutdown_lock)
+        engine.deleteLater()
+        return 1
     try:
         return qt_application.exec()
     finally:
-        _request_shutdown_lock(application)
+        controller.shutdown(_request_shutdown_lock)
         engine.deleteLater()
