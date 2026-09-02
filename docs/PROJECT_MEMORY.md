@@ -2,6 +2,31 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 5 desktop foundation
+
+Task 5 of the approved vault-application desktop vertical slice adds the
+optional `desktop` PySide6 6.11 package extra, `desktop-test` pytest-qt group,
+`password-bonobo` GUI entry point, both Hatch wheel packages, and regenerated
+lock resolution.  The new `bonobo_desktop` package has no eager PySide6 import;
+its composition-root skeleton configures Qt identity, fails closed for an
+unavailable QML root or Botan library, creates separate private working and
+recovery directories, composes `VaultService.with_botan` with
+`VaultApplication`, and requests facade lock during shutdown.
+
+The required RED first failed collection because PySide6 was absent.  A second
+RED exposed that the provenance gate ignored optional extras; it now treats
+desktop extras as direct runtime requirements.  The desktop/package/wheel
+selection passes 13 tests with the desktop extra and test group; provenance
+tests pass 15.  Base core/desktop package imports pass under Python 3.14 with
+site packages disabled.  Fresh build, wheel, provenance, REUSE (145/145), Ruff,
+strict mypy (91 files), Python structure, and whitespace checks pass.  The
+full report is `.superpowers/sdd/2026-09-01-vault-application-desktop-vertical-slice/task-5-report.md`.
+
+Task 5 is committed as the current desktop-foundation checkpoint.  The immediate
+next action is continue only with approved Task 6.  Later approved work remains
+Tasks 7 and 8; provider coordination, URL-audit work, mobile UI, and QML
+workflows remain out of scope.
+
 ## Completed Task 4 transaction-boundary revision
 
 The user approved a narrow architectural revision for the two remaining Task 4

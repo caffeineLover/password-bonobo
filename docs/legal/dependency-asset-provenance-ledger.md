@@ -13,7 +13,8 @@ Compact keys keep this source reviewable within the 120-character line limit:
   `T` transitive.
 - Constraint: `N` means not directly declared.  Other values reproduce the declaration in `pyproject.toml`.
 - Use: `BT` repository build/test/security tool, `TS` transitive tool support, `CI` hosted workflow, `DG` document
-  generation or review, `LT` license text, `FX` structural test fixture, and `TM` typing marker.
+  generation or review, `LT` license text, `FX` structural test fixture, `TM` typing marker, and `UI` optional
+  platform-application GUI runtime.
 - Distribution: `N` not distributed with the package, `S` source repository or source distribution, and `W` wheel;
   `A` platform application artifact, and `+` joins every applicable distribution location.
 - Evidence: `P` `pyproject.toml` or a machine-readable source pin, `L` `uv.lock`, `M` installed Core Metadata, `V`
@@ -23,7 +24,7 @@ Compact keys keep this source reviewable within the 120-character line limit:
 
 ## Python packages
 
-The lock contains 56 resolved third-party packages.  Hatchling is declared for isolated builds but is not resolved in
+The lock contains 61 resolved third-party packages.  Hatchling is declared for isolated builds but is not resolved in
 `uv.lock`; its exact build version and artifact origin therefore remain `NOASSERTION` pending a build-lock decision.
 
 |Name|Rel|Constraint|Version|Origin|Terms|Use|Dist|Evidence|Review|
@@ -64,6 +65,10 @@ The lock contains 56 resolved third-party packages.  Hatchling is declared for i
 |pip-requirements-parser|T|N|32.0.1|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |platformdirs|T|N|4.11.3|https://pypi.org/simple|MIT|TS|N|L+M|MP|
 |pluggy|T|N|1.6.0|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
+|pyside6|DR:desktop|PySide6>=6.11.2,<6.12|6.11.2|https://pypi.org/simple|LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only|UI|A|L+M|P|
+|pyside6-addons|T|N|6.11.2|https://pypi.org/simple|LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only|UI|A|L+M|P|
+|pyside6-essentials|T|N|6.11.2|https://pypi.org/simple|LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only|UI|A|L+M|P|
+|pytest-qt|DD:development desktop-test|pytest-qt>=4.5,<5|4.5.0|https://pypi.org/simple|MIT|BT|N|L+M|MP|
 |py-serializable|T|N|2.1.0|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |pycodestyle|T|N|2.14.0|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |pygments|T|N|2.21.0|https://pypi.org/simple|BSD-2-Clause|TS|N|L+M|MP|
@@ -78,6 +83,7 @@ The lock contains 56 resolved third-party packages.  Hatchling is declared for i
 |reuse|DD|reuse>=6.2,<7|6.2.0|https://pypi.org/simple|NOASSERTION|BT|N|L|P|
 |rich|T|N|15.0.0|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |ruff|DD|ruff>=0.12,<1|0.16.4|https://pypi.org/simple|MIT|BT|N|L+M|MP|
+|shiboken6|T|N|6.11.2|https://pypi.org/simple|LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only|UI|A|L+M|P|
 |sortedcontainers|T|N|2.4.0|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |stevedore|T|N|5.9.1|https://pypi.org/simple|Apache-2.0|TS|N|L+M|MP|
 |tomli|T|N|2.4.1|https://pypi.org/simple|MIT|TS|N|L+M|MP|
@@ -196,13 +202,15 @@ and deterministically mutated only by the parser-resilience runner.
 
 ## Distribution conclusions and review status
 
-The wheel declares no runtime Python dependency.  Both wheel and source distribution must carry the GPL text and typing
-marker; wheel metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and
-document tools do not enter either artifact.  Botan is bundled only with applicable platform application artifacts, not
-the pure Python wheel.  Source-distribution presence does not establish mobile or App Store eligibility.  Every `P` or
-`MP` row remains pending for the iOS distribution decision; no row grants an exception, contributor permission, or
-permission to copy third-party expression. The runnable core demonstration is Bonobo-authored source, contains only
-fixed fabricated values, and does not add a dependency or third-party asset.
+The wheel declares no required runtime Python dependency.  Its optional `desktop` extra resolves PySide6 6.11.2 through
+PySide6 Addons, PySide6 Essentials, and Shiboken6 for a platform application artifact; those Qt for Python terms remain
+pending distribution review.  Both wheel and source distribution must carry the GPL text and typing marker; wheel
+metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and document tools do
+not enter either artifact.  Botan is bundled only with applicable platform application artifacts, not the pure Python
+wheel.  Source-distribution presence does not establish mobile or App Store eligibility.  Every `P` or `MP` row remains
+pending for the iOS distribution decision; no row grants an exception, contributor permission, or permission to copy
+third-party expression. The runnable core demonstration is Bonobo-authored source, contains only fixed fabricated
+values, and does not add a dependency or third-party asset.
 
 Run `uv run python -m tools.check_provenance` after dependency declarations, `uv.lock`, workflow action references,
 document-tool commands, or tracked assets change.  The command fails on missing, extra, or stale coverage.

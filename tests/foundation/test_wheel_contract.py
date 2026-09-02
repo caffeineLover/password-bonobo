@@ -1,6 +1,7 @@
 """Verify that built wheels carry the complete declared GPL license artifact."""
 
 import tarfile
+import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -207,3 +208,18 @@ def _write_complete_wheel(directory: Path, license_path: Path) -> None:
         license_path.read_bytes(),
         include_typing_marker=True,
     )
+
+
+
+#### Include both the reusable core and optional desktop adapter in wheel builds.
+####
+#### The GUI entry point must resolve from an installed wheel, while the core
+#### remains a separately importable package for headless consumers.
+####
+def test_wheel_configuration_includes_desktop_adapter() -> None:
+    configuration = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert set(configuration["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]) == {
+        "src/bonobo_core",
+        "src/bonobo_desktop",
+    }

@@ -156,6 +156,18 @@ def _direct_requirements(pyproject_source: str) -> dict[str, tuple[tuple[str, st
     requirement_groups.append(
         ("runtime", _string_list(project.get("dependencies", []), "project.dependencies"))
     )
+    optional_dependencies = project.get("optional-dependencies", {})
+    if not isinstance(optional_dependencies, dict):
+        raise ValueError("project.optional-dependencies must be a table")
+    for extra_name, requirements in optional_dependencies.items():
+        if not isinstance(extra_name, str):
+            raise ValueError("project.optional-dependencies extra name must be a string")
+        requirement_groups.append(
+            (
+                f"runtime {extra_name}",
+                _string_list(requirements, f"project.optional-dependencies.{extra_name}"),
+            )
+        )
 
     dependency_groups = document.get("dependency-groups", {})
     if not isinstance(dependency_groups, dict):
@@ -361,7 +373,13 @@ def _expected_direct_cells(
     scopes = tuple(dict.fromkeys(scope for scope, _ in declarations))
     requirements = tuple(dict.fromkeys(requirement for _, requirement in declarations))
     scope_codes = {"build": "DB", "runtime": "DR", "development": "DD"}
-    relationship = "+".join(scope_codes.get(scope, f"DD:{scope}") for scope in scopes)
+    relationship = "+".join(
+        scope_codes.get(
+            scope,
+            f"DR:{scope.removeprefix('runtime ')}" if scope.startswith("runtime ") else f"DD:{scope}",
+        )
+        for scope in scopes
+    )
     return relationship, "; ".join(requirements)
 
 

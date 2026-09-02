@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from tools.check_provenance import (
+    _direct_requirements,
     check_botan_provenance_sources,
     check_interop_producer_provenance,
     check_provenance_sources,
@@ -58,6 +59,32 @@ def _synthetic_ledger() -> str:
 |`LICENSES/GPL-3.0-or-later.txt`|GPL-3.0-or-later|REUSE|GPL-3.0-or-later|LT|S+W|R|V|
 |`src/sample/py.typed`|Current|Bonobo|GPL-3.0-or-later|TM|S+W|R|V|
 """
+
+
+
+#### Treat an optional desktop extra as a direct runtime dependency declaration.
+####
+#### The desktop package is intentionally absent from the base dependency list,
+#### but its resolved PySide6 wheel remains subject to the same provenance
+#### relationship and constraint review as an unconditional runtime dependency.
+####
+def test_optional_desktop_extra_is_a_direct_runtime_requirement() -> None:
+    pyproject = """[build-system]
+requires = []
+
+[project]
+dependencies = []
+
+[project.optional-dependencies]
+desktop = ["PySide6>=6.11.2,<6.12"]
+
+[dependency-groups]
+dev = []
+"""
+
+    assert _direct_requirements(pyproject) == {
+        "pyside6": (("runtime desktop", "PySide6>=6.11.2,<6.12"),),
+    }
 
 
 
