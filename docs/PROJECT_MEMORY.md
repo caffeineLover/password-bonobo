@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-02
 
-## Active Task 4 review-fix round 1
+## Completed Task 4 review-fix round 1
 
 Independent review rejected `ac87962` with one Critical selector-CAS gap,
 nine Important transaction/ownership gaps, and one mandatory raw-path exception
@@ -26,9 +26,9 @@ strict mypy for all 86 files under win32/darwin/linux, Python structure,
 compatibility, provenance, Bandit, pip-audit, REUSE 138/138, tracked-file and
 whitespace checks, source/wheel build, and wheel inspection all pass. The Task 4
 report records RED/GREEN and architecture evidence for every review finding.
-Immediate next actions are stage only the Task 4 review-fix files, rerun staged
-gates, and commit without amending `ac87962`. Later approved work remains Tasks
-5 through 8 in order.
+The separate non-amended repair commit is `2245e31` (`fix: harden suspended
+session reconciliation`). Immediate next action is controller review of Task 4;
+later approved work remains Tasks 5 through 8 in order.
 
 ## Completed Task 4 checkpoint
 
