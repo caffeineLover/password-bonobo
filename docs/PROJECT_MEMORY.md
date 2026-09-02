@@ -2,7 +2,13 @@
 
 Last updated: 2026-09-02
 
-## Final re-review blocked by two native-dialog security boundaries
+## Native-dialog security repair verified
+
+The user authorized one additional narrowly scoped repair-and-review wave for
+the two native-dialog findings below.  No merge, push, publication, or unrelated
+scope is authorized.  The implementation, prescribed verification, exact-diff
+self-review, ignored report, and staged policy checks are complete red-first;
+the three-file candidate awaits one local commit.
 
 Scoped re-review of final fix commit `e6eb534` confirms all seven original
 Important findings and both promoted Task 6 test gaps are addressed.  It found
@@ -13,15 +19,30 @@ If native selection raises, the QML-facing slot wipes input but re-raises the
 arbitrary exception, allowing unredacted native diagnostics to cross the safe
 failure boundary instead of emitting the fixed argument-free rejection.
 
-These are real load-bearing security findings, not parked minors.  The mandated
-single final fix wave and single scoped re-review are exhausted, so the branch
-must not merge or publish in this state.  The exact next actions, if another
-repair wave is authorized, are: (1) take passphrase ownership before opening the
-dialog and close it on cancellation/native failure; (2) contain every dialog
-exception inside the controller, set only a closed generic failure key, and emit
-the argument-free rejection; (3) add red-first coverage for blocking-dialog
-ownership and exception redaction; (4) run focused desktop gates, one scoped
-review, then the complete Botan-backed final suite and finishing workflow.
+The exact focused matrix first failed all six create/open cases.  During accepted
+or canceled selection it observed `passphrasePresent=True`, the raw bytearray
+intact, and no owner; adversarial path/secret-like `KeyboardInterrupt` text also
+escaped both slots.  After the controller-only repair, all six pass.  Slot entry
+now transfers input immediately to one real `SecretBuffer`; cancellation closes
+it without reporting an error, accepted selection transfers it exactly once to
+the facade, and dialog `BaseException` closes it, emits only zero-argument
+`commandRejected`, returns false, and leaves public safe state unchanged.
+
+The amended controller/QML set passes 65 tests and the complete offscreen desktop
+suite passes all 90.  Ruff, autopep8 diff, Python structure, six-file QML lint,
+provenance, strict mypy for 111 files under default/win32/darwin/linux, native
+deploy dry run, Bandit, pip-audit, source/wheel build, and wheel inspection all
+exit zero.  Deploy retains only the documented missing-project and unavailable
+`dumpbin` warnings; pip-audit skips only the unpublished local package.
+
+Tracked-file policy is clean, REUSE reports 174/174 compliant, and staged plus
+unstaged whitespace checks are clean.  Exact-diff self-review confirms only the
+controller, controller regressions, and this memory are tracked candidates.
+
+Exact next actions are: restage this final checkpoint; rerun staged tracked-file,
+REUSE, and whitespace checks; commit locally; and record the hash in the ignored
+report.  Controller final verification/review follows.  Merge and publication
+remain prohibited.
 
 Hosted Windows/macOS/Linux deployment evidence and the local optional-project /
 `dumpbin` warnings remain integration checks after the security boundary is

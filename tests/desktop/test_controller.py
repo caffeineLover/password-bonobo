@@ -692,18 +692,185 @@ def test_controller_create_intent_has_no_qml_locator_argument(qtbot: QtBot) -> N
 
 
 
-#### Wipe retained passphrase input when native selection itself is interrupted.
+#### Transfer raw controller input to one owner before either native dialog opens.
 ####
 @pytest.mark.parametrize("intent", ("create", "open"))
-def test_controller_wipes_passphrase_when_native_selection_raises(intent: str) -> None:
+def test_controller_takes_passphrase_ownership_before_native_selection(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    service = FakeVaultService(FakeVaultSession(()))
+    application = VaultApplication(service)
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+    during_dialog: list[tuple[bool, bytes, int, bool]] = []
+
+
+
+    #### Capture the real owner created at synchronous slot entry.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+
+
+    #### Observe controller and owner state while returning one accepted selection.
+    ####
+    class _ObservingDialog:
+
+
+
+        #### Record ownership state while selecting the fabricated open vault.
+        ####
+        def select_open(self, display_label: str) -> VaultFileSelection:
+            during_dialog.append(
+                (
+                    cast(bool, controller.property("passphrasePresent")),
+                    bytes(controller._passphrase),
+                    len(owners),
+                    owners[0].closed if owners else True,
+                )
+            )
+            return VaultFileSelection(Path("fabricated-open.psafe3"), display_label)
+
+
+
+        #### Record ownership state while selecting the fabricated create destination.
+        ####
+        def select_create(self, display_label: str) -> VaultFileSelection:
+            during_dialog.append(
+                (
+                    cast(bool, controller.property("passphrasePresent")),
+                    bytes(controller._passphrase),
+                    len(owners),
+                    owners[0].closed if owners else True,
+                )
+            )
+            return VaultFileSelection(Path("fabricated-create.psafe3"), display_label)
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    controller = DesktopController(typed_application, executor, file_dialog=_ObservingDialog())
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert _submit_secret_intent(controller, intent)
+
+    assert during_dialog == [(False, b"", 1, False)]
+    assert len(owners) == 1
+    assert owners[0].closed
+    assert (service.create_calls, service.open_calls) == ((1, 0) if intent == "create" else (0, 1))
+    executor.shutdown()
+
+
+
+#### Close the transferred real owner when either native dialog is canceled.
+####
+@pytest.mark.parametrize("intent", ("create", "open"))
+def test_controller_closes_owned_passphrase_when_native_selection_is_canceled(
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
     application = VaultApplication(FakeVaultService(FakeVaultSession(())))
     typed_application = cast(VaultApplication[VaultSession], application)
     executor = FacadeExecutor(typed_application)
-    failure = KeyboardInterrupt(f"fabricated {intent} dialog interruption")
+    owners: list[SecretBuffer] = []
+    owned_storage: list[bytearray] = []
+    take_ownership = SecretBuffer.take_ownership
+    during_dialog: list[tuple[bool, bytes, int]] = []
 
 
 
-    #### Interrupt either native selection call before secret ownership transfer.
+    #### Capture the real owner and its adopted mutable storage.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owned_storage.append(value)
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+
+
+    #### Observe ownership state before returning native cancellation.
+    ####
+    class _CanceledDialog:
+
+
+
+        #### Cancel open selection after recording controller state.
+        ####
+        def select_open(self, _display_label: str) -> None:
+            during_dialog.append(
+                (
+                    cast(bool, controller.property("passphrasePresent")),
+                    bytes(controller._passphrase),
+                    len(owners),
+                )
+            )
+
+
+
+        #### Cancel create selection after recording controller state.
+        ####
+        def select_create(self, _display_label: str) -> None:
+            during_dialog.append(
+                (
+                    cast(bool, controller.property("passphrasePresent")),
+                    bytes(controller._passphrase),
+                    len(owners),
+                )
+            )
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    controller = DesktopController(typed_application, executor, file_dialog=_CanceledDialog())
+    rejections: list[tuple[object, ...]] = []
+    controller.commandRejected.connect(lambda *values: rejections.append(values))
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    assert not _submit_secret_intent(controller, intent)
+
+    assert during_dialog == [(False, b"", 1)]
+    assert rejections == []
+    assert len(owners) == 1
+    assert owners[0].closed
+    assert bytes(owned_storage[0]) == b"\x00" * len(owned_storage[0])
+    executor.shutdown()
+
+
+
+#### Contain adversarial native-dialog failures behind argument-free rejection.
+####
+@pytest.mark.parametrize("intent", ("create", "open"))
+def test_controller_contains_native_selection_failure_without_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    sensitive_text = rf"fabricated-passphrase at C:\private\{intent}.psafe3"
+    failure = KeyboardInterrupt(sensitive_text)
+    owners: list[SecretBuffer] = []
+    owned_storage: list[bytearray] = []
+    take_ownership = SecretBuffer.take_ownership
+
+
+
+    #### Capture the real owner and its adopted mutable storage.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owned_storage.append(value)
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+
+
+    #### Raise one adversarial diagnostic from either native selection boundary.
     ####
     class _InterruptedDialog:
 
@@ -721,19 +888,38 @@ def test_controller_wipes_passphrase_when_native_selection_raises(intent: str) -
         def select_create(self, _display_label: str) -> VaultFileSelection | None:
             raise failure
 
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
     controller = DesktopController(typed_application, executor, file_dialog=_InterruptedDialog())
+    rejections: list[tuple[object, ...]] = []
+    controller.commandRejected.connect(lambda *values: rejections.append(values))
     assert controller.setProperty("passphrase", "fabricated-passphrase")
-    retained_input = controller._passphrase
+    before = (
+        controller.property("phase"),
+        controller.property("displayLabel"),
+        controller.property("failureKey"),
+        controller.property("selectedKey"),
+    )
 
-    with pytest.raises(KeyboardInterrupt) as caught:
-        if intent == "create":
-            controller.create_vault("Fabricated")
-        else:
-            controller.open_vault("Fabricated")
+    try:
+        accepted = _submit_secret_intent(controller, intent)
+    except BaseException:
+        pytest.fail("native dialog exception escaped the QML-facing slot")
 
-    assert caught.value is failure
-    assert controller.property("passphrasePresent") is False
-    assert bytes(retained_input) == b"\x00" * len(retained_input)
+    after = (
+        controller.property("phase"),
+        controller.property("displayLabel"),
+        controller.property("failureKey"),
+        controller.property("selectedKey"),
+    )
+    signal = controller.metaObject().method(controller.metaObject().indexOfSignal("commandRejected()"))
+    assert not accepted
+    assert rejections == [()]
+    assert signal.parameterCount() == 0
+    assert before == after
+    assert len(owners) == 1
+    assert owners[0].closed
+    assert bytes(owned_storage[0]) == b"\x00" * len(owned_storage[0])
+    assert sensitive_text not in repr((after, controller.__dict__))
     executor.shutdown()
 
 

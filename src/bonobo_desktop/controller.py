@@ -197,20 +197,22 @@ class DesktopController(QObject):
 
 
 
-    #### Resolve one open intent through the native Python dialog and submit privately.
+    #### Own passphrase input before resolving one native open intent privately.
     ####
     @Slot(str, result=bool, name="openVault")
     def open_vault(self, display_label: str) -> bool:
+        passphrase = self._take_passphrase()
         try:
             selection = self._file_dialog.select_open(display_label)
         except BaseException:
             with suppress(BaseException):
-                self._clear_passphrase()
-            raise
-        if selection is None:
-            self._clear_passphrase()
+                passphrase.close()
+            self.commandRejected.emit()
             return False
-        passphrase = self._take_passphrase()
+        if selection is None:
+            with suppress(BaseException):
+                passphrase.close()
+            return False
         return self._submit_secret_command(
             lambda application: application.open(selection.locator, passphrase, selection.display_label),
             passphrase,
@@ -218,20 +220,22 @@ class DesktopController(QObject):
 
 
 
-    #### Resolve one create intent through the native Python dialog and submit privately.
+    #### Own passphrase input before resolving one native create intent privately.
     ####
     @Slot(str, result=bool, name="createVault")
     def create_vault(self, display_label: str) -> bool:
+        passphrase = self._take_passphrase()
         try:
             selection = self._file_dialog.select_create(display_label)
         except BaseException:
             with suppress(BaseException):
-                self._clear_passphrase()
-            raise
-        if selection is None:
-            self._clear_passphrase()
+                passphrase.close()
+            self.commandRejected.emit()
             return False
-        passphrase = self._take_passphrase()
+        if selection is None:
+            with suppress(BaseException):
+                passphrase.close()
+            return False
         return self._submit_secret_command(
             lambda application: application.create(selection.locator, passphrase, selection.display_label),
             passphrase,
