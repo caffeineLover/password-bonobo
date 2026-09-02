@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-02
 
-## Hosted desktop proof correction in progress
+## Hosted desktop proof correction verified
 
 The user authorized publication and hosted verification.  The completed desktop
 vertical slice and its local integration record were pushed through commit
@@ -64,9 +64,17 @@ Ruff passes the changed files and strict mypy passes all 110 source files.  The
 affected pending/storage suite reports 93 passed and 7 expected platform skips
 in 140.18 seconds.
 
-The exact immediate actions are to publish the root-cause correction and monitor
-its replacement foundation run until all three desktop jobs and both mobile jobs
-reach terminal status.  After hosted success, record that exact run here.
+Root-cause correction commit `74707f1` is published and exact-commit foundation
+run `33688230387` passes all five jobs.  Windows reports 940 passed and 10
+expected skips at 80% coverage; Ubuntu reports 927 passed and 23 expected skips,
+and macOS reports 929 passed and 21 expected skips, both at 77% coverage.  Each
+desktop job also passes all 91 offscreen desktop tests and both early native
+publication probes.  Android and iOS cross-build/link jobs pass.
+
+The hosted desktop proof correction is complete.  The exact next product action
+is to select and design the next approved vertical slice; do not begin provider
+coordination, URL-audit behavior, mobile clients, settings, or advanced vault
+workflows without explicit scope.
 Packaged native artifacts, installers, signing, provider work, URL audit,
 mobile clients, settings, and advanced vault workflows remain outside this
 completed vertical slice.
