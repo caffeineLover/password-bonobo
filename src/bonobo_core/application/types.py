@@ -54,6 +54,9 @@ class RecordSummary:
 
 #### Capture one complete UI-safe application state without domain escape hatches.
 ####
+#### Record projections may be filtered by the active safe search query, but they
+#### never gain a URL, secret, or PasswordSafe identity as a result.
+####
 @dataclass(frozen=True, slots=True)
 class ApplicationSnapshot:
     generation: int

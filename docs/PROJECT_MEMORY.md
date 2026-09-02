@@ -2,6 +2,29 @@
 
 Last updated: 2026-09-02
 
+## Active Task 3 checkpoint
+
+Task 3 of the vault-application desktop vertical slice is active on
+`feature/vault-application-desktop` from base `38231e6`.  The worktree was
+clean before work began.  The new focused record-command and secret-action
+tests first failed during collection as expected because the public
+`RecordDraft` contract and recording ports did not exist; they now pass (9).
+The Task 3 facade adds safe search, revision-bound immutable drafts, explicit
+password/username copy, URL browser actions, closed platform failure reasons,
+and clipboard cleanup on terminal transitions.  Existing PasswordSafe treats
+URLs as public text fields, so URL buffers are converted only transiently in
+the private command and are passed to `SetTextField`; URL browser actions use a
+short-lived application lease and never enter a projection.  The application
+suite passes (50), as does the relevant application/PasswordSafe
+session-secret/service selection (74); Ruff, focused mypy, Python structure,
+and whitespace checks pass.  Exact strict mypy passes on win32, darwin, and
+linux for 83 files each.  The required Botan-backed full suite passes with 712
+tests and 12 expected skips in 107.56 seconds.  The Task 3 report is present in
+the approved SDD workspace.  Immediate next actions: run final structure and
+diff checks after the report/memory updates, commit only Task 3 changes, then
+continue with approved Task 4.  Later approved work remains Tasks 4 through 8
+in order.
+
 ## Purpose and resume protocol
 
 This is the repository's sole persistent continuation record.  Read it completely before resumed or substantial work,

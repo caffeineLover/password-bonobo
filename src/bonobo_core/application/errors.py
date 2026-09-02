@@ -42,6 +42,8 @@ class ApplicationFailureReason(StrEnum):
     EXTERNAL_MODIFICATION = "external-modification"
     STORAGE = "storage"
     RECOVERY_AVAILABLE = "recovery-available"
+    CLIPBOARD_UNAVAILABLE = "clipboard-unavailable"
+    BROWSER_UNAVAILABLE = "browser-unavailable"
     UNEXPECTED = "unexpected"
 
 

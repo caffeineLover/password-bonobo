@@ -6,7 +6,17 @@ remaining independent from encryption, storage, and fabricated file contents.
 
 from collections.abc import Callable
 
-from bonobo_core.passwordsafe import RecordHandle, RecordView, RevisionToken, SecretBuffer
+from bonobo_core.passwordsafe import (
+    NewRecord,
+    RecordFieldType,
+    RecordHandle,
+    RecordView,
+    RevisionToken,
+    SecretBuffer,
+    SecretLease,
+    SetSecretField,
+    SetTextField,
+)
 
 
 
@@ -37,6 +47,8 @@ def fabricated_record_view() -> RecordView:
 #### operation because the facade must not depend on those details here.
 ####
 class FakeVaultSession:
+    apply_calls: int
+    change_count: int
     discard_error: BaseException | None
     records_error: BaseException | None
     records_value: tuple[RecordView, ...]
@@ -51,6 +63,8 @@ class FakeVaultSession:
     #### Initialize an active session with caller-supplied non-secret record views.
     ####
     def __init__(self, records: tuple[RecordView, ...], *, dirty: bool = False) -> None:
+        self.apply_calls = 0
+        self.change_count = 0
         self.records_value = records
         self.dirty = dirty
         self.discard_calls = 0
@@ -68,6 +82,78 @@ class FakeVaultSession:
         if self.records_error is not None:
             raise self.records_error
         return self.records_value
+
+
+
+    #### Apply fabricated public-field updates and produce one fresh fake revision.
+    ####
+    def apply(
+        self,
+        handle: RecordHandle,
+        _expected_revision: RevisionToken,
+        edits: tuple[SetTextField | SetSecretField, ...],
+    ) -> RecordView:
+        for index, view in enumerate(self.records_value):
+            if view.handle is not handle:
+                continue
+            title = view.title
+            group = view.group
+            username = view.username
+            url = view.url
+            for edit in edits:
+                if isinstance(edit, SetTextField):
+                    if edit.field_type is RecordFieldType.TITLE:
+                        title = edit.value
+                    elif edit.field_type is RecordFieldType.GROUP:
+                        group = edit.value
+                    elif edit.field_type is RecordFieldType.USERNAME:
+                        username = edit.value
+                    elif edit.field_type is RecordFieldType.URL:
+                        url = edit.value
+                else:
+                    edit.value.close()
+            updated = RecordView(handle, RevisionToken(), title, group, username, url, view.protected)
+            self.records_value = (*self.records_value[:index], updated, *self.records_value[index + 1 :])
+            self.apply_calls += 1
+            self.change_count += 1
+            self.dirty = True
+            return updated
+        raise ValueError("fabricated record is unavailable")
+
+
+
+    #### Add a fabricated record while closing the supplied password owner.
+    ####
+    def add(self, new_record: NewRecord, _expected_revision: RevisionToken) -> RecordView:
+        try:
+            view = RecordView(
+                RecordHandle(),
+                RevisionToken(),
+                new_record.title,
+                new_record.group,
+                new_record.username,
+                new_record.url,
+                False,
+            )
+            self.records_value = (*self.records_value, view)
+            self.change_count += 1
+            self.dirty = True
+            return view
+        finally:
+            new_record.password.close()
+
+
+
+    #### Lease only fabricated password or URL material for explicit port actions.
+    ####
+    def reveal(self, handle: RecordHandle, field_type: RecordFieldType) -> SecretLease:
+        if not any(view.handle is handle for view in self.records_value):
+            raise ValueError("fabricated record is unavailable")
+        if field_type is RecordFieldType.PASSWORD:
+            return SecretLease.from_bytes(b"fabricated-password")
+        if field_type is RecordFieldType.URL:
+            return SecretLease.from_bytes(b"https://fabricated.example.invalid/private")
+        raise ValueError("fabricated secret field is unavailable")
 
 
 
@@ -157,3 +243,88 @@ class FakeVaultService:
             raise self.save_error
         session.dirty = False
         return object()
+
+
+
+#### Record clipboard interactions while consuming each lease only during the call.
+####
+class RecordingClipboard:
+    clear_calls: int
+    copied: bytes | None
+    copy_error: BaseException | None
+    _last_lease: SecretLease | None
+
+
+
+    #### Initialize an empty recording port with optional fabricated failure injection.
+    ####
+    def __init__(self) -> None:
+        self.clear_calls = 0
+        self.copied = None
+        self.copy_error = None
+        self._last_lease = None
+
+
+
+    #### Copy a lease only while it remains open and optionally raise a fake error.
+    ####
+    def copy(self, value: SecretLease, *, lifetime_seconds: int) -> None:
+        if lifetime_seconds <= 0:
+            raise AssertionError("clipboard lifetime must be positive")
+        self.copied = bytes(value.borrow())
+        self._last_lease = value
+        if self.copy_error is not None:
+            raise self.copy_error
+
+
+
+    #### Record adapter-owned clipboard clearing after terminal facade transitions.
+    ####
+    def clear_owned(self) -> None:
+        self.clear_calls += 1
+
+
+
+    #### Report whether the most recently observed lease was wiped on facade exit.
+    ####
+    @property
+    def last_lease_closed(self) -> bool:
+        return self._last_lease is not None and self._last_lease.closed
+
+
+
+#### Record browser interactions while keeping every leased URL within the call.
+####
+class RecordingBrowser:
+    _last_lease: SecretLease | None
+    open_error: BaseException | None
+    opened: bool
+
+
+
+    #### Initialize a successful browser port with optional fabricated failure injection.
+    ####
+    def __init__(self) -> None:
+        self._last_lease = None
+        self.open_error = None
+        self.opened = False
+
+
+
+    #### Accept one leased URL without retaining or rendering its contents.
+    ####
+    def open(self, value: SecretLease) -> bool:
+        value.borrow()
+        self._last_lease = value
+        if self.open_error is not None:
+            raise self.open_error
+        self.opened = True
+        return True
+
+
+
+    #### Report whether the most recently observed lease was wiped on facade exit.
+    ####
+    @property
+    def last_lease_closed(self) -> bool:
+        return self._last_lease is not None and self._last_lease.closed
