@@ -76,6 +76,72 @@ def test_stale_draft_rejects_before_session_mutation(
 
 
 
+#### Reject a constructed existing draft that never began a private edit capture.
+####
+def test_existing_draft_without_private_revision_capture_is_rejected() -> None:
+    session = FakeVaultSession((fabricated_record_view(),))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-vault.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    before = application.snapshot
+    draft = RecordDraft(RecordKey(1), before.generation, "Changed Title", "Research", "sample-user", False)
+    password = SecretBuffer.from_bytes(b"fabricated-password-change")
+
+    with pytest.raises(ApplicationCommandError, match="record draft is stale"):
+        application.commit_edit(draft, password)
+
+    assert password.closed
+    assert session.change_count == 0
+    assert session.records_value[0].title == "Alpha Portal"
+    assert application.snapshot == before
+
+
+
+#### Reject an existing draft whose privately captured revision is externally stale.
+####
+def test_existing_draft_rejects_out_of_band_revision_without_mutation() -> None:
+    session = FakeVaultSession((fabricated_record_view(),))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-vault.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    draft = replace(application.begin_edit(RecordKey(1), application.snapshot.generation), title="Changed Title")
+    before = application.snapshot
+    session.advance_revision_out_of_band()
+    password = SecretBuffer.from_bytes(b"fabricated-password-change")
+
+    with pytest.raises(ApplicationCommandError, match="record draft is stale"):
+        application.commit_edit(draft, password)
+
+    assert password.closed
+    assert session.change_count == 0
+    assert session.records_value[0].title == "Alpha Portal"
+    assert application.snapshot == before
+
+
+
+#### Consume a canceled existing edit capture before another draft can use it.
+####
+def test_canceled_existing_draft_cannot_authorize_a_fabricated_edit() -> None:
+    session = FakeVaultSession((fabricated_record_view(),))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-vault.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    draft = application.begin_edit(RecordKey(1), application.snapshot.generation)
+    before = application.snapshot
+
+    assert application.commit_edit(draft, None) == before
+    assert session.change_count == 0
+
+    fabricated = RecordDraft(RecordKey(1), before.generation, "Changed Title", "Research", "sample-user", False)
+    password = SecretBuffer.from_bytes(b"fabricated-password-change")
+
+    with pytest.raises(ApplicationCommandError, match="record draft is stale"):
+        application.commit_edit(fabricated, password)
+
+    assert password.closed
+    assert session.change_count == 0
+    assert session.records_value[0].title == "Alpha Portal"
+    assert application.snapshot == before
+
+
+
 #### Filter only safe record projection fields while preserving facade-owned keys.
 ####
 def test_search_changes_only_the_safe_projection(application: VaultApplication[FakeVaultSession]) -> None:

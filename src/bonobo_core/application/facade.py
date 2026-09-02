@@ -198,13 +198,12 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     _browser: BrowserPort | None
     _clipboard: ClipboardPort | None
     _decision: _PendingDecision | None
+    _draft_revisions: dict[tuple[int, RecordKey | None], RevisionToken]
     _generation: int
     _lock: RLock
     _next_record_key: int
-    _new_draft_revisions: dict[int, RevisionToken]
     _random: RandomSource
     _record_keys: dict[RecordHandle, RecordKey]
-    _record_revisions: dict[RecordKey, RevisionToken]
     _search: str
     _service: VaultServiceLike[ApplicationSessionT]
     _session: ApplicationSessionT | None
@@ -237,9 +236,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         self._session = None
         self._generation = 0
         self._next_record_key = 1
-        self._new_draft_revisions = {}
+        self._draft_revisions = {}
         self._record_keys = {}
-        self._record_revisions = {}
         self._search = ""
         self._snapshot = ApplicationSnapshot(0, ApplicationPhase.EMPTY, "", False, (), None, None, None)
         self._decision = None
@@ -311,12 +309,12 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             previous = self._validate_active_generation(expected_generation)
             if key is None:
                 session = self._require_session()
-                self._new_draft_revisions[previous.generation] = self._current_revision(session)
+                self._capture_draft_revision(previous.generation, None, self._current_revision(session))
                 return RecordDraft(None, previous.generation, "", "", "", False)
             handle = self._resolve_handle(key)
             session = self._require_session()
             view = self._view_for_handle(session, handle)
-            self._record_revisions[key] = session.revision
+            self._capture_draft_revision(previous.generation, key, self._current_revision(session))
             return RecordDraft(key, previous.generation, view.title, view.group, view.username, view.protected)
 
 
@@ -530,7 +528,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         if password is None:
             raise ApplicationCommandError("new record password is required")
         session = self._require_session()
-        revision = self._consume_new_draft_revision(draft.generation)
+        revision = self._consume_draft_revision(draft.generation, None)
         if self._current_revision(session) is not revision:
             raise ApplicationCommandError("record draft is stale")
         self._enter_busy(previous)
@@ -575,6 +573,9 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             raise ApplicationCommandError("record draft is invalid")
         handle = self._resolve_handle(key)
         session = self._require_session()
+        revision = self._consume_draft_revision(draft.generation, key)
+        if self._current_revision(session) is not revision:
+            raise ApplicationCommandError("record draft is stale")
         view = self._view_for_handle(session, handle)
         if draft.protected != view.protected:
             raise ApplicationCommandError("record protection edit is unavailable")
@@ -592,9 +593,6 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             edits.append(SetTextField(RecordFieldType.URL, self._secret_text(url)))
         if not edits:
             return previous
-        revision = self._record_revisions.get(key)
-        if revision is None:
-            raise ApplicationCommandError("record draft is stale")
         self._enter_busy(previous)
         mutated = False
         try:
@@ -700,10 +698,17 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
 
 
 
-    #### Consume the private revision captured while creating one new-record draft.
+    #### Retain one opaque revision only for an edit begun at this snapshot generation.
     ####
-    def _consume_new_draft_revision(self, generation: int) -> RevisionToken:
-        revision = self._new_draft_revisions.pop(generation, None)
+    def _capture_draft_revision(self, generation: int, key: RecordKey | None, revision: RevisionToken) -> None:
+        self._draft_revisions[(generation, key)] = revision
+
+
+
+    #### Consume one private revision before a draft can cancel or mutate session state.
+    ####
+    def _consume_draft_revision(self, generation: int, key: RecordKey | None) -> RevisionToken:
+        revision = self._draft_revisions.pop((generation, key), None)
         if revision is None:
             raise ApplicationCommandError("record draft is stale")
         return revision
@@ -837,14 +842,13 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 candidate = self._service.create(replacement.path, replacement.passphrase)
             else:
                 candidate = self._service.open(replacement.path, replacement.passphrase)
-            records, record_keys, record_revisions = self._project_session(candidate)
+            records, record_keys = self._project_session(candidate)
             if old_session is not None:
                 old_terminal_started = True
                 old_session.lock() if not old_session.dirty else old_session.discard_and_lock()
                 self._clear_clipboard_without_masking()
             self._session = candidate
             self._record_keys = record_keys
-            self._record_revisions = record_revisions
             return self._commit_projected_session(candidate, replacement.display_label, records)
         except BaseException as error:
             if candidate is not None and candidate is not old_session:
@@ -915,15 +919,13 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     def _project_session(
         self,
         session: ApplicationSessionT,
-    ) -> tuple[tuple[RecordSummary, ...], dict[RecordHandle, RecordKey], dict[RecordKey, RevisionToken]]:
+    ) -> tuple[tuple[RecordSummary, ...], dict[RecordHandle, RecordKey]]:
         views = session.records()
-        revision = self._current_revision(session)
         record_keys = {
             view.handle: RecordKey(self._next_record_key + index)
             for index, view in enumerate(views)
         }
-        revisions = {record_keys[view.handle]: revision for view in views}
-        return project_records(views, record_keys), record_keys, revisions
+        return project_records(views, record_keys), record_keys
 
 
 
@@ -950,7 +952,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
 
 
 
-    #### Refresh private identity and revision mappings after a successful mutation.
+    #### Refresh private handle mappings after a successful mutation.
     ####
     #### Existing handles retain their facade-owned keys.  A newly added handle
     #### receives a fresh key only after the session mutation has succeeded, and
@@ -958,7 +960,6 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     ####
     def _refresh_active_projection(self, session: ApplicationSessionT) -> tuple[RecordSummary, ...]:
         views = session.records()
-        revision = self._current_revision(session)
         keys: dict[RecordHandle, RecordKey] = {}
         for view in views:
             key = self._record_keys.get(view.handle)
@@ -967,7 +968,6 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 self._next_record_key += 1
             keys[view.handle] = key
         self._record_keys = keys
-        self._record_revisions = {keys[view.handle]: revision for view in views}
         return self._filter_records(project_records(views, keys))
 
 
@@ -991,7 +991,6 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     def _commit_locked(self, display_label: str) -> ApplicationSnapshot:
         self._session = None
         self._record_keys = {}
-        self._record_revisions = {}
         self._clear_clipboard_without_masking()
         return self._publish(ApplicationPhase.LOCKED, display_label, False, (), None, None, None)
 
@@ -1026,7 +1025,6 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         self._discard_without_masking(session)
         self._session = None
         self._record_keys = {}
-        self._record_revisions = {}
         self._clear_clipboard_without_masking()
         return self._publish(
             ApplicationPhase.LOCKED,
@@ -1098,7 +1096,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         failure: ApplicationFailure | None,
         decision: DecisionToken | None,
     ) -> ApplicationSnapshot:
-        self._new_draft_revisions.clear()
+        self._draft_revisions.clear()
         self._generation += 1
         self._snapshot = ApplicationSnapshot(
             self._generation,
