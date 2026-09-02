@@ -1,6 +1,6 @@
 # Password Bonobo Project Memory
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Purpose and resume protocol
 
@@ -11,11 +11,12 @@ Do not store raw transcripts, credentials, machine-specific research paths, or h
 
 This file is Markdown-only.  Do not create a second project-memory location or a LaTeX/PDF derivative.
 
-## Active Task 2 checkpoint
+## Completed Task 2 checkpoint
 
 Task 2 of the approved vault-application desktop vertical slice is committed as
-`6f0a89c` on `feature/vault-application-desktop`.  Review-fix round 1 is in
-committed as `ffdf1f4` for failures raised after terminal session operations.
+`6f0a89c` on `feature/vault-application-desktop`.  Review-fix round 1 is
+committed as `ffdf1f4` for failures raised after terminal session operations,
+with its checkpoint committed as `6d9bc70`.
 The fix adds fault injection tests and conservatively fails closed rather than
 republishing an old unlocked snapshot after a lock/discard may have mutated its
 private session.  The committed task adds the serialized UI-independent lifecycle facade,
@@ -29,8 +30,10 @@ the established verified Botan DLL reports 698 passed and 12 expected skips in
 Ruff, structure, and the exact repository-wide strict mypy checks pass under
 Windows, macOS, and Linux for 79 source files.  The Task 1-only fabricated
 `RecordView` factory now lives in the Task 2 application fakes rather than
-creating a second module path in PasswordSafe test helpers.  Immediate next
-actions: continue only with approved Task 3.  Review-fix fault tests passed
+creating a second module path in PasswordSafe test helpers.  Independent
+re-review approved Task 2 with no remaining Critical, Important, or Minor
+findings.  Immediate next actions: continue only with approved Task 3.
+Review-fix fault tests passed
 (16) and focused application/service tests passed (56); Ruff, Python
 structure, `git diff --check`, and strict mypy on Windows, macOS, and Linux
 (79 files each) passed.  The exact Botan-backed full suite passed 703 tests
