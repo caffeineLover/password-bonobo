@@ -28,6 +28,11 @@ jobs:
         run: uv run python -m pytest tests/desktop -q
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: Probe native retained-directory publication
+        run: >-
+          uv run python -m pytest
+          tests/passwordsafe/test_pending_sessions.py::test_native_anchor_publishes_staged_child_by_retained_identity
+          -q
       - name: Inspect native desktop deployment
         run: uv run pyside6-deploy --dry-run -c pysidedeploy.spec
       - id: botan

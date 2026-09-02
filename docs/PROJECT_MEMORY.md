@@ -6,11 +6,11 @@ Last updated: 2026-09-02
 
 The user authorized publication and hosted verification.  The completed desktop
 vertical slice and its local integration record were pushed through commit
-`92400d7`.  Hosted foundation run `33685474332` is the exact-commit proof run.
-Its Android and iOS cross-build/link jobs pass.  Ubuntu 24.04 fails before test
-collection because importing PySide6 QtGui cannot resolve `libEGL.so.1`; the
-macOS and Windows quality jobs continue independently because the matrix does
-not fail fast.
+`92400d7`.  Hosted foundation run `33685474332` is the initial exact-commit
+proof run.  Its Android and iOS cross-build/link jobs pass.  Ubuntu 24.04 first
+fails before test collection because importing PySide6 QtGui cannot resolve
+`libEGL.so.1`.  The completed macOS full suite then exposes 71 failures with a
+common first-write boundary in the new pending-session publisher.
 
 A red-first parsed-workflow regression proves the quality matrix must install
 Ubuntu's `libegl1` runtime, only on Linux and before dependency synchronization
@@ -24,12 +24,25 @@ The parsed deployment/workflow file passes all 9 tests.  Clipboard expiry passes
 five consecutive isolated runs, and the complete desktop selection passes all
 91 tests.  Ruff passes the changed files and the entire source/test/tool tree;
 strict mypy passes all 110 source files when invoked with the repository's full
-roots; autopep8 reports no diff; and the Python structure gate passes.
+roots; autopep8 reports no diff; and the Python structure gate passes.  Commit
+`17db85a` contains and publishes those corrections.
 
-The exact immediate actions are to complete document-policy, provenance,
-tracked-file, REUSE, and whitespace checks; commit and push the correction; then
-monitor the new foundation run until all three desktop jobs and both mobile jobs
-reach terminal status.  After hosted success, record that exact run here.
+Replacement run `33686070548` proves the Linux runtime install, all 91 Ubuntu
+offscreen desktop tests, and the Ubuntu deployment dry run.  Both mobile jobs
+pass, and Windows and macOS pass the same desktop/deployment gates.  Ubuntu's
+later full suite reproduces the macOS pending-session result exactly: 71
+failures share the first POSIX pending publication as their root, after 853
+passes and 23 expected skips.  The safe public exception projection intentionally
+hides the underlying native exception, so a direct retained-anchor regression
+now isolates create/write/fsync/absent-only publish and retained-descriptor read.
+It passes on Windows and is added as an early matrix probe before the native
+deployment step.
+
+The exact immediate actions are to push that diagnostic regression, observe its
+direct Ubuntu/macOS failure, correct only the proven POSIX native boundary under
+red-first coverage, and monitor a replacement foundation run until all three
+desktop jobs and both mobile jobs reach terminal status.  After hosted success,
+record that exact run here.
 Packaged native artifacts, installers, signing, provider work, URL audit,
 mobile clients, settings, and advanced vault workflows remain outside this
 completed vertical slice.

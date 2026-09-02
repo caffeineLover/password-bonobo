@@ -259,6 +259,37 @@ def _service(tmp_path: Path) -> VaultService:
 
 
 
+#### Exercise absent-only publication through the retained native directory identity.
+####
+def test_native_anchor_publishes_staged_child_by_retained_identity(tmp_path: Path) -> None:
+    directory = _private_directory(tmp_path, "anchor-private")
+    anchor = _open_private_anchor(directory)
+    descriptor = -1
+    staged_name = ".fabricated-staged"
+    published_name = ".fabricated-published"
+    payload = b"fabricated-anchor-payload"
+    try:
+        created = anchor.create_persistent(staged_name)
+        assert created is not None
+        descriptor, identity, cleanup_name = created
+        assert cleanup_name == staged_name
+        assert os.write(descriptor, payload) == len(payload)
+        os.fsync(descriptor)
+
+        assert anchor.publish_new_child(descriptor, identity, staged_name, published_name)
+        assert not (directory / staged_name).exists()
+        assert (directory / published_name).exists()
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        assert os.read(descriptor, len(payload)) == payload
+    finally:
+        if descriptor >= 0:
+            with suppress(BaseException):
+                os.close(descriptor)
+        with suppress(BaseException):
+            anchor.close()
+
+
+
 #### Hold one pending open guard in a spawned process until its parent releases it.
 ####
 def _hold_pending_identity_guard(
