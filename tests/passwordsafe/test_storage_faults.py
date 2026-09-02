@@ -7,9 +7,6 @@ from pathlib import Path
 from threading import Event, Thread
 
 import pytest
-from helpers import DeterministicRandomSource
-from test_storage import _publication_case
-from test_writer import _private_directory, _XorBackend
 
 from bonobo_core.passwordsafe.constants import FILE_TAG
 from bonobo_core.passwordsafe.errors import StorageError
@@ -22,6 +19,9 @@ from bonobo_core.passwordsafe.storage import (
     _vault_locator,
 )
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_storage import _publication_case
+from tests.passwordsafe.test_writer import _private_directory, _XorBackend
 
 
 

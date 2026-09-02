@@ -2,6 +2,32 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 7 review-fix round 1
+
+The five requested review repairs are implemented red-first.  QML now retains
+the keyboard-selected primitive record key across each model reset and clears
+selection to search when that key disappears even if another row remains; the
+decision modal focuses Save on open; runtime accessibility tests cover initial
+focus, names, and complete tab cycles for Welcome, Unlock, Vault, RecordEditor,
+and DecisionDialog.  Record-confirm submission interruptions close the local
+secret owner without masking the original `BaseException`, and the QML
+identifier scanner preserves template interpolation code while ignoring
+literal text.
+
+The mandatory repository-wide mypy RED reproduced the `fakes` / qualified
+helper identity conflict.  Normalizing application imports alone remained red,
+so the approved fallback adds explicit test-package markers and qualifies the
+PasswordSafe helper imports required by that package boundary.  Final
+verification reports 83 application tests and 47 offscreen desktop tests
+passing, all 637 PasswordSafe tests collecting plus a 27-pass/5-skip runtime
+sample, resolved-path qmllint and Ruff clean, strict mypy clean for 106 files
+under win32, darwin, and linux, Python structure clean, REUSE 169/169, and clean
+staged and unstaged whitespace.  The Task 7 report contains exact RED/GREEN,
+debugging, implementation, accessibility, and secret-boundary evidence.  Task
+7 is complete after the separate review-fix commit; the exact next action is
+Task 8.  Provider, URL-audit, mobile, settings, and advanced vault work remain
+out of scope.
+
 ## Completed Task 7 Qt Quick shell
 
 The approved scope correction supplied primitive controller Add/Edit Confirm,

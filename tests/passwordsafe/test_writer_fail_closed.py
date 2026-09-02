@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import BinaryIO, Final, NoReturn, SupportsIndex
 
 import pytest
-from helpers import DeterministicRandomSource
-from test_writer import _opened_source, _private_directory, _XorBackend
 
 from bonobo_core.passwordsafe import writer as writer_module
 from bonobo_core.passwordsafe.constants import EOF_MARKER, ResourceLimits
@@ -25,6 +23,8 @@ from bonobo_core.passwordsafe.errors import (
 from bonobo_core.passwordsafe.model import RawField, RawRecord, VaultDocument
 from bonobo_core.passwordsafe.reader import OpenedVault, PasswordSafeReader, VaultCryptoState
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import _opened_source, _private_directory, _XorBackend
 
 
 

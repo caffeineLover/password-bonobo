@@ -5,13 +5,12 @@ import tracemalloc
 from pathlib import Path
 from typing import Final
 
-from helpers import DeterministicRandomSource, build_spec_vault
-from strategies import large_opaque_attachment
-from test_writer import _private_directory, _XorBackend
-
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType, ResourceLimits
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.service import VaultService
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
+from tests.passwordsafe.strategies import large_opaque_attachment
+from tests.passwordsafe.test_writer import _private_directory, _XorBackend
 
 
 

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Final, Protocol, SupportsIndex, cast, overload
 
 import pytest
-from helpers import DeterministicRandomSource, build_spec_vault
 
 import bonobo_core.passwordsafe.crypto as crypto_module
 from bonobo_core.passwordsafe.constants import ResourceLimits
@@ -37,6 +36,7 @@ from bonobo_core.passwordsafe.crypto import (
 )
 from bonobo_core.passwordsafe.errors import ResourceLimitError, ResourceLimitReason
 from bonobo_core.passwordsafe.secrets import SecretBuffer, SecretClosedError
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
 
 
 

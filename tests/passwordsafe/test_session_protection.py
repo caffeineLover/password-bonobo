@@ -3,11 +3,11 @@
 from pathlib import Path
 
 import pytest
-from test_writer import _base_fields, _opened_source, _XorBackend
 
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType
 from bonobo_core.passwordsafe.errors import ProtectedRecordError
 from bonobo_core.passwordsafe.session import SetTextField, VaultSession
+from tests.passwordsafe.test_writer import _base_fields, _opened_source, _XorBackend
 
 
 

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Literal, cast
 
 import pytest
-from fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 from bonobo_core.application.facade import ApplicationCommandError, CloseChoice, VaultApplication
 from bonobo_core.application.types import ApplicationPhase, ApplicationSnapshot
@@ -19,6 +18,7 @@ from bonobo_core.passwordsafe import (
     StorageError,
     StorageReason,
 )
+from tests.application.fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 
 

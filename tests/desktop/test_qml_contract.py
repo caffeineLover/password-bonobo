@@ -35,21 +35,87 @@ _FORBIDDEN_BINDING_IDENTIFIERS = frozenset(
         "errorString",
     }
 )
-_NON_CODE_QML = re.compile(
-    r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`|//[^\r\n]*|/\*.*?\*/',
-    re.DOTALL,
-)
 _QML_IDENTIFIER = re.compile(r"\b[A-Za-z_]\w*\b")
 
 
 
-#### Return exact identifiers from QML code after removing strings and comments.
+#### Scan one QML code segment while removing strings, comments, and template text.
+####
+def _scan_qml_code(text: str, start: int = 0, *, interpolation: bool = False) -> tuple[str, int]:
+    code: list[str] = []
+    index = start
+    depth = 1 if interpolation else 0
+    while index < len(text):
+        character = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if character in {'"', "'"}:
+            quote = character
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                elif text[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+            code.append(" ")
+        elif character == "/" and following == "/":
+            newline = text.find("\n", index + 2)
+            index = len(text) if newline < 0 else newline
+            code.append(" ")
+        elif character == "/" and following == "*":
+            closing = text.find("*/", index + 2)
+            index = len(text) if closing < 0 else closing + 2
+            code.append(" ")
+        elif character == "`":
+            nested, index = _scan_qml_template(text, index + 1)
+            code.extend((" ", nested, " "))
+        elif interpolation and character == "{":
+            depth += 1
+            code.append(character)
+            index += 1
+        elif interpolation and character == "}":
+            depth -= 1
+            index += 1
+            if depth == 0:
+                return "".join(code), index
+            code.append(character)
+        else:
+            code.append(character)
+            index += 1
+    return "".join(code), index
+
+
+
+#### Preserve only nested code expressions from one JavaScript template literal.
+####
+def _scan_qml_template(text: str, start: int) -> tuple[str, int]:
+    code: list[str] = []
+    index = start
+    while index < len(text):
+        character = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if character == "\\":
+            index += 2
+        elif character == "`":
+            return "".join(code), index + 1
+        elif character == "$" and following == "{":
+            expression, index = _scan_qml_code(text, index + 2, interpolation=True)
+            code.extend((" ", expression, " "))
+        else:
+            index += 1
+    return "".join(code), index
+
+
+
+#### Return exact identifiers from QML code after removing non-code regions.
 ####
 #### Resource locators and translated prose are deliberately ignored, while a
 #### forbidden member on either side of a binding remains visible to the gate.
 ####
 def _qml_identifiers(text: str) -> frozenset[str]:
-    code = _NON_CODE_QML.sub(" ", text)
+    code, _end = _scan_qml_code(text)
     return frozenset(_QML_IDENTIFIER.findall(code))
 
 
@@ -109,4 +175,16 @@ def test_qml_boundary_parser_ignores_strings_but_finds_member_bindings() -> None
     )
 
     assert "path" not in identifiers
+    assert "passwordValue" in identifiers
+
+
+
+#### Preserve code inside template interpolation while ignoring its literal text.
+####
+def test_qml_boundary_parser_finds_forbidden_member_inside_template_interpolation() -> None:
+    identifiers = _qml_identifiers(
+        "Text { text: `safe resource text ${desktopController.passwordValue}` }"
+    )
+
+    assert "safe" not in identifiers
     assert "passwordValue" in identifiers

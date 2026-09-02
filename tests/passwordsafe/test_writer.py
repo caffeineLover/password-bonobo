@@ -10,8 +10,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 
-from helpers import DeterministicRandomSource, build_spec_vault
-
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType, ResourceLimits
 from bonobo_core.passwordsafe.crypto import TwofishKey
 from bonobo_core.passwordsafe.model import documents_equal_exact
@@ -19,6 +17,7 @@ from bonobo_core.passwordsafe.payloads import EncryptedSpanPayload
 from bonobo_core.passwordsafe.reader import OpenedVault, PasswordSafeReader
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
 
 
 

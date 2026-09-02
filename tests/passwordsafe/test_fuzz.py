@@ -3,11 +3,12 @@
 from pathlib import Path
 
 import pytest
-from fuzz_target import fuzz_one_input
-from helpers import DeterministicRandomSource, build_spec_vault
-from test_reader import _base_fields
-from test_writer import _XorBackend
 from tools.run_passwordsafe_fuzz import main
+
+from tests.passwordsafe.fuzz_target import fuzz_one_input
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
+from tests.passwordsafe.test_reader import _base_fields
+from tests.passwordsafe.test_writer import _XorBackend
 
 
 

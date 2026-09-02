@@ -4,10 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Final
 
-from helpers import DeterministicRandomSource, build_spec_vault
 from hypothesis import HealthCheck, given, settings
-from strategies import LosslessVaultCase, lossless_vault_cases
-from test_writer import _private_directory, _XorBackend
 
 from bonobo_core.passwordsafe.constants import ResourceLimits
 from bonobo_core.passwordsafe.model import SemanticManifest, documents_equal_exact
@@ -15,6 +12,9 @@ from bonobo_core.passwordsafe.reader import PasswordSafeReader
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.session import SetTextField, VaultSession
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
+from tests.passwordsafe.strategies import LosslessVaultCase, lossless_vault_cases
+from tests.passwordsafe.test_writer import _private_directory, _XorBackend
 
 
 

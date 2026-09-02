@@ -6,15 +6,14 @@ import stat
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from helpers import DeterministicRandomSource
-from test_writer import _PASSPHRASE, _opened_source, _private_directory, _XorBackend
-
 from bonobo_core.passwordsafe.model import documents_equal_exact
 from bonobo_core.passwordsafe.reader import OpenedVault, PasswordSafeReader
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.snapshots import _windows_path_is_private
 from bonobo_core.passwordsafe.storage import LocalVaultStore
 from bonobo_core.passwordsafe.writer import EncryptedCandidate, PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import _PASSPHRASE, _opened_source, _private_directory, _XorBackend
 
 
 

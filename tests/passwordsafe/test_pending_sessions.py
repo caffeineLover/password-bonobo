@@ -16,8 +16,6 @@ from typing import Literal
 from uuid import UUID
 
 import pytest
-from helpers import DeterministicRandomSource
-from test_writer import _private_directory, _XorBackend
 
 import bonobo_core.passwordsafe.pending as pending_module
 import bonobo_core.passwordsafe.storage as storage_module
@@ -48,6 +46,8 @@ from bonobo_core.passwordsafe.storage import (
 from bonobo_core.passwordsafe.storage import (
     _capture_regular_file as _storage_capture_regular_file,
 )
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import _private_directory, _XorBackend
 
 
 

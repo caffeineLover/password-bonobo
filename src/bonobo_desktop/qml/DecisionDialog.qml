@@ -9,7 +9,17 @@ Dialog {
     width: 420
     title: qsTr("Unsaved changes")
     closePolicy: Popup.CloseOnEscape
+    onOpened: initialFocusTimer.restart()
     onRejected: root.controller.resolveClose("cancel")
+
+    Timer {
+        id: initialFocusTimer
+        interval: 0
+        onTriggered: {
+            if (root.visible)
+                decisionSaveButton.forceActiveFocus()
+        }
+    }
 
     contentItem: Label {
         text: qsTr("Save or discard the current changes before continuing?")

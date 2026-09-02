@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from helpers import DeterministicRandomSource, build_spec_vault
 
 from bonobo_core.passwordsafe.botan import BotanBackend
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType, ResourceLimits
@@ -25,6 +24,7 @@ from bonobo_core.passwordsafe.payloads import EncryptedSpanPayload, InlinePayloa
 from bonobo_core.passwordsafe.reader import OpenedVault, PasswordSafeReader, VaultCryptoState
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.snapshots import EncryptedSnapshot, SnapshotClosedError
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
 
 
 

@@ -4,9 +4,6 @@ import os
 from pathlib import Path
 
 import pytest
-from test_snapshots import _create_windows_junction
-from test_storage import _publication_case
-from test_writer import _private_directory
 
 from bonobo_core.passwordsafe.errors import ExternalModificationError, StorageError
 from bonobo_core.passwordsafe.storage import (
@@ -16,6 +13,9 @@ from bonobo_core.passwordsafe.storage import (
     _PublicationAnchor,
     _RecoveryArtifact,
 )
+from tests.passwordsafe.test_snapshots import _create_windows_junction
+from tests.passwordsafe.test_storage import _publication_case
+from tests.passwordsafe.test_writer import _private_directory
 
 
 

@@ -7,7 +7,6 @@ fake-port effects and safe snapshots, never application-internal identities.
 from pathlib import Path
 
 import pytest
-from fakes import FakeVaultService, FakeVaultSession, RecordingBrowser, RecordingClipboard, fabricated_record_view
 
 from bonobo_core.application import (
     ApplicationFailureReason,
@@ -15,6 +14,13 @@ from bonobo_core.application import (
     VaultApplication,
 )
 from bonobo_core.passwordsafe import SecretBuffer
+from tests.application.fakes import (
+    FakeVaultService,
+    FakeVaultSession,
+    RecordingBrowser,
+    RecordingClipboard,
+    fabricated_record_view,
+)
 
 
 

@@ -6,14 +6,14 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from helpers import DeterministicRandomSource, build_spec_vault
 from hypothesis import HealthCheck, given, settings
-from strategies import oversized_uint32_field_lengths
-from test_reader import _base_fields, _private_directory, _XorBackend
 
 from bonobo_core.passwordsafe.errors import MalformedVaultError
 from bonobo_core.passwordsafe.reader import PasswordSafeReader
 from bonobo_core.passwordsafe.secrets import SecretBuffer
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
+from tests.passwordsafe.strategies import oversized_uint32_field_lengths
+from tests.passwordsafe.test_reader import _base_fields, _private_directory, _XorBackend
 
 
 

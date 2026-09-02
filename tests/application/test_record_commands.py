@@ -8,10 +8,10 @@ from dataclasses import fields, replace
 from pathlib import Path
 
 import pytest
-from fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 from bonobo_core.application import ApplicationCommandError, RecordDraft, RecordKey, VaultApplication
 from bonobo_core.passwordsafe import SecretBuffer
+from tests.application.fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 
 

@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from helpers import DeterministicRandomSource, build_spec_vault
 
 import bonobo_core.passwordsafe.reader as reader_module
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType, ResourceLimits
@@ -30,6 +29,7 @@ from bonobo_core.passwordsafe.payloads import FieldPayload
 from bonobo_core.passwordsafe.reader import PasswordSafeReader
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.snapshots import EncryptedSnapshot
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
 
 
 

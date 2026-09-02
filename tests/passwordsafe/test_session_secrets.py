@@ -2,11 +2,10 @@
 
 from pathlib import Path
 
-from test_writer import _opened_source, _XorBackend
-
 from bonobo_core.passwordsafe.constants import RecordFieldType
 from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.session import SetSecretField, VaultSession
+from tests.passwordsafe.test_writer import _opened_source, _XorBackend
 
 
 

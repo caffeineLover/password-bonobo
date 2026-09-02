@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import cast
 
+import pytest
 from PySide6.QtCore import QCoreApplication, QThread
 from pytestqt.qtbot import QtBot
 from tests.application.fakes import (
@@ -560,4 +561,124 @@ def test_controller_confirms_new_record_from_zero_key(qtbot: QtBot) -> None:
     assert session.change_count == 1
     assert session.records_value[0].title == "Added Portal"
     assert controller.property("records").rowCount() == 1
+    executor.shutdown()
+
+
+
+#### Close a newly owned editor secret when shutdown rejects worker admission.
+####
+def test_controller_closes_record_password_when_executor_rejects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+
+
+
+    #### Capture the real mutable owner created at the controller boundary.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    executor.shutdown()
+
+    assert not controller.confirm_record(0, "Rejected", "Examples", "sample", False, "fabricated")
+    assert len(owners) == 1
+    assert owners[0].closed
+
+
+
+#### Close a newly owned editor secret when executor submission itself raises.
+####
+def test_controller_closes_record_password_when_executor_submission_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+    failure = KeyboardInterrupt("fabricated submission interruption")
+
+
+
+    #### Capture the real mutable owner before submission is interrupted.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+
+
+    #### Raise the exact fabricated interruption from the executor boundary.
+    ####
+    def interrupt_submission(*_args: object, **_kwargs: object) -> bool:
+        raise failure
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    monkeypatch.setattr(executor, "submit", interrupt_submission)
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        controller.confirm_record(0, "Interrupted", "Examples", "sample", False, "fabricated")
+
+    assert caught.value is failure
+    assert len(owners) == 1
+    assert owners[0].closed
+    executor.shutdown()
+
+
+
+#### Preserve the submission interruption even when emergency owner cleanup fails.
+####
+def test_controller_secret_cleanup_never_masks_submission_interruption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    failure = KeyboardInterrupt("fabricated submission interruption")
+    cleanup_calls = 0
+
+
+
+    #### Model cleanup failure after ownership has transferred to the controller.
+    ####
+    class _FailingSecretOwner:
+
+
+
+        #### Record the attempted cleanup before raising a fabricated failure.
+        ####
+        def close(self) -> None:
+            nonlocal cleanup_calls
+            cleanup_calls += 1
+            raise RuntimeError("fabricated cleanup failure")
+
+    owner = cast(SecretBuffer, _FailingSecretOwner())
+
+
+
+    #### Raise the exact fabricated interruption from the executor boundary.
+    ####
+    def interrupt_submission(*_args: object, **_kwargs: object) -> bool:
+        raise failure
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(lambda _value: owner))
+    monkeypatch.setattr(executor, "submit", interrupt_submission)
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        controller.confirm_record(0, "Interrupted", "Examples", "sample", False, "fabricated")
+
+    assert caught.value is failure
+    assert cleanup_calls == 1
     executor.shutdown()

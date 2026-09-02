@@ -6,6 +6,7 @@ inside command closures and never become Qt properties or signal arguments.
 """
 
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import ClassVar
 
@@ -390,7 +391,16 @@ class DesktopController(QObject):
                     password_owner.close()
                 raise
 
-        accepted = self._executor.submit(commit, canceled=None if password_owner is None else password_owner.close)
+        try:
+            accepted = self._executor.submit(
+                commit,
+                canceled=None if password_owner is None else password_owner.close,
+            )
+        except BaseException:
+            if password_owner is not None:
+                with suppress(BaseException):
+                    password_owner.close()
+            raise
         if not accepted:
             if password_owner is not None:
                 password_owner.close()

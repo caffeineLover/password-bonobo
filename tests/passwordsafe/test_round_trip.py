@@ -2,17 +2,16 @@
 
 from pathlib import Path
 
-from helpers import DeterministicRandomSource
-from test_writer import (
-    _opened_source,
-    _private_directory,
-    _XorBackend,
-)
-
 from bonobo_core.passwordsafe.constants import RecordFieldType
 from bonobo_core.passwordsafe.model import RawField, RawRecord, VaultDocument
 from bonobo_core.passwordsafe.schema import encode_record_field
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import (
+    _opened_source,
+    _private_directory,
+    _XorBackend,
+)
 
 
 

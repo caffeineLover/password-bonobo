@@ -230,3 +230,222 @@ concern; Task 7 adds no new import route and its scoped strict check passes.
 PowerShell wildcard behavior for `pyside6-qmllint` is also documented above.
 No remaining Task 7 functional, accessibility, secret-boundary, or shutdown
 concern was found in the final diff review.
+
+## Review-fix round 1
+
+This separate repair closes the four Important review findings and the
+confirmed mandatory mypy deficit against Task 7 commit `4697a2b`.
+
+### RED evidence
+
+The literal mandatory typing gate reproduced the conflicting helper identity
+before import normalization:
+
+```powershell
+python -m uv run mypy src tests tools
+```
+
+```text
+pyproject.toml: error: Source file found twice under different module names: "fakes" and "tests.application.fakes"
+Found 1 error in 1 file (errors prevented further checking)
+EXIT_CODE=1
+```
+
+The template-interpolation and controller-owner regressions were added before
+the production changes and run with:
+
+```powershell
+python -m uv run --extra desktop --group desktop-test python -m pytest -q tests/desktop/test_qml_contract.py tests/desktop/test_controller.py -k "template_interpolation or record_password"
+```
+
+```text
+FAILED test_qml_boundary_parser_finds_forbidden_member_inside_template_interpolation
+  AssertionError: assert 'passwordValue' in frozenset({'Text', 'text'})
+FAILED test_controller_closes_record_password_when_executor_submission_raises
+  assert False; SecretBuffer(closed=False)
+2 failed, 1 passed, 19 deselected
+EXIT_CODE=1
+```
+
+The multi-record focus and complete-view accessibility regressions were added
+before their QML changes and run with:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+python -m uv run --extra desktop --group desktop-test python -m pytest -q tests/desktop/test_keyboard_workflow.py -k "another_filtered or complete_tab_cycle"
+```
+
+```text
+FAILED test_model_reset_clears_selection_when_another_filtered_record_remains
+  pytestqt.exceptions.TimeoutError: search focus was not restored
+FAILED test_decision_dialog_has_accessible_complete_tab_cycle
+  pytestqt.exceptions.TimeoutError: decisionSaveButton had no initial focus
+2 failed, 4 passed, 5 deselected
+EXIT_CODE=1
+```
+
+The four passing cases in that RED are material: Welcome, Unlock, Vault, and
+RecordEditor already completed their newly asserted initial-focus, access-name,
+visibility, and full forward-tab cycles.  DecisionDialog was the isolated
+missing initial-focus branch.
+
+### Systematic focus debugging
+
+An initial controller-owned retained-row implementation caused a reproducible
+native Windows access violation at QML window exposure.  Removing only the
+`ListView.onIsCurrentItemChanged` call into a Python slot eliminated that
+crash; reintroducing the call behind a zero-interval timer reproduced it on a
+Down-key selection.  The stable implementation therefore keeps presentation
+selection local: `modelAboutToBeReset` freezes delegate selection updates, a
+zero-interval QML timer waits until the reset finishes, and the
+`DelegateModel.items` group is scanned by the retained primitive `key`.  No
+Python call occurs during model/view selection churn.  The regression selects
+the second row by keyboard, filters it out while the first row remains, and
+requires index `-1` plus search focus.
+
+### Implementation and files
+
+- `VaultView.qml` now retains by the exact existing `key` role on every model
+  reset, restores the matching row, and clears local selection and focuses
+  search whenever the key is absent regardless of remaining row count.
+- `DecisionDialog.qml` defers initial focus until the opened modal is stable,
+  then focuses its first allowed action, Save.
+- `controller.py` guards executor submission with `BaseException` cleanup,
+  suppresses cleanup failure only while preserving the original exception,
+  and retains the existing admission-rejection behavior.
+- `test_qml_contract.py` replaces the raw template-removal regex with a small
+  code scanner that excludes strings/comments/template text while recursively
+  preserving `${...}` expressions, including nested braces and templates.
+- `test_keyboard_workflow.py` uses only fabricated records and exercises access
+  names, initial visible focus, and deterministic complete tab cycles across
+  Welcome, Unlock, Vault, RecordEditor, and DecisionDialog.
+- `test_controller.py` covers rejected admission, raised submission, and a
+  cleanup failure that must not mask the original interruption.
+- The five `tests/application/test_*.py` helper imports now use the single
+  qualified `tests.application.fakes` identity.
+- Consistent imports alone remained RED.  The minimal evidenced fallback adds
+  `tests/__init__.py`, `tests/application/__init__.py`, and
+  `tests/passwordsafe/__init__.py`, then mechanically qualifies the existing
+  PasswordSafe test-helper imports under `tests.passwordsafe`.  No production
+  package or mypy configuration changed.  `REUSE.toml` covers the three new
+  package markers.
+- `docs/PROJECT_MEMORY.md` records this completed review checkpoint.
+
+### GREEN verification
+
+Focused ownership and masking regressions:
+
+```powershell
+python -m uv run --extra desktop --group desktop-test python -m pytest -q tests/desktop/test_controller.py -k "record_password or secret_cleanup"
+```
+
+```text
+3 passed, 16 deselected in 1.53s
+EXIT_CODE=0
+```
+
+Resolved-file QML lint:
+
+```powershell
+$qmlFiles = (Get-ChildItem -LiteralPath 'src\bonobo_desktop\qml' -Filter '*.qml').FullName
+python -m uv run --extra desktop pyside6-qmllint $qmlFiles
+```
+
+```text
+EXIT_CODE=0
+```
+
+Affected application and complete offscreen desktop runtime suites:
+
+```powershell
+python -m uv run python -m pytest tests/application -q
+$env:QT_QPA_PLATFORM = 'offscreen'
+python -m uv run --extra desktop --group desktop-test python -X faulthandler -m pytest tests/desktop -q
+```
+
+```text
+Application: 83 passed in 7.17s
+Desktop: 47 passed in 3.18s
+EXIT_CODE=0
+```
+
+The broader helper-import boundary was collected and sampled at runtime:
+
+```powershell
+python -m uv run python -m pytest --collect-only -q tests/passwordsafe
+python -m uv run python -m pytest -q tests/passwordsafe/test_fuzz.py tests/passwordsafe/test_round_trip.py tests/passwordsafe/test_storage_external_change.py tests/passwordsafe/test_service.py
+```
+
+```text
+637 tests collected in 2.20s
+27 passed, 5 skipped in 29.46s
+EXIT_CODE=0
+```
+
+Repository-wide strict typing now passes literally and under every required
+profile:
+
+```powershell
+python -m uv run mypy src tests tools
+python -m uv run mypy --platform win32 src tests tools
+python -m uv run mypy --platform darwin src tests tools
+python -m uv run mypy --platform linux src tests tools
+```
+
+```text
+Success: no issues found in 106 source files
+Success: no issues found in 106 source files
+Success: no issues found in 106 source files
+Success: no issues found in 106 source files
+EXIT_CODE=0
+```
+
+Static, structure, licensing, and whitespace gates:
+
+```powershell
+python -m uv run ruff check src tests tools
+python -m uv run python tools/check_python_structure.py src tests tools
+python -m uv run reuse --no-multiprocessing lint
+git diff --check
+git diff --cached --check
+```
+
+```text
+Ruff: All checks passed!
+Structure: EXIT_CODE=0
+REUSE Specification 3.3: 169 / 169 files have copyright and license information
+Unstaged whitespace: EXIT_CODE=0
+Staged whitespace: EXIT_CODE=0
+```
+
+### Accessibility and secret-boundary self-review
+
+- Each focusable control in all four views and both scoped modals has a
+  nonempty runtime accessible name, opts into tab focus, becomes the actual
+  visible active-focus item at its deterministic stop, and returns to the
+  initial item after one complete cycle.  Save receives focus whenever the
+  decision modal opens.
+- Selection restoration reads only the already-approved primitive `key` role;
+  the other four roles remain `title`, `group`, `username`, and `protected`.
+  Missing selection never aliases a remaining row and always returns focus to
+  search.
+- The boundary scanner still ignores legitimate resource/prose strings and now
+  catches forbidden identifiers inside template interpolation code.  QML has
+  no domain object, locator, UUID, secret-value, exception, or raw message
+  binding.
+- Passphrases and record passwords remain concealed local inputs, are cleared
+  before submission, and are never rebound.  Record-password ownership is
+  closed on worker failure, queue cancellation, rejection, or a raised submit;
+  cleanup failure cannot replace the original `BaseException`.
+- Ctrl+S, Ctrl+L, Ctrl+F, Enter, and Escape behavior is unchanged.  Editor
+  cancellation remains local and mutation-free; shutdown serialization and
+  terminal callback rules are untouched.
+
+### Concerns
+
+No remaining review-fix concern was found.  The earlier report statement that
+repository-wide mypy was an out-of-scope baseline is superseded by the explicit
+review authorization and the green package-identity repair above.  The QML
+reset restore is intentionally deferred by one Qt event so the reset has fully
+settled; runtime tests wait on the resulting focus state rather than elapsed
+time.

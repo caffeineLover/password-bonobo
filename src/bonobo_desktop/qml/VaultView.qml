@@ -9,7 +9,7 @@ Pane {
     id: root
     required property var controller
     property int retainedKey: 0
-    property int retainedRow: -1
+    property bool modelResetInProgress: false
     property string selectedTitle: ""
     property string selectedGroup: ""
     property string selectedUsername: ""
@@ -17,11 +17,35 @@ Pane {
 
     function selectRecord(key, row, title, group, username, isProtected) {
         root.retainedKey = key
-        root.retainedRow = row
         root.selectedTitle = title
         root.selectedGroup = group
         root.selectedUsername = username
         root.selectedProtected = isProtected
+    }
+
+    function clearSelection() {
+        root.retainedKey = 0
+        root.selectedTitle = ""
+        root.selectedGroup = ""
+        root.selectedUsername = ""
+        root.selectedProtected = false
+    }
+
+    function restoreSelection() {
+        let restoredRow = -1
+        for (let row = 0; row < recordDelegates.items.count; ++row) {
+            const candidate = recordDelegates.items.get(row)
+            if (candidate.model.key === root.retainedKey) {
+                restoredRow = row
+                break
+            }
+        }
+        recordList.currentIndex = restoredRow
+        if (restoredRow < 0) {
+            root.clearSelection()
+            searchField.forceActiveFocus()
+        }
+        root.modelResetInProgress = false
     }
 
     DelegateModel {
@@ -43,7 +67,7 @@ Pane {
             Accessible.name: text
             highlighted: ListView.isCurrentItem
             ListView.onIsCurrentItemChanged: {
-                if (ListView.isCurrentItem)
+                if (ListView.isCurrentItem && !root.modelResetInProgress)
                     root.selectRecord(recordKey, index, recordTitle, recordGroup,
                                       recordUsername, recordProtected)
             }
@@ -53,6 +77,12 @@ Pane {
                                   recordUsername, recordProtected)
             }
         }
+    }
+
+    Timer {
+        id: restoreSelectionTimer
+        interval: 0
+        onTriggered: root.restoreSelection()
     }
 
     function openSelected() {
@@ -128,10 +158,6 @@ Pane {
 
             Keys.onReturnPressed: root.openSelected()
             Keys.onEnterPressed: root.openSelected()
-            onCountChanged: {
-                if (count === 0 && activeFocus)
-                    searchField.forceActiveFocus()
-            }
         }
 
         RowLayout {
@@ -215,6 +241,18 @@ Pane {
         sequence: "Ctrl+F"
         context: Qt.ApplicationShortcut
         onActivated: searchField.forceActiveFocus()
+    }
+
+    Connections {
+        target: root.controller.records
+
+        function onModelAboutToBeReset() {
+            root.modelResetInProgress = true
+        }
+
+        function onModelReset() {
+            restoreSelectionTimer.restart()
+        }
     }
 
     Component.onCompleted: searchField.forceActiveFocus()

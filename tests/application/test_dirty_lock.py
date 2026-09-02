@@ -7,12 +7,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from fakes import (
-    FakeVaultService,
-    FakeVaultSession,
-    RecordingClipboard,
-    fabricated_record_view,
-)
 
 import bonobo_core.passwordsafe.storage as storage_module
 from bonobo_core.application.facade import ApplicationCommandError, VaultApplication
@@ -26,6 +20,12 @@ from bonobo_core.passwordsafe import (
 )
 from bonobo_core.passwordsafe.crypto import TwofishKey
 from bonobo_core.passwordsafe.errors import StorageError, StorageReason
+from tests.application.fakes import (
+    FakeVaultService,
+    FakeVaultSession,
+    RecordingClipboard,
+    fabricated_record_view,
+)
 
 
 

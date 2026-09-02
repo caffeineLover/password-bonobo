@@ -10,8 +10,6 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from helpers import DeterministicRandomSource
-from test_writer import _PASSPHRASE, _opened_source, _private_directory, _XorBackend
 
 import bonobo_core.passwordsafe.service as service_module
 from bonobo_core.passwordsafe.constants import (
@@ -33,6 +31,8 @@ from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.service import SaveResult, VaultService
 from bonobo_core.passwordsafe.session import NewRecord, SetTextField
 from bonobo_core.passwordsafe.storage import StorageStage
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import _PASSPHRASE, _opened_source, _private_directory, _XorBackend
 
 
 

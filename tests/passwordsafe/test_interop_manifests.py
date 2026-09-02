@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from helpers import DeterministicRandomSource, build_spec_vault
 from tools.verify_passwordsafe_interop import (
     FieldTarget,
     InteropMismatchError,
@@ -35,6 +34,7 @@ from bonobo_core.passwordsafe.botan import BotanBackend
 from bonobo_core.passwordsafe.constants import HeaderFieldType, RecordFieldType
 from bonobo_core.passwordsafe.crypto import TwofishKey
 from bonobo_core.passwordsafe.secrets import SecretBuffer
+from tests.passwordsafe.helpers import DeterministicRandomSource, build_spec_vault
 
 
 

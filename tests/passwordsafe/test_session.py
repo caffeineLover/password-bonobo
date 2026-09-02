@@ -5,8 +5,6 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from helpers import DeterministicRandomSource
-from test_writer import _opened_source, _private_directory, _XorBackend
 
 from bonobo_core.passwordsafe.constants import RecordFieldType
 from bonobo_core.passwordsafe.errors import StaleRevisionError, UnsavedChangesError
@@ -17,6 +15,8 @@ from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.session import NewRecord, SetTextField, VaultSession
 from bonobo_core.passwordsafe.storage import LocalVaultStore
 from bonobo_core.passwordsafe.writer import PasswordSafeWriter
+from tests.passwordsafe.helpers import DeterministicRandomSource
+from tests.passwordsafe.test_writer import _opened_source, _private_directory, _XorBackend
 
 
 
