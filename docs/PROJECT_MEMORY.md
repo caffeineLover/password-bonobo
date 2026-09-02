@@ -62,9 +62,10 @@ reuse were all accepted before the fix; the focused record-command suite now
 passes (11), application plus relevant PasswordSafe session/service tests pass
 (78), and all required static checks are green.  The canonical Botan-backed
 full suite passes with 718 tests and 12 expected skips in 109.57 seconds.
-The Task 3 report is updated in the approved SDD workspace.  Exact next
-action: continue only with approved Task 4.  Later approved work remains Tasks
-4 through 8 in order.
+The Task 3 report is updated in the approved SDD workspace.  Independent final
+re-review approved the complete Task 3 range with no remaining Critical,
+Important, or Minor findings.  Exact next action: continue only with approved
+Task 4.  Later approved work remains Tasks 4 through 8 in order.
 
 ## Purpose and resume protocol
 
