@@ -11,7 +11,13 @@ from typing import ClassVar
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from bonobo_core.application import ApplicationSnapshot, CloseChoice, RecordKey, VaultApplication
+from bonobo_core.application import (
+    ApplicationPhase,
+    ApplicationSnapshot,
+    CloseChoice,
+    RecordKey,
+    VaultApplication,
+)
 from bonobo_core.passwordsafe import SecretBuffer, VaultSession
 
 from .models import RecordListModel
@@ -117,6 +123,7 @@ class DesktopController(QObject):
             raise TypeError("passphrase input must be text")
         self._wipe_passphrase()
         self._passphrase = bytearray(value, "utf-8")
+        self.passphraseChanged.emit()
 
 
 
@@ -158,6 +165,16 @@ class DesktopController(QObject):
     def _wipe_passphrase(self) -> None:
         self._passphrase[:] = b"\x00" * len(self._passphrase)
         self._passphrase = bytearray()
+
+
+
+    #### Wipe retained input and notify only when its presence actually changes.
+    ####
+    def _clear_passphrase(self) -> None:
+        if not self._passphrase:
+            return
+        self._wipe_passphrase()
+        self.passphraseChanged.emit()
 
 
 
@@ -225,7 +242,10 @@ class DesktopController(QObject):
     @Slot(result=bool)
     def save(self) -> bool:
         generation = self._snapshot.generation
-        return self._submit(lambda application: application.save(generation))
+        return self._submit(
+            lambda application: application.save(generation),
+            drain_on_shutdown=True,
+        )
 
 
 
@@ -234,7 +254,12 @@ class DesktopController(QObject):
     @Slot(result=bool)
     def lock(self) -> bool:
         generation = self._snapshot.generation
-        return self._submit(lambda application: application.lock(generation))
+        drain_on_shutdown = self._snapshot.phase is ApplicationPhase.UNLOCKED_DIRTY
+        self._clear_passphrase()
+        return self._submit(
+            lambda application: application.lock(generation),
+            drain_on_shutdown=drain_on_shutdown,
+        )
 
 
 
@@ -243,6 +268,7 @@ class DesktopController(QObject):
     @Slot(result=bool, name="requestClose")
     def request_close(self) -> bool:
         generation = self._snapshot.generation
+        self._clear_passphrase()
         return self._submit(lambda application: application.request_close(generation))
 
 
@@ -257,7 +283,21 @@ class DesktopController(QObject):
             self.commandRejected.emit()
             return False
         decision = self._snapshot.decision
-        return self._submit(lambda application: application.resolve_close(decision, selected_choice))
+        if selected_choice is not CloseChoice.CANCEL:
+            self._clear_passphrase()
+        return self._submit(
+            lambda application: application.resolve_close(decision, selected_choice),
+            drain_on_shutdown=selected_choice is CloseChoice.SAVE,
+        )
+
+
+
+    #### Wipe transient input before closing executor command admission.
+    ####
+    @Slot()
+    def shutdown(self) -> None:
+        self._clear_passphrase()
+        self._executor.shutdown()
 
 
 
@@ -296,8 +336,10 @@ class DesktopController(QObject):
     def _submit(
         self,
         command: Callable[[VaultApplication[VaultSession]], ApplicationSnapshot],
+        *,
+        drain_on_shutdown: bool = False,
     ) -> bool:
-        accepted = self._executor.submit(command)
+        accepted = self._executor.submit(command, drain_on_shutdown=drain_on_shutdown)
         if not accepted:
             self.commandRejected.emit()
         return accepted
@@ -311,6 +353,8 @@ class DesktopController(QObject):
         if not isinstance(value, ApplicationSnapshot):
             self.commandRejected.emit()
             return
+        if value.phase in {ApplicationPhase.EMPTY, ApplicationPhase.LOCKED}:
+            self._clear_passphrase()
         self._snapshot = value
         self._records.replace(value.records)
         self.snapshotChanged.emit()

@@ -2,6 +2,26 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 6 review-fix round 1
+
+Review fix round 1 addresses all four Important findings from commit `8f07415`.
+Immutable command envelopes now classify shutdown draining, worker start and
+shutdown admission are atomic, the executor tracks the active envelope, queued
+ownership is canceled, and only active save/dirty-suspend work is awaited.
+The argument-free shutdown signal lets tests prove admission is closed before
+checking rejection.  Passphrase replacement emits exactly once; lock, close,
+terminal-result, and controller-shutdown paths synchronously wipe retained
+input and notify only on a presence transition.
+
+The required regressions were observed RED with five failures, plus one separate
+controller-shutdown failure.  Focused controller tests now pass 10, and the
+complete offscreen desktop suite passes 22.  Scoped Ruff, strict mypy over 15
+files, Python structure, REUSE 156/156, and whitespace checks pass.  The Task 6
+report contains exact commands, outputs, implementation details, and self-review.
+This checkpoint is included in the separate review-fix commit.  Exact next
+action: return that commit for review.  Task 7 remains the next approved
+implementation only after Task 6 review accepts the fix; Task 8 follows Task 7.
+
 ## Completed Task 6 Qt adapter checkpoint
 
 Task 6 adds the reset-only five-role record model, primitive snapshot controller, one-worker facade executor,

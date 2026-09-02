@@ -39,6 +39,7 @@ def _snapshot(generation: int) -> ApplicationSnapshot:
 class _RecordingFacade:
     active: int
     completed: list[int]
+    first_completed: Event
     first_entered: Event
     maximum_concurrency: int
     release_first: Event
@@ -51,6 +52,7 @@ class _RecordingFacade:
     def __init__(self) -> None:
         self.active = 0
         self.completed = []
+        self.first_completed = Event()
         self.first_entered = Event()
         self.maximum_concurrency = 0
         self.release_first = Event()
@@ -70,6 +72,8 @@ class _RecordingFacade:
         with self._lock:
             self.active -= 1
             self.completed.append(number)
+        if number == 1:
+            self.first_completed.set()
         return _snapshot(number)
 
 
@@ -113,12 +117,12 @@ def test_executor_queues_results_to_the_gui_thread(qtbot: QtBot) -> None:
 
 
 
-#### Reject queued work after shutdown starts and wait for the active operation to leave its boundary.
+#### Reject queued work after admission closes and drain a classified durability operation.
 ####
-def test_executor_shutdown_drains_active_work_and_rejects_new_commands() -> None:
+def test_executor_shutdown_drains_active_work_and_rejects_new_commands(qtbot: QtBot) -> None:
     facade = _RecordingFacade()
     executor = FacadeExecutor(facade)
-    assert executor.submit(lambda target: target.run(1))
+    assert executor.submit(lambda target: target.run(1), drain_on_shutdown=True)
     assert facade.first_entered.wait(5)
     shutdown_returned = Event()
 
@@ -131,13 +135,43 @@ def test_executor_shutdown_drains_active_work_and_rejects_new_commands() -> None
         shutdown_returned.set()
 
     shutdown_thread = Thread(target=request_shutdown)
-    shutdown_thread.start()
+    with qtbot.waitSignal(executor.shutdownStarted, timeout=5000):
+        shutdown_thread.start()
     assert not executor.submit(lambda target: target.run(2))
     assert not shutdown_returned.is_set()
     facade.release_first.set()
     assert shutdown_returned.wait(5)
     shutdown_thread.join()
     assert facade.completed == [1]
+
+
+
+#### Return from shutdown without waiting for an active non-durability operation.
+####
+def test_executor_shutdown_does_not_drain_active_non_durability_work(qtbot: QtBot) -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    shutdown_returned = Event()
+    assert executor.submit(lambda target: target.run(1))
+    assert facade.first_entered.wait(5)
+
+
+
+    #### Observe shutdown independently while the facade command remains blocked.
+    ####
+    def request_shutdown() -> None:
+        executor.shutdown()
+        shutdown_returned.set()
+
+    shutdown_thread = Thread(target=request_shutdown)
+    with qtbot.waitSignal(executor.shutdownStarted, timeout=5000):
+        shutdown_thread.start()
+    assert shutdown_returned.wait(5)
+    assert not executor.submit(lambda target: target.run(2))
+    assert facade.completed == []
+    facade.release_first.set()
+    assert facade.first_completed.wait(5)
+    shutdown_thread.join()
 
 
 
@@ -148,7 +182,7 @@ def test_executor_shutdown_cancels_queued_command_ownership() -> None:
     executor = FacadeExecutor(facade)
     canceled = Event()
     shutdown_returned = Event()
-    assert executor.submit(lambda target: target.run(1))
+    assert executor.submit(lambda target: target.run(1), drain_on_shutdown=True)
     assert facade.first_entered.wait(5)
     assert executor.submit(lambda target: target.run(2), canceled=canceled.set)
 
@@ -167,6 +201,89 @@ def test_executor_shutdown_cancels_queued_command_ownership() -> None:
     assert shutdown_returned.wait(5)
     shutdown_thread.join()
     assert facade.completed == [1]
+
+
+
+#### Notify exactly once after replacing transient passphrase input.
+####
+def test_controller_emits_passphrase_notification_after_replacement() -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    notifications = 0
+
+
+
+    #### Count the closed property notification without observing its value.
+    ####
+    def count_notification() -> None:
+        nonlocal notifications
+        notifications += 1
+
+    controller.passphraseChanged.connect(count_notification)
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    assert notifications == 1
+    assert controller.property("passphrasePresent") is True
+    executor.shutdown()
+
+
+
+#### Wipe and notify transient passphrase state before a manual lock is submitted.
+####
+def test_controller_clears_passphrase_before_lock(qtbot: QtBot) -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    notifications = 0
+
+
+
+    #### Count both the setter and terminal clear transitions.
+    ####
+    def count_notification() -> None:
+        nonlocal notifications
+        notifications += 1
+
+    controller.passphraseChanged.connect(count_notification)
+    assert controller.setProperty("passphrase", "residual-input")
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert controller.lock()
+        assert controller.property("passphrasePresent") is False
+
+    assert notifications == 2
+    assert controller.property("phase") == ApplicationPhase.LOCKED.value
+    executor.shutdown()
+
+
+
+#### Wipe transient passphrase state when the controller begins shutdown.
+####
+def test_controller_shutdown_clears_passphrase() -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    notifications = 0
+
+
+
+    #### Count the setter and shutdown clear transitions.
+    ####
+    def count_notification() -> None:
+        nonlocal notifications
+        notifications += 1
+
+    controller.passphraseChanged.connect(count_notification)
+    assert controller.setProperty("passphrase", "residual-input")
+    controller.shutdown()
+
+    assert notifications == 2
+    assert controller.property("passphrasePresent") is False
 
 
 
