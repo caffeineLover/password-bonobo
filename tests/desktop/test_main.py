@@ -60,6 +60,7 @@ def test_desktop_main_injects_only_controller_before_qml_load(
 
     events: list[str] = []
     context_values: dict[str, object] = {}
+    idle_instances: list[object] = []
 
 
 
@@ -103,6 +104,48 @@ def test_desktop_main_injects_only_controller_before_qml_load(
         def deleteLater(self) -> None:  # noqa: N802 - mirrors Qt API.
             events.append("delete")
 
+
+
+    #### Record the retained idle adapter and its deterministic shutdown cleanup.
+    ####
+    class FakeIdleController:
+        closed: bool
+        is_unlocked: object
+        lock_request: object
+
+
+
+        #### Capture phase and lock callbacks supplied by the composition root.
+        ####
+        def __init__(
+            self,
+            _application: object,
+            lock_request: object,
+            *,
+            timeout_ms: int,
+            is_unlocked: object,
+        ) -> None:
+            assert timeout_ms > 0
+            self.closed = False
+            self.is_unlocked = is_unlocked
+            self.lock_request = lock_request
+            idle_instances.append(self)
+
+
+
+        #### Accept snapshot notifications while the fake remains retained.
+        ####
+        def synchronize_phase(self) -> None:
+            assert not self.closed
+
+
+
+        #### Record application-shutdown release of the event-filter owner.
+        ####
+        def close(self) -> None:
+            self.closed = True
+            events.append("idle-close")
+
     session = FakeVaultSession(())
     monkeypatch.setattr(resources, "main_qml_url", lambda: QUrl("qrc:/fabricated/Main.qml"))
     monkeypatch.setattr("bonobo_desktop.main._botan_library_path", lambda: Path("fabricated-botan"))
@@ -112,6 +155,7 @@ def test_desktop_main_injects_only_controller_before_qml_load(
     )
     monkeypatch.setattr("bonobo_desktop.main.VaultService.with_botan", lambda *_args: FakeVaultService(session))
     monkeypatch.setattr(PySide6.QtQml, "QQmlApplicationEngine", FakeEngine)
+    monkeypatch.setattr("bonobo_desktop.lifecycle.IdleLockController", FakeIdleController)
     qt_application = PySide6.QtGui.QGuiApplication.instance()
     assert qt_application is not None
     monkeypatch.setattr(type(qt_application), "exec", lambda _self: 0)
@@ -122,3 +166,10 @@ def test_desktop_main_injects_only_controller_before_qml_load(
     assert set(context_values) == {"desktopController"}
     assert isinstance(context_values["desktopController"], DesktopController)
     assert context_values["desktopController"].property("records") is not None
+    assert len(idle_instances) == 1
+    idle = cast(FakeIdleController, idle_instances[0])
+    controller = context_values["desktopController"]
+    assert getattr(idle.lock_request, "__self__", None) is controller
+    assert callable(idle.is_unlocked)
+    assert idle.closed
+    assert events[-2:] == ["idle-close", "delete"]

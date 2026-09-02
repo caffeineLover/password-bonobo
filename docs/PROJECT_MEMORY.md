@@ -2,6 +2,40 @@
 
 Last updated: 2026-09-02
 
+## Completed final desktop review fix wave
+
+The single permitted final-review repair closes all seven Important findings
+from clean starting commit `c90977b`. Python owns GUI-thread native open/save
+selection and QML retains no filesystem locator. The retained idle controller is
+phase-aware, rearms after successful unlock, submits one lock per expiry, and
+closes before terminal shutdown. Core-only entry loading returns fixed status 1
+without diagnostics. The absolute-import deployment wrapper executes directly,
+and the real dry run uses the approved exact six-module closure including Widgets
+for the native dialog. No native artifact was built or launched.
+
+The shell now presents every closed failure key as fixed localized-safe copy on
+an announced accessible alert surface. Record drafts remain available through
+safe failure/rejection and cannot be dismissed while awaiting acknowledgement;
+only argument-free success clears and closes them. Search coalesces to the latest
+pending edit against the latest accepted generation. Create/open/unlock owners
+close on rejection, submission interruption, queued cancellation, and terminal
+paths; pool admission is transactional when `QThreadPool.start()` raises. Public
+failure/rejection signals are zero-argument and adversarial secret/path-like
+exception text is absent from public controller/model state.
+
+Focused regressions and the final 86-test desktop suite pass. The Botan-backed
+repository run reached 927 passing tests with 14 expected skips; its sole failure
+was the new test's excess blank line, and the exact structure regression passes
+after that mechanical correction. Ruff, strict mypy for 111 files on default,
+win32, darwin, and linux, Python structure, document policy, resolved QML lint,
+deploy dry run, compatibility, provenance, Bandit, pip-audit, build/wheel, REUSE,
+tracked-file, and whitespace gates are clean at the final staged checkpoint. The
+ignored final-fix report records exact RED/GREEN and verification evidence.
+
+The exact next action is controller post-fix review of this local commit and its
+mandatory final verification. Merge, push, publication, packaged artifact
+launch, installers, and signing remain outside this worker's authority.
+
 ## Completed Task 8 review-fix round 1
 
 Controller review found one Important false negative in the Task 8 dependency-

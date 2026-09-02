@@ -7,7 +7,6 @@ inside command closures and never become Qt properties or signal arguments.
 
 from collections.abc import Callable
 from contextlib import suppress
-from pathlib import Path
 from typing import ClassVar
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -22,6 +21,7 @@ from bonobo_core.application import (
 )
 from bonobo_core.passwordsafe import SecretBuffer, VaultSession
 
+from .file_dialog import QtVaultFileDialog, VaultFileDialog
 from .models import RecordListModel
 from .tasks import FacadeExecutor
 
@@ -33,11 +33,16 @@ class DesktopController(QObject):
     snapshotChanged: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
     passphraseChanged: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
     commandRejected: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
+    recordCommitted: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
+    recordRejected: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
     _application: VaultApplication[VaultSession]
     _executor: FacadeExecutor[VaultApplication[VaultSession]]
+    _file_dialog: VaultFileDialog
     _passphrase: bytearray
     _records: RecordListModel
+    _search_in_flight: bool
     _snapshot: ApplicationSnapshot
+    _pending_search: str | None
 
 
 
@@ -47,13 +52,18 @@ class DesktopController(QObject):
         self,
         application: VaultApplication[VaultSession],
         executor: FacadeExecutor[VaultApplication[VaultSession]],
+        *,
+        file_dialog: VaultFileDialog | None = None,
     ) -> None:
         super().__init__()
         self._application = application
         self._executor = executor
+        self._file_dialog = QtVaultFileDialog() if file_dialog is None else file_dialog
         self._records = RecordListModel()
         self._passphrase = bytearray()
         self._snapshot = application.snapshot
+        self._search_in_flight = False
+        self._pending_search = None
         self._records.replace(self._snapshot.records)
         self._executor.resultReady.connect(self._accept_result)
         self._executor.commandFailed.connect(self.commandRejected.emit)
@@ -180,37 +190,52 @@ class DesktopController(QObject):
 
 
 
-    #### Open one private path with transient input while publishing only its label.
+    #### Report whether idle locking may run for the current unlocked phase.
     ####
-    @Slot(str, str, result=bool, name="openVault")
-    def open_vault(self, path: str, display_label: str) -> bool:
-        source = Path(path)
-        passphrase = self._take_passphrase()
-        accepted = self._executor.submit(
-            lambda application: application.open(source, passphrase, display_label),
-            canceled=passphrase.close,
-        )
-        if not accepted:
-            passphrase.close()
-            self.commandRejected.emit()
-        return accepted
+    def is_unlocked_for_idle_lock(self) -> bool:
+        return self._snapshot.phase in {ApplicationPhase.UNLOCKED_CLEAN, ApplicationPhase.UNLOCKED_DIRTY}
 
 
 
-    #### Create one private path with transient input while publishing only its label.
+    #### Resolve one open intent through the native Python dialog and submit privately.
     ####
-    @Slot(str, str, result=bool, name="createVault")
-    def create_vault(self, path: str, display_label: str) -> bool:
-        destination = Path(path)
+    @Slot(str, result=bool, name="openVault")
+    def open_vault(self, display_label: str) -> bool:
+        try:
+            selection = self._file_dialog.select_open(display_label)
+        except BaseException:
+            with suppress(BaseException):
+                self._clear_passphrase()
+            raise
+        if selection is None:
+            self._clear_passphrase()
+            return False
         passphrase = self._take_passphrase()
-        accepted = self._executor.submit(
-            lambda application: application.create(destination, passphrase, display_label),
-            canceled=passphrase.close,
+        return self._submit_secret_command(
+            lambda application: application.open(selection.locator, passphrase, selection.display_label),
+            passphrase,
         )
-        if not accepted:
-            passphrase.close()
-            self.commandRejected.emit()
-        return accepted
+
+
+
+    #### Resolve one create intent through the native Python dialog and submit privately.
+    ####
+    @Slot(str, result=bool, name="createVault")
+    def create_vault(self, display_label: str) -> bool:
+        try:
+            selection = self._file_dialog.select_create(display_label)
+        except BaseException:
+            with suppress(BaseException):
+                self._clear_passphrase()
+            raise
+        if selection is None:
+            self._clear_passphrase()
+            return False
+        passphrase = self._take_passphrase()
+        return self._submit_secret_command(
+            lambda application: application.create(selection.locator, passphrase, selection.display_label),
+            passphrase,
+        )
 
 
 
@@ -219,14 +244,10 @@ class DesktopController(QObject):
     @Slot(result=bool, name="unlockVault")
     def unlock_vault(self) -> bool:
         passphrase = self._take_passphrase()
-        accepted = self._executor.submit(
+        return self._submit_secret_command(
             lambda application: application.unlock(passphrase),
-            canceled=passphrase.close,
+            passphrase,
         )
-        if not accepted:
-            passphrase.close()
-            self.commandRejected.emit()
-        return accepted
 
 
 
@@ -234,8 +255,47 @@ class DesktopController(QObject):
     ####
     @Slot(str, result=bool, name="setSearch")
     def set_search(self, query: str) -> bool:
+        self._pending_search = query
+        if self._search_in_flight:
+            return True
+        return self._submit_pending_search()
+
+
+
+    #### Submit only the latest pending search against the latest accepted generation.
+    ####
+    def _submit_pending_search(self) -> bool:
+        query = self._pending_search
+        if query is None:
+            return True
+        self._pending_search = None
         generation = self._snapshot.generation
-        return self._submit(lambda application: application.set_search(query, generation))
+        self._search_in_flight = True
+        try:
+            accepted = self._executor.submit(
+                lambda application: application.set_search(query, generation),
+                completed=self._finish_search,
+            )
+        except BaseException:
+            self._search_in_flight = False
+            raise
+        if not accepted:
+            self._search_in_flight = False
+            self.commandRejected.emit()
+        return accepted
+
+
+
+    #### Release search serialization and submit a coalesced latest edit if present.
+    ####
+    def _finish_search(self, _result: ApplicationSnapshot | None) -> None:
+        self._search_in_flight = False
+        if self._pending_search is None:
+            return
+        try:
+            self._submit_pending_search()
+        except BaseException:
+            self.commandRejected.emit()
 
 
 
@@ -302,6 +362,7 @@ class DesktopController(QObject):
         terminal: Callable[[VaultApplication[VaultSession]], None] | None = None,
     ) -> None:
         self._clear_passphrase()
+        self._pending_search = None
         self._executor.shutdown(terminal)
 
 
@@ -392,19 +453,50 @@ class DesktopController(QObject):
                     password_owner.close()
                 raise
 
+        return self._submit_secret_command(
+            commit,
+            password_owner,
+            completed=self._finish_record_commit,
+        )
+
+
+
+    #### Close editor only after a semantic success and re-enable it on safe failure.
+    ####
+    def _finish_record_commit(self, result: ApplicationSnapshot | None) -> None:
+        if result is None:
+            return
+        if result.failure is not None:
+            self.recordRejected.emit()
+            return
+        self.recordCommitted.emit()
+
+
+
+    #### Submit one secret-bearing command with BaseException-safe ownership rollback.
+    ####
+    def _submit_secret_command(
+        self,
+        command: Callable[[VaultApplication[VaultSession]], ApplicationSnapshot],
+        secret: SecretBuffer | None,
+        *,
+        completed: Callable[[ApplicationSnapshot | None], None] | None = None,
+    ) -> bool:
         try:
             accepted = self._executor.submit(
-                commit,
-                canceled=None if password_owner is None else password_owner.close,
+                command,
+                canceled=None if secret is None else secret.close,
+                completed=completed,
             )
         except BaseException:
-            if password_owner is not None:
+            if secret is not None:
                 with suppress(BaseException):
-                    password_owner.close()
+                    secret.close()
             raise
         if not accepted:
-            if password_owner is not None:
-                password_owner.close()
+            if secret is not None:
+                with suppress(BaseException):
+                    secret.close()
             self.commandRejected.emit()
         return accepted
 

@@ -2,6 +2,7 @@
 
 from collections.abc import Generator
 from pathlib import Path
+from threading import Event
 from typing import cast
 
 import pytest
@@ -13,8 +14,19 @@ from PySide6.QtTest import QTest
 from pytestqt.qtbot import QtBot
 from tests.application.fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
-from bonobo_core.application import ApplicationPhase, VaultApplication
-from bonobo_core.passwordsafe import RecordHandle, RecordView, SecretBuffer, VaultSession
+from bonobo_core.application import (
+    ApplicationFailure,
+    ApplicationFailureReason,
+    ApplicationPhase,
+    ApplicationSnapshot,
+    VaultApplication,
+)
+from bonobo_core.passwordsafe import (
+    RecordHandle,
+    RecordView,
+    SecretBuffer,
+    VaultSession,
+)
 from bonobo_desktop.controller import DesktopController
 from bonobo_desktop.resources import main_qml_url
 from bonobo_desktop.tasks import FacadeExecutor
@@ -22,6 +34,25 @@ from bonobo_desktop.tasks import FacadeExecutor
 
 
 Shell = tuple[QQuickWindow, DesktopController, FacadeExecutor[VaultApplication[VaultSession]], FakeVaultSession]
+
+_FAILURE_STATUS_COPY: dict[ApplicationFailureReason, str] = {
+    ApplicationFailureReason.AUTHENTICATION_FAILED: "The passphrase was not accepted.",
+    ApplicationFailureReason.INTEGRITY_FAILED: "Vault integrity verification failed.",
+    ApplicationFailureReason.MALFORMED_VAULT: "The vault data is malformed.",
+    ApplicationFailureReason.UNSUPPORTED_FORMAT: "This vault format is not supported.",
+    ApplicationFailureReason.INCOMPATIBLE_EXPORT: "The vault uses incompatible export settings.",
+    ApplicationFailureReason.RESOURCE_LIMIT: "The vault exceeds supported resource limits.",
+    ApplicationFailureReason.CRYPTO_BACKEND: "Secure vault processing is unavailable.",
+    ApplicationFailureReason.PROTECTED_RECORD: "That protected record cannot be changed.",
+    ApplicationFailureReason.STALE_REVISION: "The vault changed. Review the latest data and try again.",
+    ApplicationFailureReason.UNSAVED_CHANGES: "Save or discard the pending changes first.",
+    ApplicationFailureReason.EXTERNAL_MODIFICATION: "The vault changed outside Password Bonobo.",
+    ApplicationFailureReason.STORAGE: "The vault could not be read or written.",
+    ApplicationFailureReason.RECOVERY_AVAILABLE: "Recovery data is available for this vault.",
+    ApplicationFailureReason.CLIPBOARD_UNAVAILABLE: "The clipboard is unavailable.",
+    ApplicationFailureReason.BROWSER_UNAVAILABLE: "The website could not be opened.",
+    ApplicationFailureReason.UNEXPECTED: "The action could not be completed.",
+}
 
 
 
@@ -208,6 +239,180 @@ def test_enter_opens_editor_and_escape_cancels_without_mutation(unlocked_shell: 
 
 
 
+#### Keep the complete local editor draft until a delayed command acknowledges success.
+####
+def test_record_editor_closes_and_clears_only_after_success_acknowledgement(
+    unlocked_shell: Shell,
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window, controller, _executor, session = unlocked_shell
+    record_list = _item(window, "recordList")
+    record_list.setProperty("currentIndex", 0)
+    record_list.forceActiveFocus()
+    QTest.keyClick(window, Qt.Key.Key_Return)
+    editor = _object(window, "recordEditor")
+    title_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorTitle"))
+    group_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorGroup"))
+    username_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorUsername"))
+    password_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorPassword"))
+    entered = Event()
+    release = Event()
+    records = session.records
+
+
+
+    #### Hold the first record refresh until local draft retention is observed.
+    ####
+    def delayed_records() -> tuple[RecordView, ...]:
+        entered.set()
+        assert release.wait(5)
+        return records()
+
+    monkeypatch.setattr(session, "records", delayed_records)
+    title_field.setProperty("text", "Acknowledged Portal")
+    group_field.setProperty("text", "Acknowledged Group")
+    username_field.setProperty("text", "acknowledged-user")
+    password_field.setProperty("text", "fabricated-local-secret")
+    assert editor.setProperty("awaitingConfirmation", True)
+    assert controller.confirm_record(
+        1,
+        "Acknowledged Portal",
+        "Acknowledged Group",
+        "acknowledged-user",
+        False,
+        "fabricated-local-secret",
+    )
+    assert entered.wait(5)
+    draft_before_acknowledgement = (
+        editor.property("visible"),
+        title_field.property("text"),
+        group_field.property("text"),
+        username_field.property("text"),
+        password_field.property("text"),
+    )
+    release.set()
+    qtbot.waitUntil(lambda: editor.property("visible") is False, timeout=5000)
+
+    assert draft_before_acknowledgement == (
+        True,
+        "Acknowledged Portal",
+        "Acknowledged Group",
+        "acknowledged-user",
+        "fabricated-local-secret",
+    )
+    assert password_field.property("text") == ""
+    assert session.change_count == 1
+
+
+
+#### Prevent user dismissal from erasing a draft while its command is pending.
+####
+def test_record_editor_cannot_be_dismissed_before_acknowledgement(
+    unlocked_shell: Shell,
+) -> None:
+    window, _controller, _executor, _session = unlocked_shell
+    record_list = _item(window, "recordList")
+    record_list.setProperty("currentIndex", 0)
+    record_list.forceActiveFocus()
+    QTest.keyClick(window, Qt.Key.Key_Return)
+    editor = _object(window, "recordEditor")
+    title_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorTitle"))
+    password_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorPassword"))
+    cancel_button = _item(window, "editorCancelButton")
+    title_field.setProperty("text", "Pending Portal")
+    password_field.setProperty("text", "fabricated-local-secret")
+
+    assert editor.setProperty("awaitingConfirmation", True)
+    QTest.keyClick(window, Qt.Key.Key_Escape)
+
+    assert editor.property("visible") is True
+    assert cancel_button.property("enabled") is False
+    assert title_field.property("text") == "Pending Portal"
+    assert password_field.property("text") == "fabricated-local-secret"
+
+
+
+#### Keep a rejected editor draft available and report only fixed generic status copy.
+####
+def test_record_editor_retains_draft_after_worker_rejection(
+    unlocked_shell: Shell,
+    qtbot: QtBot,
+) -> None:
+    window, controller, _executor, session = unlocked_shell
+    record_list = _item(window, "recordList")
+    record_list.setProperty("currentIndex", 0)
+    record_list.forceActiveFocus()
+    QTest.keyClick(window, Qt.Key.Key_Return)
+    editor = _object(window, "recordEditor")
+    title_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorTitle"))
+    group_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorGroup"))
+    username_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorUsername"))
+    password_field = cast(QQuickItem, editor.findChild(QQuickItem, "editorPassword"))
+    sensitive_text = r"fabricated-secret at C:\private\vault.psafe3"
+    session.records_error = RuntimeError(sensitive_text)
+    title_field.setProperty("text", "Retained Portal")
+    group_field.setProperty("text", "Retained Group")
+    username_field.setProperty("text", "retained-user")
+    password_field.setProperty("text", "fabricated-local-secret")
+
+    assert editor.setProperty("awaitingConfirmation", True)
+    with qtbot.waitSignal(controller.commandRejected, timeout=5000):
+        assert controller.confirm_record(
+            1,
+            "Retained Portal",
+            "Retained Group",
+            "retained-user",
+            False,
+            "fabricated-local-secret",
+        )
+    qtbot.waitUntil(
+        lambda: _item(window, "applicationStatus").property("text") == "The action could not be completed.",
+        timeout=1000,
+    )
+
+    status = _item(window, "applicationStatus")
+    assert editor.property("visible") is True
+    assert title_field.property("text") == "Retained Portal"
+    assert group_field.property("text") == "Retained Group"
+    assert username_field.property("text") == "retained-user"
+    assert password_field.property("text") == "fabricated-local-secret"
+    assert status.property("text") == "The action could not be completed."
+    assert sensitive_text not in repr((status.property("text"), status.property("Accessible.name")))
+
+
+
+#### Present every closed failure key as fixed localized-safe accessible status copy.
+####
+def test_application_status_consumes_every_closed_failure_key(
+    unlocked_shell: Shell,
+) -> None:
+    window, controller, _executor, _session = unlocked_shell
+    status = _item(window, "applicationStatus")
+    interface = QAccessible.queryAccessibleInterface(status)
+    assert interface is not None
+
+    for generation, (reason, expected_copy) in enumerate(_FAILURE_STATUS_COPY.items(), start=100):
+        failure = ApplicationFailure(reason, f"application.failure.{reason.value}")
+        snapshot = ApplicationSnapshot(
+            generation,
+            ApplicationPhase.UNLOCKED_CLEAN,
+            "Fabricated",
+            False,
+            (),
+            None,
+            failure,
+            None,
+        )
+        controller._accept_result(snapshot)
+        assert status.property("text") == expected_copy
+        assert status.property("visible") is True
+        assert interface.role() is QAccessible.Role.AlertMessage
+        assert interface.text(QAccessible.Text.Name) == expected_copy
+        assert failure.presentation_key not in expected_copy
+
+
+
 #### Restore record-list focus after a reset retains the selected record.
 ####
 def test_model_reset_restores_focus_to_retained_record(unlocked_shell: Shell, qtbot: QtBot) -> None:
@@ -291,7 +496,8 @@ def test_vault_has_accessible_complete_tab_cycle(unlocked_shell: Shell, qtbot: Q
 ####
 def test_welcome_has_accessible_complete_tab_cycle(welcome_shell: Shell, qtbot: QtBot) -> None:
     window, _controller, _executor, _session = welcome_shell
-    names = ("welcomeFile", "welcomeLabel", "welcomePassword", "createButton", "openButton")
+    names = ("welcomeLabel", "welcomePassword", "createButton", "openButton")
+    assert window.findChild(QQuickItem, "welcomeFile") is None
     _assert_accessible_tab_stops(window, names)
     _assert_tab_cycle(window, names, qtbot)
 

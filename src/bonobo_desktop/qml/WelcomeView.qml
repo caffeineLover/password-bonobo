@@ -10,9 +10,9 @@ Pane {
         root.controller.passphrase = welcomePassword.text
         welcomePassword.clear()
         if (createNew)
-            root.controller.createVault(fileField.text, labelField.text)
+            root.controller.createVault(labelField.text)
         else
-            root.controller.openVault(fileField.text, labelField.text)
+            root.controller.openVault(labelField.text)
     }
 
     ColumnLayout {
@@ -30,16 +30,6 @@ Pane {
             text: qsTr("Create a local vault or open an existing PasswordSafe file.")
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-        }
-
-        TextField {
-            id: fileField
-            objectName: "welcomeFile"
-            placeholderText: qsTr("Vault file")
-            Accessible.name: qsTr("Vault file")
-            activeFocusOnTab: true
-            Layout.fillWidth: true
-            KeyNavigation.tab: labelField
         }
 
         TextField {
@@ -82,11 +72,11 @@ Pane {
                 text: qsTr("&Open")
                 Accessible.name: qsTr("Open vault")
                 activeFocusOnTab: true
-                KeyNavigation.tab: fileField
+                KeyNavigation.tab: labelField
                 onClicked: root.submit(false)
             }
         }
     }
 
-    Component.onCompleted: fileField.forceActiveFocus()
+    Component.onCompleted: labelField.forceActiveFocus()
 }

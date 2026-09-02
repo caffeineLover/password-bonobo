@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import ast
+import os
+import subprocess
+import sys
+import tomllib
 from pathlib import Path
 
 
@@ -46,3 +50,38 @@ def test_forbidden_import_diagnostic_contains_only_the_import_identifier(tmp_pat
 ####
 def test_application_core_never_imports_desktop_or_pyside() -> None:
     assert forbidden_imports(Path("src/bonobo_core/application")) == ()
+
+
+
+#### Load the configured GUI entry module in an isolated core-only interpreter.
+####
+#### Entry-point discovery imports its declared module before calling the target.
+#### A base installation therefore needs that module to stay importable without
+#### Qt and to return one fixed status without emitting the missing-import detail.
+####
+def test_configured_gui_entry_fails_safely_without_desktop_extra() -> None:
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    entry = project["project"]["scripts"]["password-bonobo"]
+    assert isinstance(entry, str)
+    module_name, separator, callable_name = entry.partition(":")
+    assert separator == ":"
+    environment = os.environ | {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": str(Path("src").resolve()),
+    }
+    command = (
+        f"from {module_name} import {callable_name}; "
+        f"raise SystemExit({callable_name}(['password-bonobo']))"
+    )
+
+    result = subprocess.run(
+        (sys.executable, "-S", "-c", command),
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == ""

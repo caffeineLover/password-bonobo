@@ -7,17 +7,19 @@ Dialog {
     required property var controller
     property int editKey: 0
     property bool editProtected: false
+    property bool awaitingConfirmation: false
     modal: true
     anchors.centerIn: parent
     width: Math.min(parent ? parent.width - 48 : 520, 520)
     title: editKey === 0 ? qsTr("Add record") : qsTr("Edit record")
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: awaitingConfirmation ? Popup.NoAutoClose : Popup.CloseOnEscape
 
     function clearLocalSecret() {
         editorPassword.clear()
     }
 
     function openNew() {
+        awaitingConfirmation = false
         editKey = 0
         editProtected = false
         editorTitle.clear()
@@ -28,6 +30,7 @@ Dialog {
     }
 
     function openExisting(key, title, group, username, isProtected) {
+        awaitingConfirmation = false
         editKey = key
         editProtected = isProtected
         editorTitle.text = title
@@ -38,16 +41,43 @@ Dialog {
     }
 
     function confirm() {
+        if (awaitingConfirmation)
+            return
         const submittedPassword = editorPassword.text
-        clearLocalSecret()
-        root.controller.confirmRecord(root.editKey, editorTitle.text, editorGroup.text,
-                                      editorUsername.text, root.editProtected, submittedPassword)
-        close()
+        awaitingConfirmation = root.controller.confirmRecord(
+            root.editKey, editorTitle.text, editorGroup.text, editorUsername.text,
+            root.editProtected, submittedPassword)
     }
 
     onOpened: editorTitle.forceActiveFocus()
-    onRejected: clearLocalSecret()
+    onRejected: {
+        awaitingConfirmation = false
+        clearLocalSecret()
+    }
     onClosed: clearLocalSecret()
+
+    Connections {
+        target: root.controller
+
+        function onRecordCommitted() {
+            if (!root.awaitingConfirmation)
+                return
+            root.awaitingConfirmation = false
+            editorTitle.clear()
+            editorGroup.clear()
+            editorUsername.clear()
+            root.clearLocalSecret()
+            root.close()
+        }
+
+        function onRecordRejected() {
+            root.awaitingConfirmation = false
+        }
+
+        function onCommandRejected() {
+            root.awaitingConfirmation = false
+        }
+    }
 
     contentItem: ColumnLayout {
         spacing: 10
@@ -109,6 +139,7 @@ Dialog {
             id: cancelButton
             objectName: "editorCancelButton"
             text: qsTr("&Cancel")
+            enabled: !root.awaitingConfirmation
             Accessible.name: qsTr("Cancel record changes")
             activeFocusOnTab: true
             KeyNavigation.tab: editorTitle

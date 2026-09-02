@@ -96,9 +96,9 @@ The lock contains 61 resolved third-party packages.  Hatchling is declared for i
 ## Native desktop deployment tools
 
 PySide6 6.11.2 supplies `pyside6-deploy` under the existing optional-runtime row.  The checked-in deployment
-configuration pins Nuitka 4.1.1 as the on-demand native build tool.  A dry run prints the resolved native command but
-does not install Nuitka or produce an artifact.  Neither tool is copied into the Python wheel; terms for platform
-application distribution remain pending review.
+configuration consumes Bonobo's executable absolute-import wrapper and pins Nuitka 4.1.1 as the on-demand native build
+tool.  A dry run prints the resolved native command but does not install Nuitka or produce an artifact.  Neither tool
+is copied into the Python wheel; terms for platform application distribution remain pending review.
 
 |Tool|Version|Origin|Terms|Use|Dist|Evidence|Review|
 |---|---|---|---|---|---|---|---|
@@ -219,10 +219,11 @@ The wheel declares no required runtime Python dependency.  Its optional `desktop
 PySide6 Addons, PySide6 Essentials, and Shiboken6 for a platform application artifact; those Qt for Python terms remain
 pending distribution review.  Both wheel and source distribution must carry the GPL text and typing marker; wheel
 metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and document tools do
-not enter either artifact.  The native dry-run contract selects only `Core`, `Gui`, `Qml`, `Quick`, and
-`QuickControls2` and the six tracked QML sources under `src/bonobo_desktop/qml/`; it does not produce, sign, or
-authorize distribution of an application artifact.  Botan is bundled only with applicable platform application
-artifacts, not the pure Python wheel.  Source-distribution presence does not establish mobile or App Store eligibility.
+not enter either artifact.  The native dry-run contract consumes `src/bonobo_desktop/deploy.py`, selects only `Core`,
+`Gui`, `Qml`, `Quick`, `QuickControls2`, and `Widgets`, and includes the six tracked QML sources under
+`src/bonobo_desktop/qml/`; it does not produce, sign, or authorize distribution of an application artifact.  Botan is
+bundled only with applicable platform application artifacts, not the pure Python wheel.  Source-distribution presence
+does not establish mobile or App Store eligibility.
 Every `P` or `MP` row remains pending for the iOS distribution decision; no row grants an exception, contributor
 permission, or permission to copy third-party expression.  The runnable core demonstration is Bonobo-authored source,
 contains only fixed fabricated values, and does not add a dependency or third-party asset.

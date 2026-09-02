@@ -62,9 +62,10 @@ Inspect the deterministic native deployment command without building or installi
 uv run pyside6-deploy --dry-run -c pysidedeploy.spec
 ```
 
-The checked-in specification pins the entry point, output directory, complete packaged QML source set, application
-name, and exact `Core`, `Gui`, `Qml`, `Quick`, and `QuickControls2` Qt module closure.  Run it natively on Windows,
-macOS, or Linux; it is not a cross-build, installer, signing, or distribution command.
+The checked-in specification pins an executable deployment wrapper, output directory, complete packaged QML source
+set, application name, and exact `Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, and `Widgets` Qt module closure.  The
+Widgets module supplies only the Python-owned native file dialog; vault locators never enter QML.  Run the dry run
+natively on Windows, macOS, or Linux; it is not a cross-build, installer, signing, or distribution command.
 
 Explicitly requested document generation and visual QA additionally require
 [Pandoc](https://pandoc.org/installing.html), a XeLaTeX distribution such as

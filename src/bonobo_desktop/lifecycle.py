@@ -61,8 +61,10 @@ class IdleLockController(QObject):
     lockRequested: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
     polled: ClassVar[Signal] = Signal()
     _application: QCoreApplication
+    _active: bool
     _elapsed: _ElapsedTimer
-    _lock_request: Callable[[], None]
+    _is_unlocked: Callable[[], bool] | None
+    _lock_request: Callable[[], object]
     _submitted: bool
     _timeout_ms: int
     _timer: QTimer
@@ -74,9 +76,10 @@ class IdleLockController(QObject):
     def __init__(
         self,
         application: QCoreApplication,
-        lock_request: Callable[[], None],
+        lock_request: Callable[[], object],
         *,
         timeout_ms: int,
+        is_unlocked: Callable[[], bool] | None = None,
         elapsed_timer: _ElapsedTimer | None = None,
     ) -> None:
         super().__init__()
@@ -85,14 +88,17 @@ class IdleLockController(QObject):
         self._application = application
         self._lock_request = lock_request
         self._timeout_ms = timeout_ms
+        self._is_unlocked = is_unlocked
         self._elapsed = QElapsedTimer() if elapsed_timer is None else elapsed_timer
+        self._active = is_unlocked is None or is_unlocked()
         self._submitted = False
         self._timer = QTimer(self)
         self._timer.setInterval(min(max(timeout_ms // 4, 1), 1000))
         self._timer.timeout.connect(self.poll)
         application.installEventFilter(self)
         self._elapsed.start()
-        self._timer.start()
+        if self._active:
+            self._timer.start()
 
 
 
@@ -100,9 +106,33 @@ class IdleLockController(QObject):
     ####
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if not self._submitted and event.type() in _QUALIFYING_EVENTS:
+        if self._active and not self._submitted and event.type() in _QUALIFYING_EVENTS:
             self._elapsed.restart()
         return super().eventFilter(watched, event)
+
+
+
+    #### Synchronize timer ownership with the current unlocked application phase.
+    ####
+    #### A locked-to-unlocked transition resets one-shot submission and starts a
+    #### fresh monotonic interval.  Remaining within one phase never rearms an
+    #### expired request or extends an interval without qualifying user input.
+    ####
+    @Slot()
+    def synchronize_phase(self) -> None:
+        is_unlocked = self._is_unlocked
+        if is_unlocked is None:
+            return
+        active = is_unlocked()
+        if active == self._active:
+            return
+        self._active = active
+        if active:
+            self._submitted = False
+            self._elapsed.restart()
+            self._timer.start()
+        else:
+            self._timer.stop()
 
 
 
@@ -110,7 +140,7 @@ class IdleLockController(QObject):
     ####
     @Slot()
     def poll(self) -> None:
-        if not self._submitted and self._elapsed.elapsed() >= self._timeout_ms:
+        if self._active and not self._submitted and self._elapsed.elapsed() >= self._timeout_ms:
             self._submitted = True
             self._timer.stop()
             self.lockRequested.emit()
@@ -122,5 +152,6 @@ class IdleLockController(QObject):
     #### Remove the application filter and stop future deadline checks.
     ####
     def close(self) -> None:
+        self._active = False
         self._timer.stop()
         self._application.removeEventFilter(self)

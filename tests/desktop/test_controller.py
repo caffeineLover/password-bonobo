@@ -7,7 +7,7 @@ from threading import Event, Lock, Thread
 from typing import cast
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QThread
+from PySide6.QtCore import QCoreApplication, QRunnable, QThread, QThreadPool
 from pytestqt.qtbot import QtBot
 from tests.application.fakes import (
     FakeVaultService,
@@ -21,8 +21,9 @@ from bonobo_core.application import (
     ApplicationSnapshot,
     VaultApplication,
 )
-from bonobo_core.passwordsafe import SecretBuffer, VaultSession
+from bonobo_core.passwordsafe import RecordHandle, RecordView, SecretBuffer, VaultSession
 from bonobo_desktop.controller import DesktopController
+from bonobo_desktop.file_dialog import VaultFileSelection
 from bonobo_desktop.models import RecordListModel
 from bonobo_desktop.tasks import FacadeExecutor
 
@@ -32,6 +33,47 @@ from bonobo_desktop.tasks import FacadeExecutor
 ####
 def _snapshot(generation: int) -> ApplicationSnapshot:
     return ApplicationSnapshot(generation, ApplicationPhase.EMPTY, "", False, (), None, None, None)
+
+
+
+#### Return the model's current title projection through its public Qt roles.
+####
+def _record_titles(model: RecordListModel) -> tuple[str, ...]:
+    title_role = next(role for role, name in model.roleNames().items() if name == b"title")
+    return tuple(cast(str, model.data(model.index(row, 0), title_role)) for row in range(model.rowCount()))
+
+
+
+#### Supply deterministic private locators for controller secret-lifetime tests.
+####
+class _SelectedDialog:
+
+
+
+    #### Return one test-owned open selection.
+    ####
+    def select_open(self, display_label: str) -> VaultFileSelection:
+        return VaultFileSelection(Path("fabricated-open.psafe3"), display_label)
+
+
+
+    #### Return one test-owned create selection.
+    ####
+    def select_create(self, display_label: str) -> VaultFileSelection:
+        return VaultFileSelection(Path("fabricated-create.psafe3"), display_label)
+
+
+
+#### Submit one passphrase-bearing controller intent by its closed test name.
+####
+def _submit_secret_intent(controller: DesktopController, intent: str) -> bool:
+    if intent == "create":
+        return controller.create_vault("Fabricated")
+    if intent == "open":
+        return controller.open_vault("Fabricated")
+    if intent == "unlock":
+        return controller.unlock_vault()
+    raise AssertionError("unknown test intent")
 
 
 
@@ -353,6 +395,86 @@ def test_executor_shutdown_cancels_queued_command_ownership() -> None:
 
 
 
+#### Roll back task admission and release real secret ownership when pool start raises.
+####
+def test_executor_submission_is_transactional_when_pool_start_raises() -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    original_pool = executor._pool
+    failure = KeyboardInterrupt("fabricated pool-start interruption")
+    owner = SecretBuffer.from_bytes(b"fabricated-queued-secret")
+
+
+
+    #### Raise before the task can become reachable by the worker pool.
+    ####
+    class _FailingPool:
+
+
+
+        #### Preserve the original submission interruption for the caller.
+        ####
+        def start(self, _task: QRunnable) -> None:
+            raise failure
+
+    executor._pool = cast(QThreadPool, _FailingPool())
+    try:
+        with pytest.raises(KeyboardInterrupt) as caught:
+            executor.submit(lambda _target: _snapshot(1), canceled=owner.close)
+    finally:
+        executor._pool = original_pool
+
+    assert caught.value is failure
+    assert owner.closed
+    assert executor._tasks == set()
+    executor.shutdown()
+
+
+
+#### Cancel a queued command by closing its transferred real secret owner.
+####
+def test_executor_shutdown_closes_real_secret_for_queued_cancellation() -> None:
+    facade = _RecordingFacade()
+    executor = FacadeExecutor(facade)
+    owner = SecretBuffer.from_bytes(b"fabricated-queued-secret")
+    canceled = Event()
+    shutdown_returned = Event()
+    assert executor.submit(lambda target: target.run(1), drain_on_shutdown=True)
+    assert facade.first_entered.wait(5)
+
+
+
+    #### Close the real owner and expose only completion of that cleanup.
+    ####
+    def cancel_secret() -> None:
+        owner.close()
+        canceled.set()
+
+    assert executor.submit(lambda target: target.run(2), canceled=cancel_secret)
+
+
+
+    #### Request shutdown independently while active durability work is held.
+    ####
+    def request_shutdown() -> None:
+        executor.shutdown()
+        shutdown_returned.set()
+
+    shutdown_thread = Thread(target=request_shutdown)
+    shutdown_thread.start()
+    try:
+        assert canceled.wait(5)
+        assert owner.closed
+        assert not shutdown_returned.is_set()
+    finally:
+        facade.release_first.set()
+        assert shutdown_returned.wait(5)
+        shutdown_thread.join()
+
+    assert facade.completed == [1]
+
+
+
 #### Notify exactly once after replacing transient passphrase input.
 ####
 def test_controller_emits_passphrase_notification_after_replacement() -> None:
@@ -456,7 +578,39 @@ def test_controller_clears_passphrase_before_open_and_projects_snapshot(qtbot: Q
     application = VaultApplication(service)
     typed_application = cast(VaultApplication[VaultSession], application)
     executor = FacadeExecutor(typed_application)
-    controller = DesktopController(typed_application, executor)
+    selected_locator = Path("fabricated.psafe3")
+
+
+
+    #### Return one Python-owned native selection without exposing it through Qt.
+    ####
+    class _OpenDialog:
+        calls: list[str]
+
+
+
+        #### Initialize safe display-label observations.
+        ####
+        def __init__(self) -> None:
+            self.calls = []
+
+
+
+        #### Return the test-owned private locator for one open intent.
+        ####
+        def select_open(self, display_label: str) -> VaultFileSelection:
+            self.calls.append(display_label)
+            return VaultFileSelection(selected_locator, display_label)
+
+
+
+        #### Reject an unexpected create intent in this open-only regression.
+        ####
+        def select_create(self, _display_label: str) -> VaultFileSelection | None:
+            raise AssertionError("create selection was not requested")
+
+    dialog = _OpenDialog()
+    controller = DesktopController(typed_application, executor, file_dialog=dialog)
     signals = 0
 
 
@@ -470,7 +624,7 @@ def test_controller_clears_passphrase_before_open_and_projects_snapshot(qtbot: Q
     controller.snapshotChanged.connect(count_signal)
     assert controller.setProperty("passphrase", "fabricated-passphrase")
     assert controller.property("passphrasePresent") is True
-    assert controller.open_vault("fabricated.psafe3", "Fabricated")
+    assert controller.open_vault("Fabricated")
     assert controller.property("passphrase") == ""
     assert controller.property("passphrasePresent") is False
     assert entered.wait(5)
@@ -486,8 +640,219 @@ def test_controller_clears_passphrase_before_open_and_projects_snapshot(qtbot: Q
     assert controller.property("failureKey") == ""
     assert controller.property("selectedKey") == 0
     assert controller.property("decisionRequired") is False
+    assert dialog.calls == ["Fabricated"]
     records = cast(RecordListModel, controller.property("records"))
     assert records.rowCount() == 1
+    executor.shutdown()
+
+
+
+#### Keep create selection private and expose only one safe label argument to Qt.
+####
+def test_controller_create_intent_has_no_qml_locator_argument(qtbot: QtBot) -> None:
+    session = FakeVaultSession(())
+    service = FakeVaultService(session)
+    application = VaultApplication(service)
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+
+
+
+    #### Supply one private create selection from the injected native adapter.
+    ####
+    class _CreateDialog:
+
+
+
+        #### Return the test-owned locator and the unchanged safe label.
+        ####
+        def select_create(self, display_label: str) -> VaultFileSelection:
+            return VaultFileSelection(Path("fabricated-created.psafe3"), display_label)
+
+
+
+        #### Reject an unexpected open intent in this create-only regression.
+        ####
+        def select_open(self, _display_label: str) -> VaultFileSelection | None:
+            raise AssertionError("open selection was not requested")
+
+    controller = DesktopController(typed_application, executor, file_dialog=_CreateDialog())
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert controller.create_vault("Created")
+
+    assert service.create_calls == 1
+    assert controller.property("displayLabel") == "Created"
+    metaobject = controller.metaObject()
+    assert metaobject.indexOfMethod("createVault(QString)") >= 0
+    assert metaobject.indexOfMethod("createVault(QString,QString)") == -1
+    assert metaobject.indexOfMethod("openVault(QString,QString)") == -1
+    executor.shutdown()
+
+
+
+#### Wipe retained passphrase input when native selection itself is interrupted.
+####
+@pytest.mark.parametrize("intent", ("create", "open"))
+def test_controller_wipes_passphrase_when_native_selection_raises(intent: str) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    failure = KeyboardInterrupt(f"fabricated {intent} dialog interruption")
+
+
+
+    #### Interrupt either native selection call before secret ownership transfer.
+    ####
+    class _InterruptedDialog:
+
+
+
+        #### Raise the closed test interruption during open selection.
+        ####
+        def select_open(self, _display_label: str) -> VaultFileSelection | None:
+            raise failure
+
+
+
+        #### Raise the closed test interruption during create selection.
+        ####
+        def select_create(self, _display_label: str) -> VaultFileSelection | None:
+            raise failure
+
+    controller = DesktopController(typed_application, executor, file_dialog=_InterruptedDialog())
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+    retained_input = controller._passphrase
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        if intent == "create":
+            controller.create_vault("Fabricated")
+        else:
+            controller.open_vault("Fabricated")
+
+    assert caught.value is failure
+    assert controller.property("passphrasePresent") is False
+    assert bytes(retained_input) == b"\x00" * len(retained_input)
+    executor.shutdown()
+
+
+
+#### Close real passphrase owners when create, open, or unlock admission returns false.
+####
+@pytest.mark.parametrize("intent", ("create", "open", "unlock"))
+def test_controller_closes_passphrase_when_executor_rejects(
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor, file_dialog=_SelectedDialog())
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+
+
+
+    #### Capture the real mutable passphrase owner at the controller boundary.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+    executor.shutdown()
+
+    assert not _submit_secret_intent(controller, intent)
+    assert len(owners) == 1
+    assert owners[0].closed
+
+
+
+#### Close real passphrase owners and preserve create, open, or unlock submission errors.
+####
+@pytest.mark.parametrize("intent", ("create", "open", "unlock"))
+def test_controller_closes_passphrase_when_executor_submission_raises(
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    application = VaultApplication(FakeVaultService(FakeVaultSession(())))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor, file_dialog=_SelectedDialog())
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+    failure = KeyboardInterrupt(f"fabricated {intent} submission interruption")
+
+
+
+    #### Capture the real mutable passphrase owner at the controller boundary.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+
+
+    #### Raise the exact interruption before executor ownership can settle.
+    ####
+    def interrupt_submission(*_args: object, **_kwargs: object) -> bool:
+        raise failure
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    monkeypatch.setattr(executor, "submit", interrupt_submission)
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    with pytest.raises(KeyboardInterrupt) as caught:
+        _submit_secret_intent(controller, intent)
+
+    assert caught.value is failure
+    assert len(owners) == 1
+    assert owners[0].closed
+    executor.shutdown()
+
+
+
+#### Clear every passphrase owner through successful create, open, and unlock terminals.
+####
+@pytest.mark.parametrize("intent", ("create", "open", "unlock"))
+def test_controller_closes_passphrase_after_terminal_result(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
+) -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    if intent == "unlock":
+        with SecretBuffer.from_bytes(b"fabricated-initial-passphrase") as initial:
+            opened = application.open(Path("fabricated.psafe3"), initial, "Fabricated")
+        application.lock(opened.generation)
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor, file_dialog=_SelectedDialog())
+    owners: list[SecretBuffer] = []
+    take_ownership = SecretBuffer.take_ownership
+
+
+
+    #### Capture the real mutable passphrase owner at the controller boundary.
+    ####
+    def capture_owner(value: bytearray) -> SecretBuffer:
+        owner = take_ownership(value)
+        owners.append(owner)
+        return owner
+
+    monkeypatch.setattr(SecretBuffer, "take_ownership", staticmethod(capture_owner))
+    assert controller.setProperty("passphrase", "fabricated-passphrase")
+
+    with qtbot.waitSignal(controller.snapshotChanged, timeout=5000):
+        assert _submit_secret_intent(controller, intent)
+
+    assert len(owners) == 1
+    assert owners[0].closed
     executor.shutdown()
 
 
@@ -506,6 +871,164 @@ def test_controller_maps_qml_record_key_to_application_key(qtbot: QtBot) -> None
         assert controller.copy_password(1)
 
     assert clipboard.copied == b"fabricated-password"
+    executor.shutdown()
+
+
+
+#### Coalesce two edits before the first result and render only the latest query.
+####
+def test_controller_serializes_two_search_edits_before_first_result(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = fabricated_record_view()
+    second = RecordView(
+        RecordHandle(),
+        first.revision,
+        "Beta Console",
+        "Examples",
+        "second-user",
+        "https://second.example.invalid/private",
+        False,
+    )
+    session = FakeVaultSession((first, second))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    entered = Event()
+    release = Event()
+    records = session.records
+    calls = 0
+    rejections: list[tuple[object, ...]] = []
+
+
+
+    #### Hold only the first search projection until both edits are submitted.
+    ####
+    def delayed_records() -> tuple[RecordView, ...]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            assert release.wait(5)
+        return records()
+
+    monkeypatch.setattr(session, "records", delayed_records)
+    controller.commandRejected.connect(lambda *values: rejections.append(values))
+    model = cast(RecordListModel, controller.property("records"))
+
+    assert controller.set_search("Alpha")
+    assert entered.wait(5)
+    assert controller.set_search("Beta")
+    release.set()
+    qtbot.waitUntil(lambda: bool(rejections) or _record_titles(model) == ("Beta Console",), timeout=5000)
+
+    assert rejections == []
+    assert _record_titles(model) == ("Beta Console",)
+    assert calls == 2
+    executor.shutdown()
+
+
+
+#### Retry the latest pending search after a safe first-result failure snapshot.
+####
+def test_controller_retries_latest_search_after_first_result_failure(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = fabricated_record_view()
+    second = RecordView(
+        RecordHandle(),
+        first.revision,
+        "Beta Console",
+        "Examples",
+        "second-user",
+        "https://second.example.invalid/private",
+        False,
+    )
+    session = FakeVaultSession((first, second))
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    entered = Event()
+    release = Event()
+    records = session.records
+    calls = 0
+    rejections: list[tuple[object, ...]] = []
+
+
+
+    #### Fail the held first refresh and let the pending latest refresh succeed.
+    ####
+    def initially_failing_records() -> tuple[RecordView, ...]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            assert release.wait(5)
+            raise RuntimeError("fabricated sensitive-looking first search failure")
+        return records()
+
+    monkeypatch.setattr(session, "records", initially_failing_records)
+    controller.commandRejected.connect(lambda *values: rejections.append(values))
+    model = cast(RecordListModel, controller.property("records"))
+
+    assert controller.set_search("Alpha")
+    assert entered.wait(5)
+    assert controller.set_search("Beta")
+    release.set()
+    qtbot.waitUntil(lambda: bool(rejections) or _record_titles(model) == ("Beta Console",), timeout=5000)
+
+    assert rejections == []
+    assert _record_titles(model) == ("Beta Console",)
+    assert calls == 2
+    executor.shutdown()
+
+
+
+#### Publish worker failures only through zero-argument signals and closed state.
+####
+def test_worker_failure_signals_never_retain_sensitive_exception_text(qtbot: QtBot) -> None:
+    sensitive_text = r"fabricated-passphrase at C:\private\vault.psafe3"
+    session = FakeVaultSession((fabricated_record_view(),))
+    application = VaultApplication(FakeVaultService(session))
+    typed_application = cast(VaultApplication[VaultSession], application)
+    executor = FacadeExecutor(typed_application)
+    controller = DesktopController(typed_application, executor)
+    failed: list[tuple[object, ...]] = []
+    rejected: list[tuple[object, ...]] = []
+    executor.commandFailed.connect(lambda *values: failed.append(values))
+    controller.commandRejected.connect(lambda *values: rejected.append(values))
+
+
+
+    #### Raise text resembling both a secret and a private source locator.
+    ####
+    def fail_worker(_target: VaultApplication[VaultSession]) -> ApplicationSnapshot:
+        raise RuntimeError(sensitive_text)
+
+    with qtbot.waitSignal(controller.commandRejected, timeout=5000):
+        assert executor.submit(fail_worker)
+
+    model = cast(RecordListModel, controller.property("records"))
+    public_state = (
+        controller.property("phase"),
+        controller.property("displayLabel"),
+        controller.property("failureKey"),
+        controller.property("passphrase"),
+        _record_titles(model),
+    )
+    assert failed == [()]
+    assert rejected == [()]
+    assert executor.metaObject().method(executor.metaObject().indexOfSignal("commandFailed()")).parameterCount() == 0
+    controller_signal = controller.metaObject().method(controller.metaObject().indexOfSignal("commandRejected()"))
+    assert controller_signal.parameterCount() == 0
+    assert sensitive_text not in repr(public_state)
+    assert sensitive_text not in repr(controller.__dict__)
     executor.shutdown()
 
 

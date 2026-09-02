@@ -8,7 +8,10 @@ dependencies in mobile cross-build jobs.
 from __future__ import annotations
 
 import configparser
+import os
 import shlex
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -23,6 +26,7 @@ import yaml  # type: ignore[import-untyped]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEPLOYMENT_SPEC = REPOSITORY_ROOT / "pysidedeploy.spec"
+DEPLOYMENT_WRAPPER = REPOSITORY_ROOT / "src" / "bonobo_desktop" / "deploy.py"
 FOUNDATION_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "foundation.yml"
 
 
@@ -191,9 +195,43 @@ def test_deployment_spec_names_only_required_qt_modules() -> None:
 
     assert spec.title == "Password Bonobo"
     assert spec.project_dir == "."
-    assert spec.input_file == "src/bonobo_desktop/main.py"
+    assert spec.input_file == "src/bonobo_desktop/deploy.py"
     assert spec.exec_directory == "dist/desktop"
-    assert spec.modules == ("Core", "Gui", "Qml", "Quick", "QuickControls2")
+    assert spec.modules == ("Core", "Gui", "Qml", "Quick", "QuickControls2", "Widgets")
+
+
+
+#### Execute the configured wrapper as a real script and observe its main status.
+####
+#### The temporary package supplies the absolute import target independently of
+#### the source checkout.  Returning its distinctive status proves the wrapper's
+#### direct-execution guard actually invokes `main` rather than merely importing.
+####
+def test_deployment_wrapper_direct_execution_invokes_main(tmp_path: Path) -> None:
+    package = tmp_path / "bonobo_desktop"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "main.py").write_text(
+        '"""Supply the direct-wrapper smoke target."""\n\n\ndef main() -> int:\n    return 23\n',
+        encoding="utf-8",
+    )
+    environment = os.environ | {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": str(tmp_path),
+    }
+
+    result = subprocess.run(
+        (sys.executable, str(DEPLOYMENT_WRAPPER)),
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 23
+    assert result.stdout == ""
+    assert result.stderr == ""
 
 
 

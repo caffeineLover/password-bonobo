@@ -35,6 +35,7 @@ class _CommandEnvelope[FacadeT]:
     facade: FacadeT
     command: Callable[[FacadeT], ApplicationSnapshot]
     canceled: Callable[[], None] | None
+    completed: Callable[[ApplicationSnapshot | None], None] | None
     shutdown_policy: _ShutdownDrainPolicy
 
 
@@ -45,6 +46,7 @@ class _CommandTask[FacadeT](QRunnable):
     _envelope: _CommandEnvelope[FacadeT]
     _failed: Callable[[], None]
     _finished: Callable[[ApplicationSnapshot], None]
+    _outcome: Callable[[object, object], None]
     _done: Callable[[object], None]
     _start: Callable[[object], bool]
     _completed: Event
@@ -61,6 +63,7 @@ class _CommandTask[FacadeT](QRunnable):
         envelope: _CommandEnvelope[FacadeT],
         finished: Callable[[ApplicationSnapshot], None],
         failed: Callable[[], None],
+        outcome: Callable[[object, object], None],
         start: Callable[[object], bool],
         done: Callable[[object], None],
     ) -> None:
@@ -68,6 +71,7 @@ class _CommandTask[FacadeT](QRunnable):
         self._envelope = envelope
         self._finished = finished
         self._failed = failed
+        self._outcome = outcome
         self._start = start
         self._done = done
         self._completed = Event()
@@ -144,10 +148,21 @@ class _CommandTask[FacadeT](QRunnable):
             result = self._envelope.command(self._envelope.facade)
         except BaseException:
             self._failed()
+            self._publish_completion(None)
         else:
             self._finished(result)
+            self._publish_completion(result)
         finally:
             self._complete()
+
+
+
+    #### Queue an optional closed outcome callback after public outcome publication.
+    ####
+    def _publish_completion(self, result: ApplicationSnapshot | None) -> None:
+        completed = self._envelope.completed
+        if completed is not None:
+            self._outcome(completed, result)
 
 
 
@@ -157,6 +172,7 @@ class FacadeExecutor[FacadeT](QObject):
     resultReady: ClassVar[Signal] = Signal(object)  # noqa: N815 - Qt metaobject API.
     commandFailed: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
     shutdownStarted: ClassVar[Signal] = Signal()  # noqa: N815 - Qt metaobject API.
+    _completionReady: ClassVar[Signal] = Signal(object, object)  # noqa: N815 - Qt metaobject API.
     _active_envelope: object | None
     _active_task: object | None
     _facade: FacadeT
@@ -183,6 +199,7 @@ class FacadeExecutor[FacadeT](QObject):
         self._active_envelope = None
         self._active_task = None
         self._terminal = None
+        self._completionReady.connect(self._deliver_completion)
 
 
 
@@ -193,6 +210,7 @@ class FacadeExecutor[FacadeT](QObject):
         command: Callable[[FacadeT], ApplicationSnapshot],
         *,
         canceled: Callable[[], None] | None = None,
+        completed: Callable[[ApplicationSnapshot | None], None] | None = None,
         drain_on_shutdown: bool = False,
     ) -> bool:
         shutdown_policy = (
@@ -200,20 +218,40 @@ class FacadeExecutor[FacadeT](QObject):
             if drain_on_shutdown
             else _ShutdownDrainPolicy.RETURN_IMMEDIATELY
         )
-        envelope = _CommandEnvelope(self._facade, command, canceled, shutdown_policy)
+        envelope = _CommandEnvelope(self._facade, command, canceled, completed, shutdown_policy)
         task = _CommandTask(
             envelope,
             self.resultReady.emit,
             self.commandFailed.emit,
+            self._completionReady.emit,
             self._task_started,
             self._task_done,
         )
-        with self._guard:
-            if self._shutdown:
-                return False
-            self._tasks.add(task)
-            self._pool.start(task)
+        try:
+            with self._guard:
+                if self._shutdown:
+                    return False
+                self._tasks.add(task)
+                try:
+                    self._pool.start(task)
+                except BaseException:
+                    self._tasks.discard(task)
+                    raise
+        except BaseException:
+            task.cancel_if_pending()
+            raise
         return True
+
+
+
+    #### Invoke one task-specific closed completion callback on the GUI thread.
+    ####
+    @Slot(object, object)
+    def _deliver_completion(self, callback_value: object, result_value: object) -> None:
+        callback = cast(Callable[[ApplicationSnapshot | None], None], callback_value)
+        result = result_value if isinstance(result_value, ApplicationSnapshot) else None
+        with suppress(BaseException):
+            callback(result)
 
 
 

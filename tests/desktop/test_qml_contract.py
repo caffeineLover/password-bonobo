@@ -252,6 +252,28 @@ def test_qml_never_names_forbidden_domain_or_secret_properties() -> None:
 
 
 
+#### Require status changes to issue a polite screen-reader announcement.
+####
+def test_main_status_surface_announces_accessible_updates() -> None:
+    source = Path(packaged_qml_components()[0].toLocalFile()).read_text(encoding="utf-8")
+
+    assert ".Accessible.announce(" in source
+    assert "Accessible.Polite" in source
+
+
+
+#### Keep the local record draft until the controller acknowledges command success.
+####
+def test_record_editor_confirmation_does_not_clear_or_close_before_acknowledgement() -> None:
+    source = Path(packaged_qml_components()[4].toLocalFile()).read_text(encoding="utf-8")
+    confirmation = source.split("function confirm()", maxsplit=1)[1].split("onOpened:", maxsplit=1)[0]
+
+    assert "awaitingConfirmation = root.controller.confirmRecord(" in confirmation
+    assert "clearLocalSecret()" not in confirmation
+    assert "close()" not in confirmation
+
+
+
 #### Parse exact QML identifiers while ignoring legitimate resource-string contents.
 ####
 def test_qml_boundary_parser_ignores_strings_but_finds_member_bindings() -> None:

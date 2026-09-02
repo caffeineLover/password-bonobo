@@ -77,10 +77,12 @@ private service/session methods.
 
 `bonobo_desktop` contains only desktop presentation and platform adapters:
 
-- `main.py`: composition root, private application directories, Botan resolution, Qt startup, and safe exit status.
+- `main.py`: lazy composition root, private application directories, Botan resolution, Qt startup, and safe exit status.
+- `deploy.py`: absolute-import direct-execution wrapper consumed by native deployment tooling.
 - `controller.py`: QObject adapter whose slots translate UI intents into facade commands.
 - `models.py`: reset-only `QAbstractListModel` adapters for record and group snapshots in the first increment.
 - `tasks.py`: a single-worker executor that prevents concurrent access to one facade/session.
+- `file_dialog.py`: GUI-thread native vault selection that never publishes filesystem locators to QML.
 - `clipboard.py`, `browser.py`, `lifecycle.py`, and `settings.py`: Qt implementations of application ports.
 - `qml/`: declarative welcome, unlock, vault, record editor, confirmation, and settings views.
 
@@ -96,7 +98,9 @@ QML resources. Desktop deployment is produced independently on each target OS; p
 Qt for Python 6.11.2 is the initial qualified line because its published metadata supports Python 3.14 and current
 Windows x86-64, macOS universal2, and manylinux x86-64 wheels. The dependency is constrained to `>=6.11.2,<6.12` and
 must be requalified before widening. The deployment foundation uses Qt's supported `pyside6-deploy` configuration and
-dry-run inspection before installer signing or distribution is attempted.
+dry-run inspection with exactly Core, Gui, Qml, Quick, QuickControls2, and Widgets. Widgets is present only for the
+Python-owned native file dialog. Building or launching an artifact, installers, signing, and distribution are separate
+future decisions.
 
 ## 5. Application state model
 
@@ -121,9 +125,10 @@ stale generation are rejected with `STALE_VIEW`. A busy operation cannot be nest
 
 ### 6.1 Create and open
 
-The desktop adapter obtains a path from the native file dialog and supplies it directly to the facade without placing
-it in a model or log. Passphrase input is converted to a `SecretBuffer`, the Qt input property is cleared immediately,
-and the buffer is closed by the command boundary.
+The desktop adapter obtains a path from the native file dialog on the GUI thread and supplies it directly to the facade
+without placing it in declarative state, a Qt signal, a model, or a log. QML emits only create/open intent plus an
+optional caller-chosen display label. Passphrase input is converted to a `SecretBuffer`, the Qt input property is
+cleared immediately, and the buffer is closed by the command boundary.
 
 Successful create/open replaces the prior session only after the new session is fully authenticated and projected.
 Failure retains the old active session. Replacing a dirty session first returns a decision token for save, discard, or
@@ -157,9 +162,10 @@ Successful save or discard removes the pending artifact by stable identity.
 Record-list summaries expose only opaque ID, title, group, username, protected state, and non-secret status flags. URL,
 email, notes, password, history, custom fields, UUID, and unknown-field metadata remain outside the list projection.
 
-Search is deterministic, Unicode casefolded by default, and limited initially to title, group, and username. An
-explicit case-sensitive option is supported. Search changes selection only; it does not mutate the vault or create a
-dirty revision.
+Search is deterministic, Unicode casefolded by default, and limited initially to title, group, and username. Rapid
+edits are coalesced behind the active search so only the latest pending query is submitted with the latest accepted
+generation. An explicit case-sensitive option is supported. Search changes selection only; it does not mutate the
+vault or create a dirty revision.
 
 Groups are projections of dot-separated record group values plus representable empty-group metadata. Rename, move,
 and non-empty deletion are planned commands over one revision. Root cannot be renamed or deleted. A confirmed
@@ -190,9 +196,10 @@ returns only a success/failure reason. The URL is absent from diagnostics, error
 
 ### 8.3 Idle and lifecycle
 
-A Qt event filter reports qualifying user activity to a monotonic idle controller. Timer expiry requests the facade's
-lock transaction. Suspend, session end, and application shutdown use the same operation; the process does not exit
-while a save or pending-session synchronization is incomplete.
+A Qt event filter reports qualifying user activity to a monotonic idle controller only while the facade is unlocked.
+Timer expiry requests the facade's lock transaction once, and each successful unlock rearms a fresh interval. Suspend,
+session end, and application shutdown use the same operation; the process does not exit while a save or pending-session
+synchronization is incomplete.
 
 ### 8.4 Preferences and recent files
 
@@ -211,9 +218,10 @@ The first shell has four top-level views:
    persistent dirty indicator.
 4. Record editor: revision-bound draft with explicit Save/Cancel and protected-entry confirmation.
 
-Save, lock, create/open replacement, and close are first-class commands. Keyboard order, access names, shortcut
-discoverability, focus restoration, scalable text, high-contrast colors, and screen-reader status notifications are
-acceptance requirements, not polish work.
+Save, lock, create/open replacement, and close are first-class commands. The record editor retains every local draft
+field until an argument-free success acknowledgement; safe rejection leaves the draft available. Keyboard order,
+access names, shortcut discoverability, focus restoration, scalable text, high-contrast colors, and screen-reader-
+announced fixed status copy are acceptance requirements, not polish work.
 
 ## 10. Failure and diagnostic model
 
@@ -263,7 +271,8 @@ The subproject is complete when:
 4. The Qt Quick client completes the core fabricated-vault workflow by pointer and keyboard on Windows, macOS, and
    Linux.
 5. Clipboard, browser, idle, close, replacement, and error behavior pass fault-injected and native adapter tests.
-6. A native deploy dry run and packaged smoke launch pass on all three desktop targets.
+6. A real native deploy dry run passes on all three desktop targets, and direct wrapper execution is covered without
+   building or launching a packaged artifact.
 7. All existing core, interoperability, mobile cross-build, security, licensing, and repository gates remain green.
 
 ## 14. References

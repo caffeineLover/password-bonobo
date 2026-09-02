@@ -108,3 +108,59 @@ def test_idle_activity_filter_ignores_non_input_and_resets_for_input(qtbot: QtBo
     timer.elapsed_value = 100
     _await_timer_poll(qtbot, controller, lambda: submissions == 1)
     controller.close()
+
+
+
+#### Arm only while unlocked and rearm after every locked-to-unlocked transition.
+####
+#### An expiry remains one-shot within one unlocked phase.  Successful relock
+#### followed by unlock starts a fresh monotonic interval and permits one new
+#### submission without reconstructing the retained application event filter.
+####
+def test_idle_lock_is_phase_aware_and_rearms_after_unlock(qtbot: QtBot) -> None:
+    application = QCoreApplication.instance()
+    assert application is not None
+    timer = _ManualElapsedTimer()
+    unlocked = False
+    submissions = 0
+
+
+
+    #### Report the current test-owned application phase without exposing a DTO.
+    ####
+    def is_unlocked() -> bool:
+        return unlocked
+
+
+
+    #### Count one lock request for each distinct unlocked lifetime.
+    ####
+    def submit_lock() -> None:
+        nonlocal submissions
+        submissions += 1
+
+    controller = IdleLockController(
+        application,
+        submit_lock,
+        timeout_ms=100,
+        is_unlocked=is_unlocked,
+        elapsed_timer=timer,
+    )
+    timer.elapsed_value = 500
+    _await_timer_poll(qtbot, controller, lambda: submissions == 0)
+
+    unlocked = True
+    controller.synchronize_phase()
+    assert timer.elapsed_value == 0
+    timer.elapsed_value = 100
+    _await_timer_poll(qtbot, controller, lambda: submissions == 1)
+    timer.elapsed_value = 500
+    _await_timer_poll(qtbot, controller, lambda: submissions == 1)
+
+    unlocked = False
+    controller.synchronize_phase()
+    unlocked = True
+    controller.synchronize_phase()
+    timer.elapsed_value = 100
+    _await_timer_poll(qtbot, controller, lambda: submissions == 2)
+    controller.close()

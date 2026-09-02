@@ -17,15 +17,15 @@ from bonobo_core.application import VaultApplication
 from bonobo_core.passwordsafe import VaultService, VaultSession
 
 from . import resources
-from .browser import QtBrowserPort
-from .clipboard import QtClipboardPort
-from .controller import DesktopController
-from .tasks import FacadeExecutor
 
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+
+_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 
 
 
@@ -80,16 +80,28 @@ def _request_shutdown_lock(application: VaultApplication[VaultSession]) -> None:
 #### without a loaded root object.
 ####
 def main(argv: Sequence[str] | None = None) -> int:
-    from PySide6.QtCore import QStandardPaths
-    from PySide6.QtGui import QGuiApplication
-    from PySide6.QtQml import QQmlApplicationEngine
+    try:
+        from PySide6.QtCore import QStandardPaths
+        from PySide6.QtQml import QQmlApplicationEngine
+        from PySide6.QtWidgets import QApplication
+
+        from .browser import QtBrowserPort
+        from .clipboard import QtClipboardPort
+        from .controller import DesktopController
+        from .file_dialog import QtVaultFileDialog
+        from .lifecycle import IdleLockController
+        from .tasks import FacadeExecutor
+    except ImportError:
+        # Entry-point discovery on a core-only installation must fail with one
+        # fixed status and must not disclose import or environment diagnostics.
+        return 1
 
     arguments = list(process_argv if argv is None else argv)
-    existing_application = QGuiApplication.instance()
+    existing_application = QApplication.instance()
     qt_application = (
-        QGuiApplication(arguments)
+        QApplication(arguments)
         if existing_application is None
-        else cast(QGuiApplication, existing_application)
+        else cast(QApplication, existing_application)
     )
     qt_application.setOrganizationName("Password Bonobo")
     qt_application.setApplicationName("Password Bonobo")
@@ -113,16 +125,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     browser = QtBrowserPort()
     application = VaultApplication(service, clipboard=clipboard, browser=browser)
     executor = FacadeExecutor(application)
-    controller = DesktopController(application, executor)
+    controller = DesktopController(application, executor, file_dialog=QtVaultFileDialog())
+    idle_lock = IdleLockController(
+        qt_application,
+        controller.lock,
+        timeout_ms=_IDLE_TIMEOUT_MS,
+        is_unlocked=controller.is_unlocked_for_idle_lock,
+    )
+    controller.snapshotChanged.connect(idle_lock.synchronize_phase)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("desktopController", controller)
-    engine.load(qml_url)
-    if not engine.rootObjects():
-        controller.shutdown(_request_shutdown_lock)
-        engine.deleteLater()
-        return 1
     try:
+        engine.load(qml_url)
+        if not engine.rootObjects():
+            return 1
         return qt_application.exec()
     finally:
+        idle_lock.close()
         controller.shutdown(_request_shutdown_lock)
         engine.deleteLater()

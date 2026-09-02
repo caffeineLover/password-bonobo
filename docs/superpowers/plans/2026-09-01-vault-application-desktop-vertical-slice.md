@@ -39,6 +39,8 @@ pytest, pytest-qt, Ruff, strict mypy, Bandit, REUSE, uv, and native `pyside6-dep
 - `src/bonobo_core/application/facade.py`: serialized application state machine.
 - `src/bonobo_core/passwordsafe/pending.py`: durable encrypted pending-session storage.
 - `src/bonobo_desktop/main.py`: desktop composition root.
+- `src/bonobo_desktop/deploy.py`: absolute-import deployment wrapper.
+- `src/bonobo_desktop/file_dialog.py`: Python-owned GUI-thread native vault selection.
 - `src/bonobo_desktop/controller.py`: QObject command adapter.
 - `src/bonobo_desktop/models.py`: Qt record-list model.
 - `src/bonobo_desktop/tasks.py`: single-worker facade executor.
@@ -419,6 +421,7 @@ git commit -m "feat: suspend dirty vault sessions securely"
 - Modify: `uv.lock`
 - Create: `src/bonobo_desktop/__init__.py`
 - Create: `src/bonobo_desktop/main.py`
+- Create: `src/bonobo_desktop/deploy.py`
 - Create: `src/bonobo_desktop/resources.py`
 - Create: `tests/desktop/test_import_boundary.py`
 - Create: `tests/desktop/test_main.py`
@@ -457,9 +460,10 @@ license, source, version range, distribution purpose, and review state in the pr
 
 - [ ] **Step 4: Implement a safe composition-root skeleton**
 
-Create `QGuiApplication`, set organization/application names before settings access, create private working/recovery
-directories, compose `VaultService.with_botan`, construct `VaultApplication`, load QML from packaged resources, return
-1 when no root object loads, and ensure shutdown requests facade lock before destroying the engine.
+Lazily import every Qt adapter, create `QApplication`, set organization/application names before settings access,
+create private working/recovery directories, compose `VaultService.with_botan`, construct `VaultApplication`, load QML
+from packaged resources, return 1 when no root object loads, and ensure shutdown requests facade lock before destroying
+the engine. Keep an absolute-import direct-execution wrapper for deployment tooling.
 
 - [ ] **Step 5: Run import, wheel, provenance, and license gates**
 
@@ -487,16 +491,18 @@ git commit -m "build: add PySide6 desktop foundation"
 - Create: `src/bonobo_desktop/clipboard.py`
 - Create: `src/bonobo_desktop/browser.py`
 - Create: `src/bonobo_desktop/lifecycle.py`
+- Create: `src/bonobo_desktop/file_dialog.py`
 - Create: `tests/desktop/test_models.py`
 - Create: `tests/desktop/test_controller.py`
 - Create: `tests/desktop/test_clipboard.py`
 - Create: `tests/desktop/test_lifecycle.py`
+- Create: `tests/desktop/test_file_dialog.py`
 
 **Interfaces:**
 - Consumes: Task 1–4 facade/DTOs and Qt `QAbstractListModel`, `QObject`, `QThreadPool`, `QClipboard`,
-  `QDesktopServices`, and `QElapsedTimer`.
+  `QDesktopServices`, `QFileDialog`, and `QElapsedTimer`.
 - Produces: `RecordListModel`, `DesktopController`, `FacadeExecutor`, `QtClipboardPort`, `QtBrowserPort`, and
-  `IdleLockController`.
+  `IdleLockController`, and `QtVaultFileDialog`.
 
 - [ ] **Step 1: Write failing model-role and serialization tests**
 
@@ -535,7 +541,9 @@ the worker with events rather than sleeps.
 
 Clipboard writes a random Bonobo MIME nonce, clears only when that nonce remains current, and wipes temporary mutable
 copies. Browser converts the explicit leased UTF-8 value to `QUrl` only inside the operation and returns a boolean.
-Idle tracking uses a monotonic deadline and qualifying application input events; expiry submits facade lock once.
+Idle tracking uses a monotonic deadline and qualifying application input events only while unlocked; expiry submits
+facade lock once, and successful unlock rearms it. Native create/open selection runs on the GUI thread and keeps every
+filesystem locator outside QML.
 
 - [ ] **Step 6: Run offscreen adapter tests and commit**
 
@@ -621,6 +629,7 @@ git commit -m "feat: add accessible Qt Quick vault shell"
 
 **Files:**
 - Create: `pysidedeploy.spec`
+- Create: `src/bonobo_desktop/deploy.py`
 - Create: `tests/desktop/test_deployment_contract.py`
 - Modify: `.github/workflows/foundation.yml`
 - Modify: `README.md`
@@ -636,8 +645,8 @@ git commit -m "feat: add accessible Qt Quick vault shell"
 ```python
 def test_deployment_spec_names_only_required_qt_modules() -> None:
     spec = read_deployment_spec()
-    assert spec.input_file == "src/bonobo_desktop/main.py"
-    assert set(spec.modules) == {"Core", "Gui", "Qml", "Quick", "QuickControls2"}
+    assert spec.input_file == "src/bonobo_desktop/deploy.py"
+    assert set(spec.modules) == {"Core", "Gui", "Qml", "Quick", "QuickControls2", "Widgets"}
 
 
 def test_desktop_ci_installs_extra_and_runs_offscreen_smoke() -> None:
@@ -653,9 +662,10 @@ Expected: FAIL because deployment configuration and CI steps are absent.
 
 - [ ] **Step 3: Add deterministic native deployment dry runs**
 
-Configure the entry point, project root, output directory, QML resources, app name, and exact Qt modules. Add desktop
-matrix steps that install the `desktop` extra and `desktop-test` group, run offscreen QML tests, and execute
-`pyside6-deploy --dry-run -c pysidedeploy.spec`. Mobile cross-build jobs continue installing only core/dev dependencies.
+Configure the executable wrapper, project root, output directory, QML resources, app name, and exact Qt modules. Add
+desktop matrix steps that install the `desktop` extra and `desktop-test` group, run offscreen QML tests, and execute
+`pyside6-deploy --dry-run -c pysidedeploy.spec`. The wrapper receives direct-execution smoke coverage without building
+or launching an artifact. Mobile cross-build jobs continue installing only core/dev dependencies.
 
 - [ ] **Step 4: Run the full local release gates**
 
