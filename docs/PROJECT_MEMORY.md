@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-02
 
-## Active Task 4 transaction-boundary revision
+## Completed Task 4 transaction-boundary revision
 
 The user approved a narrow architectural revision for the two remaining Task 4
 findings.  The approved design addendum is
@@ -15,7 +15,7 @@ discard cannot leave the facade holding a dead selector.
 
 The executable repair plan is
 `docs/superpowers/plans/2026-09-02-pending-session-transaction-boundaries.md`.
-Repair round 4 is active from clean base `7fe0e98`.  The pre-change focused
+Repair round 4 began from clean base `7fe0e98`.  The pre-change focused
 Task 4 suite passed 148 tests with 2 expected skips in 138.24 seconds.  The
 retained-anchor matrix and deterministic decoy ABA regressions are now RED:
 the prescribed selection reports 14 failures and 67 deselections in 22.81
@@ -38,10 +38,12 @@ in 176.35 seconds; and the exact-DLL full suite passes 837 with 14 skips in
 files under win32, darwin, and linux, Python structure, compatibility (66
 behaviors, 45 features, 55 oracles), provenance, Bandit, pip-audit, REUSE
 140/140, tracked-file and whitespace checks, source/wheel build, and wheel
-inspection pass.  The repair commit containing this checkpoint is ready for a
-scoped independent re-review from base `7fe0e98`.  Do not begin Task 5 until
-Task 4 receives a clean independent review.  Tasks 5 through 8 remain approved
-only in that order.
+inspection pass.  The repair is committed as `42f209e`.  Scoped independent
+re-review confirms both the final retained-anchor authorization and committed-
+discard reconciliation findings are addressed, with no new breakage or out-of-
+scope observations.  Task 4 is therefore complete.  The exact next action is
+Task 5, the optional PySide6 desktop package, followed by Tasks 6 through 8 in
+order.
 
 ## Completed Task 4 review-fix round 3
 
@@ -604,6 +606,6 @@ the same metadata.
 
 ## Exact continuation order after this checkpoint
 
-1. Verify, commit, and push the REUSE correction; fast-forward it into the isolated O3 worktree.
-2. Execute vertical-slice Task 1 red-first under the selected subagent-driven workflow.
-3. Continue the plan in order; do not start provider coordination, URL-audit behavior, or mobile clients.
+1. Execute vertical-slice Task 5 red-first in the existing isolated O3 worktree.
+2. Continue Tasks 6 through 8 in order under the selected subagent-driven workflow.
+3. Do not start provider coordination, URL-audit behavior, or mobile clients.
