@@ -6,9 +6,10 @@ Last updated: 2026-09-02
 
 The user authorized one additional narrowly scoped repair-and-review wave for
 the two native-dialog findings below.  No merge, push, publication, or unrelated
-scope is authorized.  The implementation, prescribed verification, exact-diff
-self-review, ignored report, and staged policy checks are complete red-first;
-the three-file candidate awaits one local commit.
+scope is authorized.  The red-first implementation, exact-diff self-review,
+prescribed verification, and independent scoped re-review are complete in local
+commit `6a79678`; both residual findings are addressed with no new Critical or
+Important breakage.
 
 Scoped re-review of final fix commit `e6eb534` confirms all seven original
 Important findings and both promoted Task 6 test gaps are addressed.  It found
@@ -39,10 +40,10 @@ Tracked-file policy is clean, REUSE reports 174/174 compliant, and staged plus
 unstaged whitespace checks are clean.  Exact-diff self-review confirms only the
 controller, controller regressions, and this memory are tracked candidates.
 
-Exact next actions are: restage this final checkpoint; rerun staged tracked-file,
-REUSE, and whitespace checks; commit locally; and record the hash in the ignored
-report.  Controller final verification/review follows.  Merge and publication
-remain prohibited.
+The exact next action is the controller's complete final verification on the
+committed branch, followed by branch-finishing options if every gate remains
+green.  Merge and publication remain prohibited until the user selects an
+integration option.
 
 Hosted Windows/macOS/Linux deployment evidence and the local optional-project /
 `dumpbin` warnings remain integration checks after the security boundary is
