@@ -53,6 +53,14 @@ class VaultSessionLike(Protocol):
 
 
 
+    #### Return the current opaque revision without exposing it from the facade.
+    ####
+    @property
+    def revision(self) -> RevisionToken:
+        raise NotImplementedError
+
+
+
     #### Return immutable public views for the current authenticated document.
     ####
     def records(self) -> tuple[RecordView, ...]:
@@ -304,7 +312,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             handle = self._resolve_handle(key)
             session = self._require_session()
             view = self._view_for_handle(session, handle)
-            self._record_revisions[key] = view.revision
+            self._record_revisions[key] = session.revision
             return RecordDraft(key, previous.generation, view.title, view.group, view.username, view.protected)
 
 
@@ -523,7 +531,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         try:
             url_text = self._secret_text(url)
             new_record = NewRecord(uuid4(), draft.title, password, draft.username, draft.group, url_text)
-            session.add(new_record, self._current_revision())
+            session.add(new_record, self._current_revision(session))
             mutated = True
             records = self._refresh_active_projection(session)
             return self._publish(
@@ -675,13 +683,13 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
 
 
 
-    #### Read one private current revision after ensuring every view agrees on it.
+    #### Read the session's current private revision for a generation-checked command.
     ####
-    def _current_revision(self) -> RevisionToken:
-        revisions = tuple(self._record_revisions.values())
-        if not revisions:
+    def _current_revision(self, session: ApplicationSessionT) -> RevisionToken:
+        revision = session.revision
+        if not isinstance(revision, RevisionToken):
             raise ApplicationCommandError("record revision is unavailable")
-        return revisions[0]
+        return revision
 
 
 
@@ -892,11 +900,12 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         session: ApplicationSessionT,
     ) -> tuple[tuple[RecordSummary, ...], dict[RecordHandle, RecordKey], dict[RecordKey, RevisionToken]]:
         views = session.records()
+        revision = self._current_revision(session)
         record_keys = {
             view.handle: RecordKey(self._next_record_key + index)
             for index, view in enumerate(views)
         }
-        revisions = {record_keys[view.handle]: view.revision for view in views}
+        revisions = {record_keys[view.handle]: revision for view in views}
         return project_records(views, record_keys), record_keys, revisions
 
 
@@ -932,6 +941,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     ####
     def _refresh_active_projection(self, session: ApplicationSessionT) -> tuple[RecordSummary, ...]:
         views = session.records()
+        revision = self._current_revision(session)
         keys: dict[RecordHandle, RecordKey] = {}
         for view in views:
             key = self._record_keys.get(view.handle)
@@ -940,7 +950,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 self._next_record_key += 1
             keys[view.handle] = key
         self._record_keys = keys
-        self._record_revisions = {keys[view.handle]: view.revision for view in views}
+        self._record_revisions = {keys[view.handle]: revision for view in views}
         return self._filter_records(project_records(views, keys))
 
 

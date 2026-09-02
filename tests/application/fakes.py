@@ -47,6 +47,7 @@ def fabricated_record_view() -> RecordView:
 #### operation because the facade must not depend on those details here.
 ####
 class FakeVaultSession:
+    _revision: RevisionToken
     apply_calls: int
     change_count: int
     discard_error: BaseException | None
@@ -63,6 +64,7 @@ class FakeVaultSession:
     #### Initialize an active session with caller-supplied non-secret record views.
     ####
     def __init__(self, records: tuple[RecordView, ...], *, dirty: bool = False) -> None:
+        self._revision = records[0].revision if records else RevisionToken()
         self.apply_calls = 0
         self.change_count = 0
         self.records_value = records
@@ -73,6 +75,14 @@ class FakeVaultSession:
         self.lock_calls = 0
         self.lock_error = None
         self.locked = False
+
+
+
+    #### Return the current fake document revision for facade command validation.
+    ####
+    @property
+    def revision(self) -> RevisionToken:
+        return self._revision
 
 
 
@@ -93,7 +103,9 @@ class FakeVaultSession:
         _expected_revision: RevisionToken,
         edits: tuple[SetTextField | SetSecretField, ...],
     ) -> RecordView:
-        for index, view in enumerate(self.records_value):
+        if _expected_revision is not self._revision:
+            raise ValueError("fabricated revision is stale")
+        for view in self.records_value:
             if view.handle is not handle:
                 continue
             title = view.title
@@ -112,8 +124,22 @@ class FakeVaultSession:
                         url = edit.value
                 else:
                     edit.value.close()
-            updated = RecordView(handle, RevisionToken(), title, group, username, url, view.protected)
-            self.records_value = (*self.records_value[:index], updated, *self.records_value[index + 1 :])
+            self._revision = RevisionToken()
+            updated = RecordView(handle, self._revision, title, group, username, url, view.protected)
+            self.records_value = tuple(
+                updated
+                if existing.handle is handle
+                else RecordView(
+                    existing.handle,
+                    self._revision,
+                    existing.title,
+                    existing.group,
+                    existing.username,
+                    existing.url,
+                    existing.protected,
+                )
+                for existing in self.records_value
+            )
             self.apply_calls += 1
             self.change_count += 1
             self.dirty = True
@@ -126,16 +152,33 @@ class FakeVaultSession:
     ####
     def add(self, new_record: NewRecord, _expected_revision: RevisionToken) -> RecordView:
         try:
+            if _expected_revision is not self._revision:
+                raise ValueError("fabricated revision is stale")
+            self._revision = RevisionToken()
             view = RecordView(
                 RecordHandle(),
-                RevisionToken(),
+                self._revision,
                 new_record.title,
                 new_record.group,
                 new_record.username,
                 new_record.url,
                 False,
             )
-            self.records_value = (*self.records_value, view)
+            self.records_value = (
+                *(
+                    RecordView(
+                        existing.handle,
+                        self._revision,
+                        existing.title,
+                        existing.group,
+                        existing.username,
+                        existing.url,
+                        existing.protected,
+                    )
+                    for existing in self.records_value
+                ),
+                view,
+            )
             self.change_count += 1
             self.dirty = True
             return view

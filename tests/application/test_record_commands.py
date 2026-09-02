@@ -100,3 +100,22 @@ def test_url_edit_uses_a_closed_transient_secret_buffer(
     assert website.closed
     assert application.test_session_change_count == 1
     assert "example.invalid" not in repr(result)
+
+
+
+#### Add the first record from an empty session using its private current revision.
+####
+def test_new_draft_in_empty_vault_commits_one_add_with_a_closed_secret() -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-empty.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    draft = RecordDraft(None, application.snapshot.generation, "First Record", "Research", "sample-user", False)
+    password = SecretBuffer.from_bytes(b"fabricated-first-password")
+
+    result = application.commit_edit(draft, password)
+
+    assert password.closed
+    assert result.dirty
+    assert result.records[0].title == "First Record"
+    assert application.test_session_change_count == 1
+    assert "fabricated-first-password" not in repr(result)
