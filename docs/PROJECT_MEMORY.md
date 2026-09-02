@@ -13,9 +13,12 @@ This file is Markdown-only.  Do not create a second project-memory location or a
 
 ## Active Task 2 checkpoint
 
-Task 2 of the approved vault-application desktop vertical slice is implemented
-on `feature/vault-application-desktop`, based on Task 1 commit `19e9360`, and
-is ready to commit.  It adds the serialized UI-independent lifecycle facade,
+Task 2 of the approved vault-application desktop vertical slice is committed as
+`6f0a89c` on `feature/vault-application-desktop`.  Review-fix round 1 is in
+progress for failures raised after terminal session operations.  The fix adds
+fault injection tests and conservatively fails closed rather than republishing
+an old unlocked snapshot after a lock/discard may have mutated its private
+session.  The committed task adds the serialized UI-independent lifecycle facade,
 safe public command exports, and headless fake-service tests.  The binding
 replacement rule is proved: an open from dirty unlocked state returns an
 `AWAITING_DECISION` replacement token without calling the service; resolving
@@ -27,8 +30,11 @@ Ruff, structure, and the exact repository-wide strict mypy checks pass under
 Windows, macOS, and Linux for 79 source files.  The Task 1-only fabricated
 `RecordView` factory now lives in the Task 2 application fakes rather than
 creating a second module path in PasswordSafe test helpers.  Immediate next
-actions: commit Task 2, then continue only with approved Task 3.  Later
-approved work remains Tasks 4 through 8 in order.
+actions: run the full Botan-backed suite, update the Task 2 report with red and
+green evidence, self-review, and commit the review fix.  Focused application
+and service tests passed (56), as did Ruff, Python structure, `git diff --check`,
+and strict mypy on Windows, macOS, and Linux (79 files each).  Later approved
+work remains Tasks 3 through 8 in order.
 
 ## Completed Task 1 checkpoint
 

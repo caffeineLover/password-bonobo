@@ -63,6 +63,24 @@ def test_failed_replacement_retains_dirty_active_session(fake_service: FakeVault
 
 
 
+#### Fail closed when old-session discard mutates and then raises during replacement.
+####
+def test_replacement_cleanup_failure_does_not_republish_old_dirty_state(fake_service: FakeVaultService) -> None:
+    app = opened_application(fake_service, dirty=True)
+    candidate = FakeVaultSession((fabricated_record_view(),))
+    fake_service.open_session.discard_error = RuntimeError("fabricated-old-session-failure")
+    fake_service.open_session = candidate
+    pending = app.open(Path("fabricated-other.psafe3"), SecretBuffer.from_bytes(b"fabricated"), "Other")
+
+    result = app.resolve_close(pending.decision, CloseChoice.DISCARD)
+
+    assert result.phase is ApplicationPhase.LOCKED
+    assert result.records == ()
+    assert result.failure is not None
+    assert candidate.discard_calls == 1
+
+
+
 #### Close transferred passphrase ownership after a successful initial open.
 ####
 def test_open_closes_passphrase_after_success(fake_service: FakeVaultService) -> None:
@@ -107,6 +125,23 @@ def test_failed_saved_replacement_retains_clean_active_session(fake_service: Fak
 
 
 
+#### Fail closed if a successful save is followed by a partially completed terminal lock.
+####
+def test_saved_close_lock_failure_does_not_republish_dirty_state(fake_service: FakeVaultService) -> None:
+    app = opened_application(fake_service, dirty=True)
+    pending = app.request_close(app.snapshot.generation)
+    fake_service.open_session.lock_error = RuntimeError("fabricated-lock-failure")
+
+    result = app.resolve_close(pending.decision, CloseChoice.SAVE)
+
+    assert fake_service.save_calls == 1
+    assert result.phase is ApplicationPhase.LOCKED
+    assert not result.dirty
+    assert result.records == ()
+    assert result.failure is not None
+
+
+
 #### Require one exact decision token and invalidate it after an accepted cancellation.
 ####
 def test_dirty_close_requires_single_use_decision(fake_service: FakeVaultService) -> None:
@@ -137,6 +172,22 @@ def test_save_commits_a_dirty_session(fake_service: FakeVaultService) -> None:
 
 
 
+#### Fail closed when save completes but rebuilding the safe projection fails.
+####
+def test_post_save_projection_failure_does_not_republish_dirty_state(fake_service: FakeVaultService) -> None:
+    app = opened_application(fake_service, dirty=True)
+    fake_service.open_session.records_error = RuntimeError("fabricated-projection-failure")
+
+    result = app.save(app.snapshot.generation)
+
+    assert fake_service.save_calls == 1
+    assert result.phase is ApplicationPhase.LOCKED
+    assert not result.dirty
+    assert result.records == ()
+    assert result.failure is not None
+
+
+
 #### Retain dirty session state and publish only safe failure data when save fails.
 ####
 def test_failed_save_retains_dirty_session_with_safe_failure(fake_service: FakeVaultService) -> None:
@@ -164,6 +215,34 @@ def test_lock_clean_closes_session(fake_service: FakeVaultService) -> None:
     assert result.phase is ApplicationPhase.LOCKED
     assert result.records == ()
     assert result.selected is None
+
+
+
+#### Fail closed if an immediate clean close raises after taking terminal action.
+####
+def test_clean_request_close_failure_does_not_republish_unlocked_state(fake_service: FakeVaultService) -> None:
+    app = opened_application(fake_service, dirty=False)
+    fake_service.open_session.lock_error = RuntimeError("fabricated-lock-failure")
+
+    result = app.request_close(app.snapshot.generation)
+
+    assert result.phase is ApplicationPhase.LOCKED
+    assert result.records == ()
+    assert result.failure is not None
+
+
+
+#### Fail closed if an explicit clean lock raises after taking terminal action.
+####
+def test_clean_lock_failure_does_not_republish_unlocked_state(fake_service: FakeVaultService) -> None:
+    app = opened_application(fake_service, dirty=False)
+    fake_service.open_session.lock_error = RuntimeError("fabricated-lock-failure")
+
+    result = app.lock_clean(app.snapshot.generation)
+
+    assert result.phase is ApplicationPhase.LOCKED
+    assert result.records == ()
+    assert result.failure is not None
 
 
 

@@ -238,10 +238,14 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             session = self._require_session()
             self._invalidate_decision()
             self._enter_busy(previous)
+            saved = False
             try:
                 self._service.save(session)
+                saved = True
                 return self._commit_session(session, previous.display_label)
             except BaseException as error:
+                if saved:
+                    return self._fail_closed(session, previous.display_label, error)
                 return self._restore_failure(previous, error)
 
 
@@ -263,7 +267,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 session.lock()
                 return self._commit_locked(previous.display_label)
             except BaseException as error:
-                return self._restore_failure(previous, error)
+                return self._fail_closed(session, previous.display_label, error)
 
 
 
@@ -307,7 +311,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 session.lock()
                 return self._commit_locked(previous.display_label)
             except BaseException as error:
-                return self._restore_failure(previous, error)
+                return self._fail_closed(session, previous.display_label, error)
 
 
 
@@ -405,6 +409,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         previous = self._snapshot if prior is None else prior
         old_session = self._session
         candidate: ApplicationSessionT | None = None
+        old_terminal_started = False
         self._enter_busy(previous)
         try:
             if replacement.action == "create":
@@ -413,6 +418,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 candidate = self._service.open(replacement.path, replacement.passphrase)
             records, record_keys = self._project_session(candidate)
             if old_session is not None:
+                old_terminal_started = True
                 old_session.lock() if not old_session.dirty else old_session.discard_and_lock()
             self._session = candidate
             self._record_keys = record_keys
@@ -420,6 +426,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         except BaseException as error:
             if candidate is not None and candidate is not old_session:
                 self._discard_without_masking(candidate)
+            if old_terminal_started and old_session is not None:
+                return self._fail_closed(old_session, previous.display_label, error)
             return self._restore_failure(previous, error)
         finally:
             self._close_replacement_without_masking(replacement)
@@ -434,8 +442,10 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             raise ApplicationCommandError("decision is stale")
         session = self._require_session()
         self._enter_busy(pending.prior)
+        save_succeeded = False
         try:
             self._service.save(session)
+            save_succeeded = True
             saved = ApplicationSnapshot(
                 pending.prior.generation,
                 ApplicationPhase.UNLOCKED_DIRTY if session.dirty else ApplicationPhase.UNLOCKED_CLEAN,
@@ -449,6 +459,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             return self._run_replacement(replacement, prior=saved)
         except BaseException as error:
             self._close_replacement_without_masking(replacement)
+            if save_succeeded:
+                return self._fail_closed(session, pending.prior.display_label, error)
             return self._restore_failure(pending.prior, error)
 
 
@@ -458,14 +470,19 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     def _resolve_close_only(self, previous: ApplicationSnapshot, choice: CloseChoice) -> ApplicationSnapshot:
         session = self._require_session()
         self._enter_busy(previous)
+        terminal_started = False
         try:
             if choice is CloseChoice.SAVE:
                 self._service.save(session)
+                terminal_started = True
                 session.lock()
             else:
+                terminal_started = True
                 session.discard_and_lock()
             return self._commit_locked(previous.display_label)
         except BaseException as error:
+            if terminal_started:
+                return self._fail_closed(session, previous.display_label, error)
             return self._restore_failure(previous, error)
 
 
@@ -514,6 +531,34 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         self._session = None
         self._record_keys = {}
         return self._publish(ApplicationPhase.LOCKED, display_label, False, (), None, None, None)
+
+
+
+    #### Discard private state and publish a locked safe failure after an irreversible step.
+    ####
+    #### A successful save or terminal session operation may mutate the source before
+    #### raising from a later projection or cleanup step.  Republishing its prior
+    #### unlocked view would misrepresent private state, so dispose of it and fail
+    #### closed instead.
+    ####
+    def _fail_closed(
+        self,
+        session: ApplicationSessionT,
+        display_label: str,
+        error: BaseException,
+    ) -> ApplicationSnapshot:
+        self._discard_without_masking(session)
+        self._session = None
+        self._record_keys = {}
+        return self._publish(
+            ApplicationPhase.LOCKED,
+            display_label,
+            False,
+            (),
+            None,
+            to_application_failure(error),
+            None,
+        )
 
 
 

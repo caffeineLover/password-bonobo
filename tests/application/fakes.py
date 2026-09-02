@@ -37,10 +37,14 @@ def fabricated_record_view() -> RecordView:
 #### operation because the facade must not depend on those details here.
 ####
 class FakeVaultSession:
+    discard_error: BaseException | None
+    records_error: BaseException | None
     records_value: tuple[RecordView, ...]
     dirty: bool
     discard_calls: int
+    lock_error: BaseException | None
     lock_calls: int
+    locked: bool
 
 
 
@@ -50,13 +54,19 @@ class FakeVaultSession:
         self.records_value = records
         self.dirty = dirty
         self.discard_calls = 0
+        self.discard_error = None
+        self.records_error = None
         self.lock_calls = 0
+        self.lock_error = None
+        self.locked = False
 
 
 
     #### Return current immutable record views as the real session's public API does.
     ####
     def records(self) -> tuple[RecordView, ...]:
+        if self.records_error is not None:
+            raise self.records_error
         return self.records_value
 
 
@@ -67,6 +77,9 @@ class FakeVaultSession:
         if self.dirty:
             raise AssertionError("dirty fake session must not be clean-locked")
         self.lock_calls += 1
+        self.locked = True
+        if self.lock_error is not None:
+            raise self.lock_error
 
 
 
@@ -75,6 +88,9 @@ class FakeVaultSession:
     def discard_and_lock(self) -> None:
         self.discard_calls += 1
         self.dirty = False
+        self.locked = True
+        if self.discard_error is not None:
+            raise self.discard_error
 
 
 
