@@ -14,10 +14,11 @@ before the production edits.
 
 Last verified: the desktop main/import-boundary/package/wheel selection passed
 with 16 tests; Ruff, strict mypy, Python structure, and `git diff --check`
-passed.  The Task 5 report has the detailed commands and outcomes.  There is
-no active Task 5 work after the separate review-fix commit.  The immediate next
-approved action is the next assigned vertical-slice task; QML resources and CI
-workflow work remain assigned to Tasks 7 and 8 respectively.
+passed.  The Task 5 report has the detailed commands and outcomes.  Scoped
+independent re-review confirms both the dirty-shutdown and safe-diagnostic
+findings are addressed with no new breakage.  Task 5 is complete through
+`5e4e7ac`; the exact next action is Task 6.  QML resources and CI workflow work
+remain assigned to Tasks 7 and 8 respectively.
 
 ## Completed Task 5 desktop foundation
 
