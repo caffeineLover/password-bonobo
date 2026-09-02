@@ -4,8 +4,9 @@
 
 This ledger records the repository's current direct and transitive Python packages, isolated build dependency, native
 runtime dependencies, GitHub Actions, documentation tools, and tracked repository assets.  It records observed facts
-without treating package metadata as a completed legal review.  The project declares no runtime Python dependencies,
-and none of the development or build packages below is bundled in the wheel.
+without treating package metadata as a completed legal review.  The project declares no required runtime Python
+dependencies; its optional desktop extra is recorded below.  None of the development or build packages is bundled in
+the Python wheel.
 
 Compact keys keep this source reviewable within the 120-character line limit:
 
@@ -91,6 +92,18 @@ The lock contains 61 resolved third-party packages.  Hatchling is declared for i
 |tomlkit|T|N|0.15.1|https://pypi.org/simple|NOASSERTION|TS|N|L|P|
 |typing-extensions|T|N|4.16.0|https://pypi.org/simple|PSF-2.0|TS|N|L+M|MP|
 |urllib3|T|N|2.7.0|https://pypi.org/simple|MIT|TS|N|L+M|MP|
+
+## Native desktop deployment tools
+
+PySide6 6.11.2 supplies `pyside6-deploy` under the existing optional-runtime row.  The checked-in deployment
+configuration pins Nuitka 4.1.1 as the on-demand native build tool.  A dry run prints the resolved native command but
+does not install Nuitka or produce an artifact.  Neither tool is copied into the Python wheel; terms for platform
+application distribution remain pending review.
+
+|Tool|Version|Origin|Terms|Use|Dist|Evidence|Review|
+|---|---|---|---|---|---|---|---|
+|pyside6-deploy|6.11.2|https://pypi.org/project/PySide6/|LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only|BT|N|L+M|P|
+|Nuitka|4.1.1|https://pypi.org/project/Nuitka/|NOASSERTION|BT|N|P|P|
 
 ## GitHub Actions
 
@@ -206,11 +219,13 @@ The wheel declares no required runtime Python dependency.  Its optional `desktop
 PySide6 Addons, PySide6 Essentials, and Shiboken6 for a platform application artifact; those Qt for Python terms remain
 pending distribution review.  Both wheel and source distribution must carry the GPL text and typing marker; wheel
 metadata must also declare the exact GPL text as PEP 639 license content.  Development, build, CI, and document tools do
-not enter either artifact.  Botan is bundled only with applicable platform application artifacts, not the pure Python
-wheel.  Source-distribution presence does not establish mobile or App Store eligibility.  Every `P` or `MP` row remains
-pending for the iOS distribution decision; no row grants an exception, contributor permission, or permission to copy
-third-party expression. The runnable core demonstration is Bonobo-authored source, contains only fixed fabricated
-values, and does not add a dependency or third-party asset.
+not enter either artifact.  The native dry-run contract selects only `Core`, `Gui`, `Qml`, `Quick`, and
+`QuickControls2` and the six tracked QML sources under `src/bonobo_desktop/qml/`; it does not produce, sign, or
+authorize distribution of an application artifact.  Botan is bundled only with applicable platform application
+artifacts, not the pure Python wheel.  Source-distribution presence does not establish mobile or App Store eligibility.
+Every `P` or `MP` row remains pending for the iOS distribution decision; no row grants an exception, contributor
+permission, or permission to copy third-party expression.  The runnable core demonstration is Bonobo-authored source,
+contains only fixed fabricated values, and does not add a dependency or third-party asset.
 
 Run `uv run python -m tools.check_provenance` after dependency declarations, `uv.lock`, workflow action references,
 document-tool commands, or tracked assets change.  The command fails on missing, extra, or stale coverage.

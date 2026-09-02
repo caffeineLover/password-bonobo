@@ -2,8 +2,9 @@
 
 Password Bonobo is an original, local-file-first password manager built around a fully typed Python core.
 
-The repository foundation, compatibility dossier, and lossless PasswordSafe core are implemented. The core has no
-production user interface yet, so Password Bonobo is not an end-user password manager at this stage.
+The repository foundation, compatibility dossier, lossless PasswordSafe core, and an accessible PySide6/Qt Quick
+desktop vertical slice are implemented.  Password Bonobo remains pre-alpha: native installers, signing, advanced vault
+workflows, and mobile clients are not delivered yet.
 
 ## Design
 
@@ -44,8 +45,26 @@ Install the selected Python baseline and synchronize the locked development envi
 
 ```powershell
 uv python install 3.14
-uv sync --locked --all-groups
+uv sync --locked --no-default-groups --group dev --group desktop-test --extra desktop
 ```
+
+The `desktop` extra installs the qualified PySide6 6.11 line, while `desktop-test` adds the offscreen Qt test adapter.
+The optional GUI expects a loader-visible Botan 3 shared library provisioned outside the Python wheel.  Start the
+developer shell with:
+
+```powershell
+uv run password-bonobo
+```
+
+Inspect the deterministic native deployment command without building or installing a platform artifact:
+
+```powershell
+uv run pyside6-deploy --dry-run -c pysidedeploy.spec
+```
+
+The checked-in specification pins the entry point, output directory, complete packaged QML source set, application
+name, and exact `Core`, `Gui`, `Qml`, `Quick`, and `QuickControls2` Qt module closure.  Run it natively on Windows,
+macOS, or Linux; it is not a cross-build, installer, signing, or distribution command.
 
 Explicitly requested document generation and visual QA additionally require
 [Pandoc](https://pandoc.org/installing.html), a XeLaTeX distribution such as
@@ -82,6 +101,9 @@ uv run autopep8 --in-place --recursive src tests tools examples
 git diff --exit-code -- src tests tools examples
 uv run ruff check src tests tools examples
 uv run mypy src tests tools examples
+$env:QT_QPA_PLATFORM = "offscreen"
+uv run python -m pytest tests/desktop -q
+uv run pyside6-deploy --dry-run -c pysidedeploy.spec
 uv run python -m pytest
 uv run python -m tools.check_python_structure src tests tools examples
 uv run python -m tools.check_compatibility

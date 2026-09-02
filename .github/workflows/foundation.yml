@@ -20,7 +20,13 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: true
-      - run: uv sync --locked --all-groups
+      - run: uv sync --locked --no-default-groups --group dev --group desktop-test --extra desktop
+      - name: Run offscreen desktop and QML tests
+        run: uv run python -m pytest tests/desktop -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Inspect native desktop deployment
+        run: uv run pyside6-deploy --dry-run -c pysidedeploy.spec
       - id: botan
         shell: pwsh
         run: >-
@@ -33,6 +39,7 @@ jobs:
       - run: uv run python -m pytest
         env:
           BONOBO_TEST_BOTAN_LIBRARY: ${{ steps.botan.outputs.library }}
+          QT_QPA_PLATFORM: offscreen
       - run: uv run python -m tools.check_python_structure src tests tools
       - run: uv run python -m tools.check_compatibility
       - run: uv run python -m tools.check_provenance
@@ -53,7 +60,7 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: true
-      - run: uv sync --locked --all-groups
+      - run: uv sync --locked --no-default-groups --group dev
       - name: Cross-build and link Android arm64 Botan probe
         shell: pwsh
         run: |
@@ -70,6 +77,6 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: true
-      - run: uv sync --locked --all-groups
+      - run: uv sync --locked --no-default-groups --group dev
       - name: Cross-build and link iOS arm64 Botan probe
         run: uv run python -m tools.build_botan --target ios-arm64 --output build/botan-ios --smoke-link

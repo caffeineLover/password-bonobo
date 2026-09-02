@@ -368,7 +368,8 @@ class DesktopController(QObject):
             if record_key is None or password
             else None
         )
-        password = ""
+        # The empty literal drops the immutable local after ownership transfers; it is not a credential.
+        password = ""  # nosec B105
 
 
 

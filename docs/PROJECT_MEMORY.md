@@ -2,6 +2,34 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 8 native packaging qualification
+
+Task 8 adds a deterministic PySide deployment spec for the desktop entry point,
+six QML sources, `dist/desktop`, and exactly `Core`, `Gui`, `Qml`, `Quick`, and
+`QuickControls2`.  The three desktop matrix legs explicitly install the desktop
+extra plus dev/desktop-test groups, run all desktop/QML tests offscreen, and run
+the real PySide deployment dry run.  Android and iOS now remain base/dev-only.
+README, provenance, and REUSE metadata describe and cover the resulting
+pre-alpha native-build boundary.
+
+The required contract RED reported four expected failures before configuration;
+focused GREEN passes all four contract tests and all 55 desktop tests.  Review
+found and corrected absent REUSE coverage (169/171 RED, 171/171 GREEN) and a
+pre-existing Bandit B105 false positive on Task 7's empty-string local password-
+reference drop; the targeted suppression preserves behavior and all 19
+controller tests pass.  The Botan-backed offscreen full suite passes 897 tests
+with 14 expected platform skips at 80% coverage.  Ruff, strict mypy for 107
+files on win32/darwin/linux, Python structure, compatibility 66/45/55,
+provenance, tracked-file policy, Bandit, pip-audit, REUSE, source/wheel build,
+wheel inspection, exact seven-resource wheel inspection, QML lint, deploy dry
+run, and whitespace checks pass.  The Task 8 report records exact evidence.
+
+Task 8 is complete at this feature-branch checkpoint.  The exact next action is
+controller final review of the complete vertical-slice branch.  Final review
+owns merge, push, hosted CI, and publication; no origin or `main` mutation has
+occurred here.  Provider, URL-audit, mobile-client, settings, advanced vault,
+actual installer/signing, and physical-device work remain out of scope.
+
 ## Completed Task 7 review-fix round 2
 
 The remaining QML boundary-parser finding is reproduced red-first with the
