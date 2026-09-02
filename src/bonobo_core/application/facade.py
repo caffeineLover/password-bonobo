@@ -27,6 +27,7 @@ from bonobo_core.passwordsafe import (
     SuspendedSession,
 )
 from bonobo_core.passwordsafe.crypto import RandomSource, SystemRandomSource
+from bonobo_core.passwordsafe.service import _CommittedSaveError, _CommittedSuspendError
 
 from .errors import ApplicationFailure, ApplicationFailureReason, to_application_failure
 from .ports import BrowserPort, ClipboardPort
@@ -165,7 +166,7 @@ class VaultServiceLike(Protocol[SessionT]):
 
     #### Explicitly remove one selected pending artifact and its stable slot.
     ####
-    def discard_suspended(self, suspended: SuspendedSession) -> None:
+    def discard_suspended(self, path: Path, suspended: SuspendedSession) -> None:
         raise NotImplementedError
 
 
@@ -471,6 +472,9 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 if not session.dirty:
                     self._suspended = None
                 return self._commit_session(session, previous.display_label)
+            except _CommittedSaveError as error:
+                self._suspended = error.suspended
+                return self._fail_closed(session, previous.display_label, error)
             except BaseException as error:
                 if saved:
                     return self._fail_closed(session, previous.display_label, error)
@@ -542,6 +546,10 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                     session.lock()
                 self._source_path = source_path
                 return self._commit_locked(previous.display_label)
+            except _CommittedSuspendError as error:
+                self._suspended = error.suspended
+                self._source_path = source_path
+                return self._fail_closed(session, previous.display_label, error)
             except BaseException as error:
                 if terminal_started:
                     return self._fail_closed(session, previous.display_label, error)
@@ -562,31 +570,33 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     #### Reauthenticate a locked source and resume pending state when one exists.
     ####
     def unlock(self, passphrase: SecretBuffer) -> ApplicationSnapshot:
-        with self._lock:
-            if self._snapshot.phase is not ApplicationPhase.LOCKED:
-                raise ApplicationCommandError("unlock requires a locked vault")
-            if not isinstance(passphrase, SecretBuffer) or passphrase.closed:
-                raise ApplicationCommandError("passphrase is invalid")
-            previous = self._snapshot
-            source_path = self._require_source_path()
-            suspended = self._suspended
-            candidate: ApplicationSessionT | None = None
-            self._enter_busy(previous)
-            try:
-                candidate = (
-                    self._service.open(source_path, passphrase)
-                    if suspended is None
-                    else self._service.resume(source_path, passphrase, suspended)
-                )
-                records, record_keys = self._project_session(candidate)
-                self._session = candidate
-                self._record_keys = record_keys
-                return self._commit_projected_session(candidate, previous.display_label, records)
-            except BaseException as error:
-                if candidate is not None:
-                    self._discard_without_masking(candidate)
-                return self._restore_failure(previous, error)
-            finally:
+        try:
+            with self._lock:
+                if self._snapshot.phase is not ApplicationPhase.LOCKED:
+                    raise ApplicationCommandError("unlock requires a locked vault")
+                if not isinstance(passphrase, SecretBuffer) or passphrase.closed:
+                    raise ApplicationCommandError("passphrase is invalid")
+                previous = self._snapshot
+                source_path = self._require_source_path()
+                suspended = self._suspended
+                candidate: ApplicationSessionT | None = None
+                self._enter_busy(previous)
+                try:
+                    candidate = (
+                        self._service.open(source_path, passphrase)
+                        if suspended is None
+                        else self._service.resume(source_path, passphrase, suspended)
+                    )
+                    records, record_keys = self._project_session(candidate)
+                    self._session = candidate
+                    self._record_keys = record_keys
+                    return self._commit_projected_session(candidate, previous.display_label, records)
+                except BaseException as error:
+                    if candidate is not None:
+                        self._discard_without_masking(candidate)
+                    return self._restore_failure(previous, error)
+        finally:
+            if isinstance(passphrase, SecretBuffer):
                 with suppress(BaseException):
                     passphrase.close()
 
@@ -606,7 +616,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             previous = self._snapshot
             self._enter_busy(previous)
             try:
-                self._service.discard_suspended(suspended)
+                self._service.discard_suspended(self._require_source_path(), suspended)
                 self._suspended = None
                 self._clear_clipboard_without_masking()
                 return self._publish(
@@ -965,7 +975,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 old_terminal_started = True
                 old_session.lock() if not old_session.dirty else old_session.discard_and_lock()
                 if self._suspended is not None:
-                    self._service.discard_suspended(self._suspended)
+                    self._service.discard_suspended(self._require_source_path(), self._suspended)
                     self._suspended = None
                 self._clear_clipboard_without_masking()
             self._session = candidate
@@ -1008,6 +1018,10 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 None,
             )
             return self._run_replacement(replacement, prior=saved)
+        except _CommittedSaveError as error:
+            self._suspended = error.suspended
+            self._close_replacement_without_masking(replacement)
+            return self._fail_closed(session, pending.prior.display_label, error)
         except BaseException as error:
             self._close_replacement_without_masking(replacement)
             if save_succeeded:
@@ -1033,9 +1047,12 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
                 terminal_started = True
                 session.discard_and_lock()
                 if self._suspended is not None:
-                    self._service.discard_suspended(self._suspended)
+                    self._service.discard_suspended(self._require_source_path(), self._suspended)
                     self._suspended = None
             return self._commit_locked(previous.display_label)
+        except _CommittedSaveError as error:
+            self._suspended = error.suspended
+            return self._fail_closed(session, previous.display_label, error)
         except BaseException as error:
             if terminal_started:
                 return self._fail_closed(session, previous.display_label, error)

@@ -212,3 +212,72 @@ def test_clean_unlock_reopens_source_and_closes_passphrase() -> None:
     assert service.open_calls == 2
     assert service.resume_calls == 0
     assert passphrase.closed
+
+
+
+#### Close transferred unlock input even when the facade rejects the current phase.
+####
+def test_unlock_rejection_closes_transferred_passphrase() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=False)
+    app = VaultApplication(FakeVaultService(session))
+    app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    passphrase = SecretBuffer.from_bytes(b"fabricated-unlock-rejection")
+
+    with pytest.raises(ApplicationCommandError):
+        app.unlock(passphrase)
+
+    assert passphrase.closed
+
+
+
+#### Keep a committed dirty suspension privately available after terminal cleanup fails.
+####
+def test_committed_suspend_failure_finishes_locked_with_private_selector() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    service.suspend_committed_error = StorageError(StorageReason.PUBLICATION_FAILED)
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+
+    failed = app.lock(opened.generation)
+
+    assert failed.phase is ApplicationPhase.LOCKED
+    assert failed.failure is not None
+    service.suspend_committed_error = None
+    resumed = app.unlock(SecretBuffer.from_bytes(b"fabricated"))
+    assert resumed.phase is ApplicationPhase.UNLOCKED_DIRTY
+
+
+
+#### Reconcile a committed save failure as locked and reopen the clean source.
+####
+def test_committed_save_failure_clears_dead_pending_selector() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    locked = app.lock(opened.generation)
+    resumed = app.unlock(SecretBuffer.from_bytes(b"fabricated"))
+    service.save_committed_error = StorageError(StorageReason.PUBLICATION_FAILED)
+
+    failed = app.save(resumed.generation)
+
+    assert locked.phase is ApplicationPhase.LOCKED
+    assert failed.phase is ApplicationPhase.LOCKED
+    assert failed.failure is not None
+    service.save_committed_error = None
+    reopened = app.unlock(SecretBuffer.from_bytes(b"fabricated"))
+    assert reopened.phase is ApplicationPhase.UNLOCKED_CLEAN
+    assert service.resume_calls == 1

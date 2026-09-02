@@ -727,6 +727,18 @@ class PasswordSafeReader(_ExclusiveOwner):
 
 
 
+    #### Authenticate a retained candidate snapshot without reopening a pathname.
+    ####
+    def reopen_snapshot(self, snapshot: EncryptedSnapshot, crypto_state: VaultCryptoState) -> OpenedVault:
+        if not isinstance(snapshot, EncryptedSnapshot):
+            raise TypeError("candidate snapshot must be EncryptedSnapshot")
+        if not isinstance(crypto_state, VaultCryptoState):
+            raise TypeError("candidate crypto state must use VaultCryptoState")
+        with self._lock:
+            return self._reopen_candidate_locked(snapshot, crypto_state)
+
+
+
     #### Reopen a candidate under caller-supplied fresh passphrase policy.
     ####
     #### Creation, passphrase change, and independent export use this path because

@@ -782,6 +782,21 @@ class WindowsDirectoryAnchor:
 
 
 
+    #### Validate privacy, identity, and plain-file state on the retained handle.
+    ####
+    def private_child_is_safe(self, descriptor: int, identity: tuple[int, int]) -> bool:
+        handle = wintypes.HANDLE(_WINDOWS_MSVCRT.get_osfhandle(descriptor))
+        information = _ByHandleFileInformation()
+        return bool(
+            self._stable()
+            and _file_identity(handle) == identity
+            and _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information))
+            and not information.dwFileAttributes & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY)
+            and _handle_is_private(handle)
+        )
+
+
+
     #### Open and validate one child using the requested native access mask.
     ####
     def _open_child_with_access(self, name: str, access: int) -> tuple[int, tuple[int, int]] | None:

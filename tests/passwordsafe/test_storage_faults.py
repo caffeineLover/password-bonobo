@@ -16,6 +16,7 @@ from bonobo_core.passwordsafe.errors import StorageError
 from bonobo_core.passwordsafe.storage import (
     LocalVaultStore,
     StorageStage,
+    _copy_descriptor_to_descriptor,
     _destination_lock,
     _RecoverySlot,
     _vault_locator,
@@ -357,3 +358,27 @@ def test_missing_obsolete_recovery_does_not_poison_restart(tmp_path: Path) -> No
 
     assert len(resumed.available_recovery(case.source)) == 1
     case.close()
+
+
+
+#### Stop a growing encrypted source before any byte beyond the cumulative bound is written.
+####
+def test_descriptor_copy_enforces_cumulative_bound_before_each_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import storage
+
+    chunks = iter((b"abcd", b"efgh", b"i", b""))
+    written = bytearray()
+
+    monkeypatch.setattr(storage, "MAX_ENCRYPTED_FILE_BYTES", 8)
+    monkeypatch.setattr(storage, "MAX_IO_CHUNK_BYTES", 4)
+    monkeypatch.setattr(os, "fstat", lambda _descriptor: type("Metadata", (), {"st_mode": 0o100600, "st_size": 4})())
+    monkeypatch.setattr(os, "lseek", lambda *_arguments: 0)
+    monkeypatch.setattr(os, "read", lambda *_arguments: next(chunks))
+    monkeypatch.setattr(storage, "_write_descriptor_bytes", lambda _descriptor, payload: written.extend(payload))
+
+    with pytest.raises(OSError):
+        _copy_descriptor_to_descriptor(11, 12)
+
+    assert bytes(written) == b"abcdefgh"

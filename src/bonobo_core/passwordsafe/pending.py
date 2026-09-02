@@ -9,25 +9,26 @@ import os
 import secrets
 import stat
 import sys
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
-from typing import Final
+from typing import Final, Never
 
 from ._darwin_security import require_no_extended_acl as _require_no_extended_acl
 from .constants import MAX_ENCRYPTED_FILE_BYTES, MAX_IO_CHUNK_BYTES
 from .crypto import RandomSource, SystemRandomSource
 from .errors import ExternalModificationError, PasswordSafeError, StorageError, StorageReason
-from .snapshots import EncryptedSnapshot, _validate_private_directory, _windows_path_is_private
+from .snapshots import EncryptedSnapshot, _validate_private_directory
 from .storage import (
     FileBaseline,
     _capture_anchor_child,
     _capture_open_descriptor,
     _capture_regular_file,
     _copy_path_to_descriptor,
+    _destination_lock,
     _PosixPublicationAnchor,
     _PublicationAnchor,
     _read_descriptor_bytes,
@@ -214,7 +215,7 @@ class _LocatedPending:
 
 
 
-PendingValidator = Callable[[Path], None]
+PendingValidator = Callable[[EncryptedSnapshot], None]
 
 
 
@@ -261,6 +262,7 @@ class PendingSessionStore:
         candidate: EncryptedCandidate,
         source_baseline: FileBaseline,
         *,
+        expected: SuspendedSession | None,
         validator: PendingValidator,
     ) -> SuspendedSession:
         if not isinstance(source, Path):
@@ -269,124 +271,209 @@ class PendingSessionStore:
             raise TypeError("pending candidate must use EncryptedCandidate")
         if not isinstance(source_baseline, FileBaseline):
             raise TypeError("pending source baseline must use FileBaseline")
+        if expected is not None:
+            _validate_suspended(expected)
         if not callable(validator):
             raise TypeError("pending validator must be callable")
-        with self._lock:
-            return self._publish_locked(source, candidate, source_baseline, validator)
+        with self._lock, _destination_lock(self._snapshot_directory, source):
+            return self._publish_locked(source, candidate, source_baseline, expected, validator)
+
+
+
+    #### Hold the source-keyed writer lock while proving no pending slot exists.
+    ####
+    @contextmanager
+    def guard_open(self, source: Path) -> Iterator[None]:
+        if not isinstance(source, Path):
+            raise TypeError("pending source must use Path")
+        try:
+            with self._lock, _destination_lock(self._snapshot_directory, source):
+                anchor: _PublicationAnchor | None = None
+                try:
+                    anchor = _open_private_anchor(self._directory)
+                    slot_name = _slot_name(_vault_locator(source))
+                    if slot_name in _slot_names(self._directory, anchor):
+                        raise StorageError(StorageReason.VERIFICATION_FAILED)
+                finally:
+                    if anchor is not None:
+                        with suppress(BaseException):
+                            anchor.close()
+                yield
+        except BaseException as error:
+            _raise_closed_pending_error(error)
 
 
 
     #### Resolve one artifact into an anonymous bounded snapshot for authentication.
     ####
-    def open(self, suspended: SuspendedSession) -> _OpenedPending:
+    def open(self, source: Path, suspended: SuspendedSession) -> _OpenedPending:
+        if not isinstance(source, Path):
+            raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock:
-            located = self._find_locked(suspended)
+        with self._lock, _destination_lock(self._snapshot_directory, source):
+            located: _LocatedPending | None = None
             snapshot: EncryptedSnapshot | None = None
             try:
-                with os.fdopen(os.dup(located.artifact_descriptor), "rb", closefd=True) as source:
+                located = self._find_locked(source, suspended)
+                with os.fdopen(os.dup(located.artifact_descriptor), "rb", closefd=True) as artifact_source:
                     snapshot = EncryptedSnapshot.capture(
-                        source,
+                        artifact_source,
                         self._snapshot_directory,
                         chunk_size=MAX_IO_CHUNK_BYTES,
                         max_bytes=MAX_ENCRYPTED_FILE_BYTES,
                     )
                 if snapshot.size != suspended.size or snapshot.sha256 != suspended.sha256:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
-                if _capture_open_descriptor(located.artifact_descriptor) != located.artifact_baseline:
+                slot_baseline = _capture_open_descriptor(located.slot_descriptor)
+                if (
+                    _capture_open_descriptor(located.artifact_descriptor) != located.artifact_baseline
+                    or _capture_anchor_child(located.anchor, located.artifact_name)
+                    != located.artifact_baseline
+                    or _capture_anchor_child(located.anchor, located.slot_name) != slot_baseline
+                ):
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
-                current = self._read_located(_open_private_anchor(self._directory), located.slot_name)
-                if current is None:
-                    raise StorageError(StorageReason.VERIFICATION_FAILED)
-                try:
-                    if current.stored != located.stored:
-                        raise StorageError(StorageReason.VERIFICATION_FAILED)
-                finally:
-                    current.close()
+                _validate_private_child(
+                    self._directory,
+                    located.anchor,
+                    located.artifact_name,
+                    located.artifact_descriptor,
+                    located.artifact_identity,
+                )
+                _validate_private_child(
+                    self._directory,
+                    located.anchor,
+                    located.slot_name,
+                    located.slot_descriptor,
+                    located.slot_identity,
+                )
                 result = _OpenedPending(snapshot, located.stored.source_baseline)
                 snapshot = None
                 return result
+            except BaseException as error:
+                _raise_closed_pending_error(error)
             finally:
                 if snapshot is not None:
                     with suppress(BaseException):
                         snapshot.close()
-                with suppress(BaseException):
-                    located.close()
+                if located is not None:
+                    with suppress(BaseException):
+                        located.close()
 
 
 
     #### Remove only the selected unchanged slot and encrypted artifact.
     ####
-    def discard(self, suspended: SuspendedSession) -> None:
+    def discard(self, source: Path, suspended: SuspendedSession) -> None:
+        if not isinstance(source, Path):
+            raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock:
-            located = self._find_locked(suspended)
-            tombstone = f".bonobo-pending-discard-{secrets.token_hex(16)}"
-            moved = False
-            artifact_removed = False
-            failure: BaseException | None = None
+        with self._lock, _destination_lock(self._snapshot_directory, source):
+            located: _LocatedPending | None = None
             try:
-                moved = located.anchor.publish_new_child(
-                    located.slot_descriptor,
-                    located.slot_identity,
-                    located.slot_name,
-                    tombstone,
-                )
-                if not moved:
-                    raise StorageError(StorageReason.PUBLICATION_FAILED)
-                located.anchor.synchronize()
-                self._faults._hit(PendingStage.CLEANUP)
-                artifact_removed = located.anchor.remove_if_same(
-                    located.artifact_descriptor,
-                    located.artifact_name,
-                    located.artifact_identity,
-                )
-                if not artifact_removed:
-                    raise StorageError(StorageReason.PUBLICATION_FAILED)
-                if not located.anchor.remove_if_same(
-                    located.slot_descriptor,
-                    tombstone,
-                    located.slot_identity,
-                ):
-                    raise StorageError(StorageReason.PUBLICATION_FAILED)
-                located.anchor.synchronize()
+                located = self._find_locked(source, suspended)
+                self._discard_locked(located)
             except BaseException as error:
-                failure = error
-                if moved and not artifact_removed:
-                    with suppress(BaseException):
-                        located.anchor.replace_child(
-                            located.slot_descriptor,
-                            located.slot_identity,
-                            tombstone,
-                            located.slot_name,
-                        )
-                        located.anchor.synchronize()
-            finally:
-                close_failure: BaseException | None = None
-                try:
-                    located.close()
-                except BaseException as error:
-                    close_failure = error
-                if failure is None:
-                    failure = close_failure
-            if failure is not None:
-                if not isinstance(failure, Exception):
-                    raise failure
-                raise StorageError(StorageReason.PUBLICATION_FAILED) from None
+                _raise_closed_pending_error(error)
 
 
 
     #### Recheck that one selected slot and artifact remain exact and unambiguous.
     ####
-    def verify(self, suspended: SuspendedSession) -> None:
+    def verify(self, source: Path, suspended: SuspendedSession) -> None:
+        if not isinstance(source, Path):
+            raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock:
-            located = self._find_locked(suspended)
+        with self._lock, _destination_lock(self._snapshot_directory, source):
+            located: _LocatedPending | None = None
             try:
-                if _capture_open_descriptor(located.artifact_descriptor) != located.artifact_baseline:
+                located = self._find_locked(source, suspended)
+                slot_baseline = _capture_open_descriptor(located.slot_descriptor)
+                if (
+                    _capture_open_descriptor(located.artifact_descriptor) != located.artifact_baseline
+                    or _capture_anchor_child(located.anchor, located.artifact_name)
+                    != located.artifact_baseline
+                    or _capture_anchor_child(located.anchor, located.slot_name) != slot_baseline
+                ):
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
-            finally:
+                _validate_private_child(
+                    self._directory,
+                    located.anchor,
+                    located.artifact_name,
+                    located.artifact_descriptor,
+                    located.artifact_identity,
+                )
+                _validate_private_child(
+                    self._directory,
+                    located.anchor,
+                    located.slot_name,
+                    located.slot_descriptor,
+                    located.slot_identity,
+                )
                 located.close()
+                located = None
+            except BaseException as error:
+                _raise_closed_pending_error(error)
+            finally:
+                if located is not None:
+                    with suppress(BaseException):
+                        located.close()
+
+
+
+    #### Remove one selected pending state with an explicit artifact-delete commit point.
+    ####
+    def _discard_locked(self, located: _LocatedPending) -> None:
+        tombstone = f".bonobo-pending-discard-{secrets.token_hex(16)}"
+        moved = False
+        artifact_removed = False
+        failure: BaseException | None = None
+        try:
+            moved = located.anchor.publish_new_child(
+                located.slot_descriptor,
+                located.slot_identity,
+                located.slot_name,
+                tombstone,
+            )
+            if not moved:
+                raise StorageError(StorageReason.PUBLICATION_FAILED)
+            located.anchor.synchronize()
+            self._faults._hit(PendingStage.CLEANUP)
+            artifact_removed = located.anchor.remove_if_same(
+                located.artifact_descriptor,
+                located.artifact_name,
+                located.artifact_identity,
+            )
+            if not artifact_removed:
+                raise StorageError(StorageReason.PUBLICATION_FAILED)
+            if not located.anchor.remove_if_same(
+                located.slot_descriptor,
+                tombstone,
+                located.slot_identity,
+            ):
+                raise StorageError(StorageReason.PUBLICATION_FAILED)
+            located.anchor.synchronize()
+        except BaseException as error:
+            failure = error
+            if moved and not artifact_removed:
+                with suppress(BaseException):
+                    located.anchor.publish_new_child(
+                        located.slot_descriptor,
+                        located.slot_identity,
+                        tombstone,
+                        located.slot_name,
+                    )
+                    located.anchor.synchronize()
+        finally:
+            try:
+                located.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if artifact_removed:
+            return
+        if failure is not None:
+            raise failure
+        raise StorageError(StorageReason.PUBLICATION_FAILED)
 
 
 
@@ -397,6 +484,7 @@ class PendingSessionStore:
         source: Path,
         candidate: EncryptedCandidate,
         source_baseline: FileBaseline,
+        expected: SuspendedSession | None,
         validator: PendingValidator,
     ) -> SuspendedSession:
         anchor: _PublicationAnchor | None = None
@@ -412,10 +500,15 @@ class PendingSessionStore:
         slot_temporary_name = ""
         slot_name = ""
         slot_published = False
+        previous_slot_moved = False
         committed = False
         suspended: SuspendedSession | None = None
         failure: BaseException | None = None
         cleanup_failed = False
+        authentication_snapshot: EncryptedSnapshot | None = None
+        artifact_baseline: FileBaseline | None = None
+        stored: _StoredPending | None = None
+        preserve_new_artifact = False
         try:
             self._faults._hit(PendingStage.PREPARATION)
             if _capture_regular_file(source) != source_baseline:
@@ -427,6 +520,11 @@ class PendingSessionStore:
             locator = _vault_locator(source)
             slot_name = _slot_name(locator)
             previous = self._read_located(anchor, slot_name, close_anchor=False)
+            if (
+                (expected is None and previous is not None)
+                or (expected is not None and (previous is None or previous.stored.suspended != expected))
+            ):
+                raise StorageError(StorageReason.VERIFICATION_FAILED)
             identifier = self._new_identifier(anchor)
             artifact_name = _artifact_name(identifier)
             temporary_name = f".bonobo-pending-write-{secrets.token_hex(16)}"
@@ -436,7 +534,13 @@ class PendingSessionStore:
             artifact_descriptor, artifact_identity, cleanup_name = created
             if cleanup_name != temporary_name:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
-            _validate_private_child(self._directory, temporary_name, artifact_descriptor)
+            _validate_private_child(
+                self._directory,
+                anchor,
+                temporary_name,
+                artifact_descriptor,
+                artifact_identity,
+            )
             self._faults._hit(PendingStage.WRITE)
             _copy_path_to_descriptor(candidate.path, artifact_descriptor)
             self._faults._hit(PendingStage.FILE_SYNC)
@@ -444,34 +548,34 @@ class PendingSessionStore:
             artifact_baseline = _capture_open_descriptor(artifact_descriptor)
             if artifact_baseline.sha256 != candidate.sha256 or artifact_baseline.size <= 0:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
-            os.close(artifact_descriptor)
-            artifact_descriptor = -1
-            retained_artifact = anchor.open_child(temporary_name)
-            if retained_artifact is None:
-                raise StorageError(StorageReason.PREPARATION_FAILED)
-            artifact_descriptor, retained_identity = retained_artifact
+            if not anchor.private_child_is_safe(artifact_descriptor, artifact_identity):
+                raise StorageError(StorageReason.VERIFICATION_FAILED)
+            with os.fdopen(os.dup(artifact_descriptor), "rb", closefd=True) as artifact_source:
+                authentication_snapshot = EncryptedSnapshot.capture(
+                    artifact_source,
+                    self._snapshot_directory,
+                    chunk_size=MAX_IO_CHUNK_BYTES,
+                    max_bytes=MAX_ENCRYPTED_FILE_BYTES,
+                )
             if (
-                retained_identity != artifact_identity
-                or _capture_open_descriptor(artifact_descriptor) != artifact_baseline
+                authentication_snapshot.size != artifact_baseline.size
+                or authentication_snapshot.sha256 != artifact_baseline.sha256
             ):
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             self._faults._hit(PendingStage.AUTHENTICATION)
-            validator(self._directory / temporary_name)
+            validator(authentication_snapshot)
+            authentication_snapshot = None
             self._faults._hit(PendingStage.COMPARE)
+            _validate_private_child(
+                self._directory,
+                anchor,
+                temporary_name,
+                artifact_descriptor,
+                artifact_identity,
+            )
             if (
                 _capture_open_descriptor(artifact_descriptor) != artifact_baseline
                 or _capture_anchor_child(anchor, temporary_name) != artifact_baseline
-            ):
-                raise StorageError(StorageReason.VERIFICATION_FAILED)
-            os.close(artifact_descriptor)
-            artifact_descriptor = -1
-            replace_artifact = anchor.open_child_for_replace(temporary_name)
-            if replace_artifact is None:
-                raise StorageError(StorageReason.PREPARATION_FAILED)
-            artifact_descriptor, replace_identity = replace_artifact
-            if (
-                replace_identity != artifact_identity
-                or _capture_open_descriptor(artifact_descriptor) != artifact_baseline
             ):
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             if not anchor.publish_new_child(
@@ -497,7 +601,13 @@ class PendingSessionStore:
             slot_descriptor, slot_identity, slot_cleanup_name = slot_created
             if slot_cleanup_name != slot_temporary_name:
                 raise StorageError(StorageReason.PREPARATION_FAILED)
-            _validate_private_child(self._directory, slot_temporary_name, slot_descriptor)
+            _validate_private_child(
+                self._directory,
+                anchor,
+                slot_temporary_name,
+                slot_descriptor,
+                slot_identity,
+            )
             _write_descriptor_bytes(slot_descriptor, payload)
             os.fsync(slot_descriptor)
             if _capture_open_descriptor(slot_descriptor).size != len(payload):
@@ -505,22 +615,34 @@ class PendingSessionStore:
             if _capture_regular_file(source) != source_baseline:
                 raise ExternalModificationError()
             self._faults._hit(PendingStage.SLOT_PUBLICATION)
-            if previous is None:
-                slot_published = anchor.publish_new_child(
-                    slot_descriptor,
-                    slot_identity,
-                    slot_temporary_name,
-                    slot_name,
+            if previous is not None:
+                previous_slot_baseline = _capture_open_descriptor(previous.slot_descriptor)
+                _validate_private_child(
+                    self._directory,
+                    previous.anchor,
+                    previous.slot_name,
+                    previous.slot_descriptor,
+                    previous.slot_identity,
                 )
-            else:
-                os.close(previous.slot_descriptor)
-                previous.slot_descriptor = -1
-                slot_published = anchor.replace_child(
-                    slot_descriptor,
-                    slot_identity,
-                    slot_temporary_name,
-                    slot_name,
-                )
+                if _capture_anchor_child(anchor, slot_name) != previous_slot_baseline:
+                    raise StorageError(StorageReason.VERIFICATION_FAILED)
+                previous_name = f".bonobo-pending-previous-slot-{secrets.token_hex(16)}"
+                if not anchor.publish_new_child(
+                    previous.slot_descriptor,
+                    previous.slot_identity,
+                    previous.slot_name,
+                    previous_name,
+                ):
+                    raise StorageError(StorageReason.PUBLICATION_FAILED)
+                previous.slot_name = previous_name
+                previous_slot_moved = True
+                anchor.synchronize()
+            slot_published = anchor.publish_new_child(
+                slot_descriptor,
+                slot_identity,
+                slot_temporary_name,
+                slot_name,
+            )
             if not slot_published:
                 raise StorageError(StorageReason.PUBLICATION_FAILED)
             self._faults._hit(PendingStage.DIRECTORY_SYNC)
@@ -538,15 +660,44 @@ class PendingSessionStore:
         except BaseException as error:
             failure = error
         finally:
+            if authentication_snapshot is not None:
+                with suppress(BaseException):
+                    authentication_snapshot.close()
             if slot_published and not committed and anchor is not None and slot_identity is not None:
-                if previous is not None and slot_descriptor >= 0:
-                    with suppress(BaseException):
-                        os.close(slot_descriptor)
-                    slot_descriptor = -1
                 restored = self._restore_previous_slot(anchor, slot_name, slot_descriptor, slot_identity, previous)
                 if not restored:
-                    committed = True
-            if not committed and anchor is not None and artifact_identity is not None:
+                    committed = (
+                        stored is not None
+                        and artifact_baseline is not None
+                        and self._visible_pending_matches(slot_name, stored, artifact_baseline)
+                    )
+                    preserve_new_artifact = not committed
+            elif (
+                previous_slot_moved
+                and previous is not None
+                and anchor is not None
+            ):
+                try:
+                    restored = anchor.publish_new_child(
+                        previous.slot_descriptor,
+                        previous.slot_identity,
+                        previous.slot_name,
+                        slot_name,
+                    )
+                    if restored:
+                        previous.slot_name = slot_name
+                        previous_slot_moved = False
+                        anchor.synchronize()
+                    else:
+                        preserve_new_artifact = True
+                except BaseException:
+                    preserve_new_artifact = True
+            if (
+                not committed
+                and not preserve_new_artifact
+                and anchor is not None
+                and artifact_identity is not None
+            ):
                 cleanup_name = artifact_name if artifact_published else temporary_name
                 with suppress(BaseException):
                     anchor.remove_if_same(artifact_descriptor, cleanup_name, artifact_identity)
@@ -556,11 +707,18 @@ class PendingSessionStore:
             if committed and previous is not None:
                 try:
                     self._faults._hit(PendingStage.CLEANUP)
-                    cleanup_failed = not previous.anchor.remove_if_same(
+                    artifact_removed = previous.anchor.remove_if_same(
                         previous.artifact_descriptor,
                         previous.artifact_name,
                         previous.artifact_identity,
                     )
+                    slot_removed = previous.anchor.remove_if_same(
+                        previous.slot_descriptor,
+                        previous.slot_name,
+                        previous.slot_identity,
+                    )
+                    previous.anchor.synchronize()
+                    cleanup_failed = not artifact_removed or not slot_removed
                 except BaseException:
                     cleanup_failed = True
             if candidate_baseline is not None:
@@ -613,17 +771,18 @@ class PendingSessionStore:
 
     #### Locate exactly one stable slot whose metadata matches the caller token.
     ####
-    def _find_locked(self, suspended: SuspendedSession) -> _LocatedPending:
+    def _find_locked(self, source: Path, suspended: SuspendedSession) -> _LocatedPending:
         anchor = _open_private_anchor(self._directory)
         matches: list[_LocatedPending] = []
         transferred = False
+        expected_slot_name = _slot_name(_vault_locator(source))
         try:
             for slot_name in _slot_names(self._directory, anchor):
                 located = self._read_located(anchor, slot_name, close_anchor=False)
                 if located is None:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
                 if located.stored.suspended.identifier == suspended.identifier:
-                    if located.stored.suspended != suspended:
+                    if slot_name != expected_slot_name or located.stored.suspended != suspended:
                         located.close()
                         raise StorageError(StorageReason.VERIFICATION_FAILED)
                     matches.append(located)
@@ -662,12 +821,21 @@ class PendingSessionStore:
         slot_descriptor, slot_identity = slot_opened
         artifact_descriptor = -1
         try:
-            _validate_private_child(self._directory, slot_name, slot_descriptor)
+            _validate_private_child(
+                self._directory,
+                anchor,
+                slot_name,
+                slot_descriptor,
+                slot_identity,
+            )
             before = _capture_open_descriptor(slot_descriptor)
             if not 0 < before.size <= _MAX_SLOT_BYTES:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             payload = _read_descriptor_bytes(slot_descriptor, _MAX_SLOT_BYTES)
-            if _capture_open_descriptor(slot_descriptor) != before:
+            if (
+                _capture_open_descriptor(slot_descriptor) != before
+                or _capture_anchor_child(anchor, slot_name) != before
+            ):
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             stored = _decode_slot(payload)
             artifact_name = _artifact_name(stored.suspended.identifier)
@@ -675,11 +843,18 @@ class PendingSessionStore:
             if artifact_opened is None:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             artifact_descriptor, artifact_identity = artifact_opened
-            _validate_private_child(self._directory, artifact_name, artifact_descriptor)
+            _validate_private_child(
+                self._directory,
+                anchor,
+                artifact_name,
+                artifact_descriptor,
+                artifact_identity,
+            )
             artifact_baseline = _capture_open_descriptor(artifact_descriptor)
             if (
                 artifact_baseline.size != stored.suspended.size
                 or artifact_baseline.sha256 != stored.suspended.sha256
+                or _capture_anchor_child(anchor, artifact_name) != artifact_baseline
             ):
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             return _LocatedPending(
@@ -716,47 +891,100 @@ class PendingSessionStore:
         slot_identity: tuple[int, int],
         previous: _LocatedPending | None,
     ) -> bool:
+        rollback_name = f".bonobo-pending-rollback-{secrets.token_hex(16)}"
         try:
             if previous is None:
                 restored = anchor.remove_if_same(slot_descriptor, slot_name, slot_identity)
-            else:
-                restored = self._write_slot(anchor, slot_name, previous.stored)
+                anchor.synchronize()
+                return restored
+            if (
+                _capture_open_descriptor(previous.artifact_descriptor) != previous.artifact_baseline
+                or _capture_anchor_child(anchor, previous.artifact_name) != previous.artifact_baseline
+            ):
+                return False
+            _validate_private_child(
+                self._directory,
+                previous.anchor,
+                previous.artifact_name,
+                previous.artifact_descriptor,
+                previous.artifact_identity,
+            )
+            previous_slot = _capture_open_descriptor(previous.slot_descriptor)
+            if _capture_anchor_child(anchor, previous.slot_name) != previous_slot:
+                return False
+            _validate_private_child(
+                self._directory,
+                previous.anchor,
+                previous.slot_name,
+                previous.slot_descriptor,
+                previous.slot_identity,
+            )
+            current_slot = _capture_open_descriptor(slot_descriptor)
+            if _capture_anchor_child(anchor, slot_name) != current_slot:
+                return False
+            if not anchor.publish_new_child(
+                slot_descriptor,
+                slot_identity,
+                slot_name,
+                rollback_name,
+            ):
+                return False
+            if not anchor.publish_new_child(
+                previous.slot_descriptor,
+                previous.slot_identity,
+                previous.slot_name,
+                slot_name,
+            ):
+                with suppress(BaseException):
+                    anchor.publish_new_child(
+                        slot_descriptor,
+                        slot_identity,
+                        rollback_name,
+                        slot_name,
+                    )
+                    anchor.synchronize()
+                return False
+            previous.slot_name = slot_name
             anchor.synchronize()
-            return restored
+            current = self._read_located(_open_private_anchor(self._directory), slot_name)
+            if current is None:
+                return False
+            try:
+                if current.stored != previous.stored or current.artifact_baseline != previous.artifact_baseline:
+                    return False
+            finally:
+                current.close()
+            with suppress(BaseException):
+                anchor.remove_if_same(slot_descriptor, rollback_name, slot_identity)
+                anchor.synchronize()
+            return True
         except BaseException:
             return False
 
 
 
-    #### Replace one stable slot with a newly synchronized exact payload.
+    #### Confirm that failed rollback still left the new exact state authoritative.
     ####
-    def _write_slot(
+    def _visible_pending_matches(
         self,
-        anchor: _PublicationAnchor,
         slot_name: str,
         stored: _StoredPending,
+        artifact_baseline: FileBaseline,
     ) -> bool:
-        name = f".bonobo-pending-slot-restore-{secrets.token_hex(16)}"
-        created = anchor.create_persistent(name)
-        if created is None:
-            return False
-        descriptor, identity, cleanup_name = created
-        if cleanup_name != name:
-            os.close(descriptor)
-            return False
-        published = False
+        current: _LocatedPending | None = None
         try:
-            _validate_private_child(self._directory, name, descriptor)
-            _write_descriptor_bytes(descriptor, _encode_slot(stored))
-            os.fsync(descriptor)
-            published = anchor.replace_child(descriptor, identity, name, slot_name)
-            return published
+            current = self._read_located(_open_private_anchor(self._directory), slot_name)
+            return (
+                current is not None
+                and current.stored == stored
+                and current.artifact_baseline == artifact_baseline
+            )
+        except BaseException:
+            return False
         finally:
-            if not published:
+            if current is not None:
                 with suppress(BaseException):
-                    anchor.remove_if_same(descriptor, name, identity)
-            with suppress(BaseException):
-                os.close(descriptor)
+                    current.close()
 
 
 
@@ -783,13 +1011,21 @@ def _open_private_anchor(directory: Path) -> _PublicationAnchor:
 
 #### Validate owner-only regular-file state through the retained descriptor.
 ####
-def _validate_private_child(directory: Path, name: str, descriptor: int) -> None:
+def _validate_private_child(
+    directory: Path,
+    anchor: _PublicationAnchor,
+    name: str,
+    descriptor: int,
+    identity: tuple[int, int],
+) -> None:
     metadata = os.fstat(descriptor)
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_ENCRYPTED_FILE_BYTES:
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_size > MAX_ENCRYPTED_FILE_BYTES
+        or not anchor.private_child_is_safe(descriptor, identity)
+    ):
         raise StorageError(StorageReason.VERIFICATION_FAILED)
     if os.name == "nt":
-        if not _windows_path_is_private(directory / name):
-            raise StorageError(StorageReason.VERIFICATION_FAILED)
         return
     if stat.S_IMODE(metadata.st_mode) != _OWNER_FILE_MODE:
         raise StorageError(StorageReason.VERIFICATION_FAILED)
@@ -893,16 +1129,24 @@ def _slot_names(directory: Path, anchor: _PublicationAnchor) -> tuple[str, ...]:
     if not anchor.stable():
         raise StorageError(StorageReason.PREPARATION_FAILED)
     names: list[str] = []
-    for entry in os.scandir(directory):
-        name = entry.name
-        if not name.startswith(_SLOT_PREFIX) or not name.endswith(_SLOT_SUFFIX):
-            continue
-        locator = name[len(_SLOT_PREFIX): -len(_SLOT_SUFFIX)]
-        try:
-            _validate_digest(locator, "pending locator")
-        except ValueError:
-            raise StorageError(StorageReason.VERIFICATION_FAILED) from None
-        names.append(name)
+    enumeration_failed = False
+    try:
+        for entry in os.scandir(directory):
+            name = entry.name
+            if not name.startswith(_SLOT_PREFIX) or not name.endswith(_SLOT_SUFFIX):
+                continue
+            locator = name[len(_SLOT_PREFIX): -len(_SLOT_SUFFIX)]
+            try:
+                _validate_digest(locator, "pending locator")
+            except ValueError:
+                raise StorageError(StorageReason.VERIFICATION_FAILED) from None
+            names.append(name)
+    except StorageError:
+        raise
+    except Exception:
+        enumeration_failed = True
+    if enumeration_failed:
+        raise StorageError(StorageReason.VERIFICATION_FAILED)
     if len(names) != len(set(names)) or not anchor.stable():
         raise StorageError(StorageReason.VERIFICATION_FAILED)
     return tuple(sorted(names))
@@ -914,6 +1158,17 @@ def _slot_names(directory: Path, anchor: _PublicationAnchor) -> tuple[str, ...]:
 def _validate_suspended(suspended: SuspendedSession) -> None:
     if not isinstance(suspended, SuspendedSession):
         raise TypeError("pending selector must use SuspendedSession")
+
+
+
+#### Convert platform diagnostics into the closed pending-store error vocabulary.
+####
+def _raise_closed_pending_error(error: BaseException) -> Never:
+    if not isinstance(error, Exception):
+        raise error
+    if isinstance(error, PasswordSafeError):
+        raise error from None
+    raise StorageError(StorageReason.VERIFICATION_FAILED) from None
 
 
 

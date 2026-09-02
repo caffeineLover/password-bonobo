@@ -2,6 +2,34 @@
 
 Last updated: 2026-09-02
 
+## Active Task 4 review-fix round 1
+
+Independent review rejected `ac87962` with one Critical selector-CAS gap,
+nine Important transaction/ownership gaps, and one mandatory raw-path exception
+gap.  All findings are compatible with the approved Task 4 design.  The complete
+red-first matrix is now recorded: the combined focused run has 16 expected
+failures with 59 passes and 2 Windows capability skips, and two additional
+targeted REDs prove committed live-snapshot cleanup currently escapes as
+`KeyboardInterrupt` and retained Windows child DACL validation is not invoked.
+
+The coherent repair is implemented: a source-keyed cross-process pending guard,
+exact retained-slot expected-selector compare-and-swap, source-bound open/verify/discard,
+descriptor-backed authentication with retained identity and handle-based Windows
+privacy, CAS rollback with old-artifact verification, explicit post-commit
+reconciliation for suspend/save/discard, cumulative copy bounds, unconditional
+secret cleanup, and closed enumeration errors.  Focused pending/storage/facade
+tests pass (78 with 2 expected capability skips in 87.07 seconds), the approved
+selected suite passes (226 with 9 expected platform skips in 117.37 seconds),
+and the fresh exact-DLL Botan suite passes (774 with 14 expected skips in 183.31
+seconds). Ruff, autopep8 diff,
+strict mypy for all 86 files under win32/darwin/linux, Python structure,
+compatibility, provenance, Bandit, pip-audit, REUSE 138/138, tracked-file and
+whitespace checks, source/wheel build, and wheel inspection all pass. The Task 4
+report records RED/GREEN and architecture evidence for every review finding.
+Immediate next actions are stage only the Task 4 review-fix files, rerun staged
+gates, and commit without amending `ac87962`. Later approved work remains Tasks
+5 through 8 in order.
+
 ## Completed Task 4 checkpoint
 
 Task 4 is complete on `feature/vault-application-desktop` from base `491802a`.

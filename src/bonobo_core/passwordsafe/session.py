@@ -610,9 +610,21 @@ class VaultSession:
     def _finish_suspend(self) -> None:
         with self._lock:
             snapshot = self._require_save_snapshot()
-            snapshot.close()
+            first_failure: BaseException | None = None
+            try:
+                snapshot.close()
+            except BaseException as error:
+                first_failure = error
+                if not snapshot.closed:
+                    self._retired_resources.append(snapshot)
             self._save_snapshot = None
-            self._close_resources()
+            try:
+                self._close_resources()
+            except BaseException as error:
+                if first_failure is None:
+                    first_failure = error
+            if first_failure is not None:
+                raise first_failure
 
 
 
@@ -896,12 +908,30 @@ class VaultSession:
     #### Close current plaintext, original aggregate resources, and key material.
     ####
     def _close_resources(self) -> None:
+        owners: list[VaultDocument | OpenedVault] = []
         if self._document is not self._original_document:
-            self._document.close()
-        self._opened.close()
+            owners.append(self._document)
+        owners.append(self._opened)
+        owners.extend(self._retired_resources)
+        pending: list[VaultDocument | OpenedVault] = []
+        first_failure: BaseException | None = None
+        seen: set[int] = set()
+        for owner in owners:
+            if id(owner) in seen:
+                continue
+            seen.add(id(owner))
+            try:
+                owner.close()
+            except BaseException as error:
+                if first_failure is None:
+                    first_failure = error
+            if not owner.closed:
+                pending.append(owner)
+        self._retired_resources = pending
         self._locked = True
         self._changes = ()
-        self._close_retired_resources()
+        if first_failure is not None:
+            raise first_failure
 
 
 

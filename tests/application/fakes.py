@@ -18,6 +18,7 @@ from bonobo_core.passwordsafe import (
     SetTextField,
     SuspendedSession,
 )
+from bonobo_core.passwordsafe.service import _CommittedSaveError, _CommittedSuspendError
 
 
 
@@ -245,8 +246,10 @@ class FakeVaultService:
     open_session: FakeVaultSession
     on_open: Callable[[], None] | None
     save_calls: int
+    save_committed_error: BaseException | None
     save_error: BaseException | None
     suspend_calls: int
+    suspend_committed_error: BaseException | None
     suspend_error: BaseException | None
     suspended_result: SuspendedSession
     resume_calls: int
@@ -268,8 +271,10 @@ class FakeVaultService:
         self.open_session = session
         self.on_open = None
         self.save_calls = 0
+        self.save_committed_error = None
         self.save_error = None
         self.suspend_calls = 0
+        self.suspend_committed_error = None
         self.suspend_error = None
         self.suspended_result = SuspendedSession("a" * 64, "b" * 64, "c" * 64, 512)
         self.resume_calls = 0
@@ -309,6 +314,8 @@ class FakeVaultService:
         if self.save_error is not None:
             raise self.save_error
         session.dirty = False
+        if self.save_committed_error is not None:
+            raise _CommittedSaveError(None) from self.save_committed_error
         return object()
 
 
@@ -321,6 +328,8 @@ class FakeVaultService:
             raise self.suspend_error
         session.dirty = False
         session.locked = True
+        if self.suspend_committed_error is not None:
+            raise _CommittedSuspendError(self.suspended_result) from self.suspend_committed_error
         return self.suspended_result
 
 
@@ -336,13 +345,15 @@ class FakeVaultService:
         self.resume_calls += 1
         if self.resume_error is not None:
             raise self.resume_error
+        self.resume_session.dirty = True
+        self.resume_session.locked = False
         return self.resume_session
 
 
 
     #### Record explicit removal of the selected fake pending state.
     ####
-    def discard_suspended(self, _suspended: SuspendedSession) -> None:
+    def discard_suspended(self, _path: object, _suspended: SuspendedSession) -> None:
         self.discard_suspended_calls += 1
         if self.discard_suspended_error is not None:
             raise self.discard_suspended_error

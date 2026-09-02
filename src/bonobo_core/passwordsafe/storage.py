@@ -269,6 +269,13 @@ class _PublicationAnchor(Protocol):
 
 
 
+    #### Validate privacy and identity through the retained child descriptor.
+    ####
+    def private_child_is_safe(self, descriptor: int, identity: tuple[int, int]) -> bool:
+        raise NotImplementedError
+
+
+
     #### Replace one child by retained descriptor under the held directory.
     ####
     def replace_child(
@@ -413,6 +420,14 @@ class _PosixPublicationAnchor:
     ####
     def open_child_for_replace(self, name: str) -> tuple[int, tuple[int, int]] | None:
         return self.open_child(name)
+
+
+
+    #### Confirm the retained regular child still has its exact POSIX identity.
+    ####
+    def private_child_is_safe(self, descriptor: int, identity: tuple[int, int]) -> bool:
+        metadata = os.fstat(descriptor)
+        return stat.S_ISREG(metadata.st_mode) and (metadata.st_dev, metadata.st_ino) == identity
 
 
 
@@ -1304,9 +1319,12 @@ def _copy_descriptor_to_descriptor(source_descriptor: int, destination_descripto
     os.lseek(source_descriptor, 0, os.SEEK_SET)
     copied = 0
     while True:
-        chunk = os.read(source_descriptor, MAX_IO_CHUNK_BYTES)
+        remaining = MAX_ENCRYPTED_FILE_BYTES - copied
+        chunk = os.read(source_descriptor, min(MAX_IO_CHUNK_BYTES, remaining + 1))
         if not chunk:
             break
+        if len(chunk) > remaining:
+            raise OSError
         _write_descriptor_bytes(destination_descriptor, chunk)
         copied += len(chunk)
     if copied != metadata.st_size:
