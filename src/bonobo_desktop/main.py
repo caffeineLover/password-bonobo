@@ -82,7 +82,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     from PySide6.QtQml import QQmlApplicationEngine
 
     arguments = list(process_argv if argv is None else argv)
-    qt_application = QGuiApplication(arguments)
+    existing_application = QGuiApplication.instance()
+    qt_application = QGuiApplication(arguments) if existing_application is None else existing_application
     qt_application.setOrganizationName("Password Bonobo")
     qt_application.setApplicationName("Password Bonobo")
 

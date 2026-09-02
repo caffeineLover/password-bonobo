@@ -2,6 +2,20 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 6 Qt adapter checkpoint
+
+Task 6 adds the reset-only five-role record model, primitive snapshot controller, one-worker facade executor,
+synchronous GUI-thread clipboard/browser calls, nonce-owned finite clipboard lifetime, and monotonic single-submit
+idle locking.  Shutdown rejects new work, deterministically cancels queued secret ownership, and waits for the active
+save/suspend boundary.  The passphrase Qt getter is always empty; mutable input is cleared before submission and paths,
+decision identities, URLs, domain objects, and raw errors never become controller/model state.
+
+The required absent-adapter RED reported four collection errors.  A separate red-first self-review regression exposed
+queued ownership cleanup and now passes.  Final verification reports 18 offscreen desktop tests passing, scoped Ruff
+clean, strict mypy clean for 15 files, Python structure clean, REUSE 156/156, and clean whitespace.  The full command,
+output, file, and review record is in the Task 6 report.  The exact next action is Task 7 QML resources and workflows;
+Task 8 CI/deployment remains approved after Task 7.  Provider, URL-audit, and mobile work remain out of scope.
+
 ## Completed Task 5 review-fix round 1
 
 The Task 5 review repair corrects commit `0902a02`'s bounded shutdown and
