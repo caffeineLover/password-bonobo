@@ -2,6 +2,22 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 8 review-fix round 1
+
+Controller review found one Important false negative in the Task 8 dependency-
+boundary helper: equals-form desktop selectors and broad selectors could bypass
+the mobile leakage assertion.  Three regressions first fail against the old
+helper for `--extra=desktop`, `--all-extras`, and an unsupported
+`--only-group=desktop-test`.  The closed parser now normalizes split and equals
+forms for the two allowed selector families and rejects every other token.
+
+All seven deployment-contract tests and all 58 offscreen desktop tests pass.
+Scoped Ruff, mypy, Python structure, REUSE 171/171, and whitespace checks are
+clean.  The workflow is unchanged.  The Task 8 report records exact RED/GREEN
+and gate evidence.  The exact next action is controller re-review of the fix
+commit and then the complete vertical-slice branch.  Final review retains
+ownership of merge, push, hosted CI, and publication.
+
 ## Completed Task 8 native packaging qualification
 
 Task 8 adds a deterministic PySide deployment spec for the desktop entry point,

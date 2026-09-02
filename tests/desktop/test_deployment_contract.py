@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 # PyYAML is a locked transitive development dependency without bundled type
 # information.  Values are narrowed to closed mappings immediately after load.
 import yaml  # type: ignore[import-untyped]
@@ -116,13 +118,32 @@ def _dependency_selection(job: dict[str, object]) -> tuple[frozenset[str], froze
     sync_commands = tuple(command for command in _commands(job) if command[:2] == ("uv", "sync"))
     assert len(sync_commands) == 1, "each job must have exactly one uv sync command"
     command = sync_commands[0]
-    assert "--locked" in command
-    assert "--no-default-groups" in command
-    assert "--all-groups" not in command
+    locked = False
+    no_default_groups = False
+    extras: set[str] = set()
+    groups: set[str] = set()
+    tokens = iter(command[2:])
+    for token in tokens:
+        if token == "--locked":
+            assert not locked, "uv sync must select --locked exactly once"
+            locked = True
+        elif token == "--no-default-groups":
+            assert not no_default_groups, "uv sync must select --no-default-groups exactly once"
+            no_default_groups = True
+        elif token in {"--extra", "--group"}:
+            value = next(tokens, None)
+            assert value and not value.startswith("-"), f"{token} requires one dependency name"
+            (extras if token == "--extra" else groups).add(value)
+        elif token.startswith("--extra=") or token.startswith("--group="):
+            option, _separator, value = token.partition("=")
+            assert value, f"{option} requires one dependency name"
+            (extras if option == "--extra" else groups).add(value)
+        else:
+            raise AssertionError(f"unsupported uv sync selector: {token}")
 
-    extras = frozenset(command[index + 1] for index, token in enumerate(command[:-1]) if token == "--extra")
-    groups = frozenset(command[index + 1] for index, token in enumerate(command[:-1]) if token == "--group")
-    return extras, groups
+    assert locked, "uv sync must select the locked resolution"
+    assert no_default_groups, "uv sync must disable implicit dependency groups"
+    return frozenset(extras), frozenset(groups)
 
 
 
@@ -132,6 +153,34 @@ def _step_for_command(job: dict[str, object], expected: tuple[str, ...]) -> dict
     matches = tuple(step for step in _run_steps(job) if tuple(shlex.split(str(step["run"]), posix=True)) == expected)
     assert len(matches) == 1, f"job must run exactly one {' '.join(expected)} step"
     return matches[0]
+
+
+
+#### Recognize compact uv option forms so desktop dependencies cannot hide from the mobile boundary.
+####
+def test_dependency_selection_normalizes_equals_form_desktop_leakage() -> None:
+    job: dict[str, object] = {
+        "steps": [
+            {"run": "uv sync --locked --no-default-groups --group=dev --extra=desktop"},
+        ],
+    }
+
+    assert _dependency_selection(job) == (frozenset({"desktop"}), frozenset({"dev"}))
+
+
+
+#### Reject broad and unsupported selectors rather than interpreting them as a core-only mobile environment.
+####
+@pytest.mark.parametrize("selector", ("--all-extras", "--only-group=desktop-test"))
+def test_dependency_selection_rejects_broad_or_unknown_selectors(selector: str) -> None:
+    job: dict[str, object] = {
+        "steps": [
+            {"run": f"uv sync --locked --no-default-groups --group dev {selector}"},
+        ],
+    }
+
+    with pytest.raises(AssertionError, match="unsupported uv sync selector"):
+        _dependency_selection(job)
 
 
 
