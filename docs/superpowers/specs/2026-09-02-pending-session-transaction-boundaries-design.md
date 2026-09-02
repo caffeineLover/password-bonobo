@@ -2,7 +2,7 @@
 
 Date: 2026-09-02
 
-Status: Approved in conversation; written review pending
+Status: Approved
 
 ## 1. Purpose and scope
 

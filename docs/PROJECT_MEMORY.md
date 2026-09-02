@@ -5,7 +5,7 @@ Last updated: 2026-09-02
 ## Active Task 4 transaction-boundary revision
 
 The user approved a narrow architectural revision for the two remaining Task 4
-findings.  The design addendum is
+findings.  The approved design addendum is
 `docs/superpowers/specs/2026-09-02-pending-session-transaction-boundaries-design.md`.
 It requires every retained-handle slot scan to finish under the existing bound
 and pass a final current-path identity check before absence or selection is
@@ -13,6 +13,8 @@ trusted.  It also requires explicit discard to distinguish pre-commit failure
 from post-commit destination-lock teardown so an irreversible successful
 discard cannot leave the facade holding a dead selector.
 
+The executable repair plan is
+`docs/superpowers/plans/2026-09-02-pending-session-transaction-boundaries.md`.
 No implementation has started.  The previous three-round stop was based on an
 outdated workflow limit; the current subagent-driven instructions permit repair
 rounds 4 and 5 with a fresh implementation agent.  The last verified code
@@ -21,11 +23,10 @@ expected skips, the selected suite passes 267 with 9 expected skips, and the
 exact-DLL full suite passes 815 with 14 expected skips.  All recorded static,
 security, legal, audit, tracked-file, and build gates are green.
 
-Immediate next actions are user review of the written addendum, creation and
-commit of its implementation plan after approval, then Task 4 repair round 4
-under the selected subagent-driven workflow.  Do not begin Task 5 until Task 4
-receives a clean independent review.  Tasks 5 through 8 remain approved only in
-that order.
+Immediate next actions are verification and commit of the approved repair plan,
+then Task 4 repair round 4 under the selected subagent-driven workflow.  Do not
+begin Task 5 until Task 4 receives a clean independent review.  Tasks 5 through
+8 remain approved only in that order.
 
 ## Completed Task 4 review-fix round 3
 
