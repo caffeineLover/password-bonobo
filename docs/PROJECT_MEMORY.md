@@ -11,6 +11,21 @@ Do not store raw transcripts, credentials, machine-specific research paths, or h
 
 This file is Markdown-only.  Do not create a second project-memory location or a LaTeX/PDF derivative.
 
+## Active Task 1 checkpoint
+
+Task 1 of the approved vault-application desktop vertical slice has completed implementation and verification on
+`feature/vault-application-desktop`.  It adds the UI-independent non-secret DTOs, safe PasswordSafe error projection,
+and deterministic record/search projection under `src/bonobo_core/application/`, with companion application tests and
+a fabricated `RecordView` helper that binds one object for the handle-to-key regression.
+
+The initial red run failed collection because `bonobo_core.application` did not exist.  The focused suite now reports 25
+passing tests, with 100% coverage of the new error mapper; Ruff, strict mypy, and the Python structure gate pass.  The
+final Windows/CPython 3.14.7 suite, using the verified Botan 3.13 DLL from the parent checkout, collected 699 tests and
+reported 687 passed with 12 expected platform-specific skips in 106.67 seconds.  Task 1 is committed as
+`feat: define safe application projections`; its full report is in the matching SDD workspace.  The immediate next
+action is to continue the approved vertical-slice plan with Task 2 only; do not begin unrelated provider, URL-audit,
+or mobile work.
+
 ## Immediate checkpoint
 
 Branch `feature/lossless-passwordsafe-core` completed and independently committed Task 13 of the approved lossless
