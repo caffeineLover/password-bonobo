@@ -52,6 +52,20 @@ report is updated in the approved SDD workspace; the final post-documentation
 structure and whitespace checks passed.  Immediate next action: continue only
 with approved Task 4.  Later approved work remains Tasks 4 through 8 in order.
 
+Review-fix round 3 is committed as `bd7f5da`.  It removes projection-wide
+revision authorization in favor of private draft captures keyed by the active
+generation and safe record key.  A capture is created only by `begin_edit`, is
+consumed before either no-op cancellation or one add/apply mutation, and is
+cleared on every published generation.  Red tests proved direct fabricated
+existing drafts, externally stale existing drafts, and canceled-draft capture
+reuse were all accepted before the fix; the focused record-command suite now
+passes (11), application plus relevant PasswordSafe session/service tests pass
+(78), and all required static checks are green.  The canonical Botan-backed
+full suite passes with 718 tests and 12 expected skips in 109.57 seconds.
+The Task 3 report is updated in the approved SDD workspace.  Exact next
+action: continue only with approved Task 4.  Later approved work remains Tasks
+4 through 8 in order.
+
 ## Purpose and resume protocol
 
 This is the repository's sole persistent continuation record.  Read it completely before resumed or substantial work,
