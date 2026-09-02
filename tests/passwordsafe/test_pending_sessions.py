@@ -5,17 +5,21 @@ source pathname before suspension so no locked session property is accessed.
 """
 
 import os
+from collections.abc import Callable, Iterator
 from dataclasses import asdict
 from multiprocessing import get_context
 from multiprocessing.connection import Connection
 from pathlib import Path
 from threading import Event, Thread
+from typing import Literal
 from uuid import UUID
 
 import pytest
 from helpers import DeterministicRandomSource
 from test_writer import _private_directory, _XorBackend
 
+import bonobo_core.passwordsafe.pending as pending_module
+import bonobo_core.passwordsafe.storage as storage_module
 from bonobo_core.passwordsafe import (
     AuthenticationError,
     ExternalModificationError,
@@ -50,6 +54,89 @@ from bonobo_core.passwordsafe.storage import (
 ####
 class _InjectedControlFlow(BaseException):
     pass
+
+
+
+#### Raise one raw path-bearing failure while entering a fabricated lock scope.
+####
+class _FailingLockScope:
+    __slots__ = ("_private_path",)
+
+
+
+    #### Retain only one fabricated private path for the injected failure.
+    ####
+    def __init__(self, private_path: Path) -> None:
+        self._private_path = private_path
+
+
+
+    #### Interrupt lock-scope entry with the deliberately path-bearing failure.
+    ####
+    def __enter__(self) -> None:
+        raise OSError(f"fabricated lock failure at {self._private_path}")
+
+
+
+    #### Never suppress a failure if exit is unexpectedly reached.
+    ####
+    def __exit__(self, *_args: object) -> Literal[False]:
+        return False
+
+
+
+#### Inject one concrete process-lock lifecycle failure through production locking.
+####
+def _install_process_lock_fault(
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    private_path: Path,
+) -> None:
+    lock_name = "_lock_windows_descriptor" if os.name == "nt" else "_lock_posix_descriptor"
+    unlock_name = "_unlock_windows_descriptor" if os.name == "nt" else "_unlock_posix_descriptor"
+
+
+
+    #### Raise a raw private-path failure from the selected native seam.
+    ####
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError(f"fabricated {stage} failure at {private_path}")
+
+    if stage == "acquire":
+        monkeypatch.setattr(storage_module, lock_name, fail)
+        return
+    if stage == "chmod":
+        monkeypatch.setattr(os, "chmod", fail)
+        return
+    if stage == "unlock":
+        monkeypatch.setattr(storage_module, unlock_name, fail)
+        return
+    if stage != "close":
+        raise AssertionError("unsupported fabricated lock stage")
+    production_lock = getattr(storage_module, lock_name)
+    production_close = os.close
+    selected_descriptor = -1
+
+
+
+    #### Remember only the descriptor which successfully obtained the process lock.
+    ####
+    def remember_lock(descriptor: int) -> None:
+        nonlocal selected_descriptor
+        production_lock(descriptor)
+        selected_descriptor = descriptor
+
+
+
+    #### Close the real descriptor, then surface the fabricated close failure.
+    ####
+    def fail_selected_close(descriptor: int) -> None:
+        production_close(descriptor)
+        if descriptor == selected_descriptor:
+            raise OSError(f"fabricated close failure at {private_path}")
+
+    monkeypatch.setattr(storage_module, lock_name, remember_lock)
+    monkeypatch.setattr(os, "close", fail_selected_close)
 
 
 
@@ -91,6 +178,40 @@ def _acquire_pending_alias_guard(
     store = PendingSessionStore(pending, working)
     with store.guard_open(source):
         acquired.set()
+
+
+
+#### Replace the pending pathname only while a pathname enumeration is active.
+####
+def _aba_scandir(
+    directory: Path,
+    substitute: Path,
+    retained: Path,
+) -> Callable[[str | os.PathLike[str]], Iterator[os.DirEntry[str]]]:
+    production_scandir = os.scandir
+    armed = True
+
+
+
+    #### Expose an empty pathname, then restore the retained directory before return.
+    ####
+    def enumerate_substitute(path: str | os.PathLike[str]) -> Iterator[os.DirEntry[str]]:
+        nonlocal armed
+        if Path(path) != directory or not armed:
+            with production_scandir(path) as entries:
+                yield from entries
+            return
+        armed = False
+        directory.replace(retained)
+        substitute.replace(directory)
+        try:
+            with production_scandir(directory) as entries:
+                yield from entries
+        finally:
+            directory.replace(substitute)
+            retained.replace(directory)
+
+    return enumerate_substitute
 
 
 
@@ -227,6 +348,220 @@ def test_pending_identity_guard_blocks_hard_link_alias_across_processes(tmp_path
     assert acquired.is_set()
     assert process.exitcode == 0
     assert contender is not None and not contender.is_alive()
+
+
+
+#### Project path-bearing acquisition failures at every pending-store boundary.
+####
+@pytest.mark.parametrize("operation", ["publish", "open", "discard", "verify"])
+def test_pending_public_boundaries_close_process_lock_acquisition_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    suspended: SuspendedSession | None = None
+    if operation != "publish":
+        suspended = service.suspend(session)
+    private_path = tmp_path / "pending-working" / ".fabricated-private.lock"
+
+
+
+    #### Fail the destination process lock before its body can execute.
+    ####
+    def failing_destination_lock(*_args: object, **_kwargs: object) -> _FailingLockScope:
+        return _FailingLockScope(private_path)
+
+    monkeypatch.setattr(pending_module, "_destination_lock", failing_destination_lock)
+
+    with pytest.raises(StorageError) as captured:
+        if operation == "publish":
+            service.suspend(session)
+        elif operation == "open":
+            assert suspended is not None
+            service._pending.open(source, suspended)
+        elif operation == "discard":
+            assert suspended is not None
+            service._pending.discard(source, suspended)
+        else:
+            assert suspended is not None
+            service._pending.verify(source, suspended)
+
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(private_path) not in str(captured.value)
+    assert str(private_path) not in repr(captured.value)
+    monkeypatch.undo()
+    if suspended is None:
+        assert session.dirty
+        assert not session.locked
+        session.discard_and_lock()
+    else:
+        service._pending.verify(source, suspended)
+        service.discard_suspended(source, suspended)
+
+
+
+#### Project acquisition, chmod, unlock, and close failures from real lock scopes.
+####
+@pytest.mark.parametrize("stage", ["acquire", "chmod", "unlock", "close"])
+def test_pending_guard_closes_process_lock_lifecycle_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    private_path = tmp_path / "pending-working" / ".fabricated-private.lock"
+    _install_process_lock_fault(monkeypatch, stage, private_path)
+
+    with pytest.raises(StorageError) as captured, service._pending.guard_open(source):
+        pass
+
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(private_path) not in str(captured.value)
+    assert str(private_path) not in repr(captured.value)
+    monkeypatch.undo()
+    session.discard_and_lock()
+
+
+
+#### Reconcile process-lock cleanup failure after pending publication as committed.
+####
+@pytest.mark.parametrize("stage", ["unlock", "close"])
+def test_suspend_process_lock_cleanup_failure_locks_with_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    private_path = tmp_path / "pending-working" / ".fabricated-private.lock"
+    _install_process_lock_fault(monkeypatch, stage, private_path)
+
+    with pytest.raises(StorageError) as captured:
+        service.suspend(session)
+
+    suspended = getattr(captured.value, "suspended", None)
+    assert isinstance(suspended, SuspendedSession)
+    assert session.locked
+    assert captured.value.__cause__ is None
+    committed_context = captured.value.__context__
+    assert str(private_path) not in str(captured.value)
+    assert str(private_path) not in repr(captured.value)
+    while committed_context is not None:
+        assert isinstance(committed_context, StorageError)
+        assert committed_context.__cause__ is None
+        assert str(private_path) not in repr(committed_context)
+        committed_context = committed_context.__context__
+    monkeypatch.undo()
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
+#### Enumerate the retained pending directory even during pathname ABA replacement.
+####
+def test_alias_open_rejects_pending_during_directory_enumeration_aba(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    suspended = service.suspend(_dirty_session(service, source))
+    alias = tmp_path / "fabricated-aba-open-alias.psafe3"
+    os.link(source, alias)
+    pending = tmp_path / "pending-private"
+    substitute = _private_directory(tmp_path, "fabricated-empty-pending")
+    retained = tmp_path / "fabricated-retained-pending"
+    passphrase = SecretBuffer.from_bytes(b"fabricated-pending-master")
+    unexpectedly_opened: VaultSession | None = None
+    monkeypatch.setattr(os, "scandir", _aba_scandir(pending, substitute, retained))
+
+    try:
+        with pytest.raises(StorageError):
+            unexpectedly_opened = service.open(alias, passphrase)
+    finally:
+        monkeypatch.undo()
+        if unexpectedly_opened is not None:
+            unexpectedly_opened.lock()
+
+    assert passphrase.closed
+    service.discard_suspended(source, suspended)
+
+
+
+#### Refuse alias suspension while the pending pathname undergoes a complete ABA.
+####
+def test_alias_suspend_rejects_pending_during_directory_enumeration_aba(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    source_session = _dirty_session(service, source)
+    alias = tmp_path / "fabricated-aba-suspend-alias.psafe3"
+    os.link(source, alias)
+    alias_session = service.open(alias, SecretBuffer.from_bytes(b"fabricated-pending-master"))
+    alias_session.add(
+        NewRecord(
+            UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            "Alias ABA edit",
+            SecretBuffer.from_bytes(b"fabricated-alias-aba-secret"),
+        ),
+        alias_session.revision,
+    )
+    suspended = service.suspend(source_session)
+    pending = tmp_path / "pending-private"
+    substitute = _private_directory(tmp_path, "fabricated-empty-pending")
+    retained = tmp_path / "fabricated-retained-pending"
+    unexpected: SuspendedSession | None = None
+    monkeypatch.setattr(os, "scandir", _aba_scandir(pending, substitute, retained))
+
+    try:
+        with pytest.raises(StorageError):
+            unexpected = service.suspend(alias_session)
+    finally:
+        monkeypatch.undo()
+        if unexpected is not None:
+            service.discard_suspended(alias, unexpected)
+        if not alias_session.locked:
+            alias_session.discard_and_lock()
+        service.discard_suspended(source, suspended)
+
+
+
+#### Reject a hostile pending directory before unbounded enumeration can continue.
+####
+def test_pending_directory_entry_count_is_strictly_bounded(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-count-source.psafe3"
+    session = service.create(source, SecretBuffer.from_bytes(b"fabricated-pending-master"))
+    session.lock()
+    pending = tmp_path / "pending-private"
+    for index in range(257):
+        entry = pending / f".fabricated-hostile-entry-{index:03d}"
+        entry.write_bytes(b"fabricated encrypted noise")
+        entry.chmod(0o600)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-pending-master")
+    unexpectedly_opened: VaultSession | None = None
+
+    try:
+        with pytest.raises(StorageError) as captured:
+            unexpectedly_opened = service.open(source, passphrase)
+    finally:
+        if unexpectedly_opened is not None:
+            unexpectedly_opened.lock()
+
+    assert passphrase.closed
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(pending) not in repr(captured.value)
 
 
 
@@ -909,6 +1244,63 @@ def test_suspend_postpublication_capture_failure_locks_with_selector(
 
 
 
+#### Treat every typed pending verification failure as uncertain authority.
+####
+@pytest.mark.parametrize("reason", tuple(StorageReason))
+def test_suspend_authority_storage_uncertainty_keeps_selector_locked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reason: StorageReason,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    production_capture = LocalVaultStore.capture
+    production_verify = PendingSessionStore.verify
+    captures = 0
+
+
+
+    #### Interrupt only after the new selector has become visible.
+    ####
+    def fail_second_capture(store: LocalVaultStore, path: Path) -> FileBaseline:
+        nonlocal captures
+        if store is service._store and path == source:
+            captures += 1
+            if captures == 2:
+                raise _InjectedControlFlow()
+        return production_capture(store, path)
+
+
+
+    #### Model a typed but nonauthoritative verification outcome.
+    ####
+    def fail_verification(
+        store: PendingSessionStore,
+        selected_source: Path,
+        suspended: SuspendedSession,
+    ) -> None:
+        if captures < 2:
+            production_verify(store, selected_source, suspended)
+            return
+        raise StorageError(reason)
+
+    monkeypatch.setattr(LocalVaultStore, "capture", fail_second_capture)
+    monkeypatch.setattr(PendingSessionStore, "verify", fail_verification)
+
+    with pytest.raises(StorageError) as captured:
+        service.suspend(session)
+
+    monkeypatch.undo()
+    suspended = getattr(captured.value, "suspended", None)
+    assert captures == 2
+    assert isinstance(suspended, SuspendedSession)
+    assert session.locked
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
 #### Restore the true dirty session when failed cleanup already removed the selector.
 ####
 def test_suspend_removed_selector_aborts_frozen_snapshot_and_remains_mutable(
@@ -1537,18 +1929,18 @@ def test_pending_enumeration_oserror_is_closed_and_path_free(
     service = _service(tmp_path)
     source = tmp_path / "fabricated-source.psafe3"
     suspended = service.suspend(_dirty_session(service, source))
-    production_scandir = os.scandir
+    anchor = _open_private_anchor(tmp_path / "pending-private")
+    anchor_type = type(anchor)
+    anchor.close()
 
 
 
     #### Fail only private pending enumeration with a path-bearing diagnostic.
     ####
-    def fail_private_enumeration(path: str | os.PathLike[str]) -> object:
-        if Path(path) == tmp_path / "pending-private":
-            raise OSError(f"fabricated enumeration failure: {tmp_path}")
-        return production_scandir(path)
+    def fail_private_enumeration(_anchor: _PublicationAnchor) -> Iterator[str]:
+        raise OSError(f"fabricated enumeration failure: {tmp_path}")
 
-    monkeypatch.setattr(os, "scandir", fail_private_enumeration)
+    monkeypatch.setattr(anchor_type, "iter_child_names", fail_private_enumeration)
     passphrase = SecretBuffer.from_bytes(b"fabricated-pending-master")
 
     with pytest.raises(StorageError) as captured:
@@ -1558,6 +1950,8 @@ def test_pending_enumeration_oserror_is_closed_and_path_free(
     assert captured.value.__cause__ is None
     assert captured.value.__context__ is None
     assert str(tmp_path) not in str(captured.value)
+    monkeypatch.undo()
+    service.discard_suspended(source, suspended)
 
 
 

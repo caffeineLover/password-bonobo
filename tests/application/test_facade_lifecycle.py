@@ -5,13 +5,13 @@ replacement safety, and owned passphrase lifetime without touching real files.
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 from fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
 
 from bonobo_core.application.facade import ApplicationCommandError, CloseChoice, VaultApplication
-from bonobo_core.application.types import ApplicationPhase
+from bonobo_core.application.types import ApplicationPhase, ApplicationSnapshot
 from bonobo_core.passwordsafe import (
     AuthenticationError,
     AuthenticationReason,
@@ -270,6 +270,54 @@ def test_replacement_validation_baseexception_closes_passphrase(
         )
 
     assert passphrase.closed
+
+
+
+#### Own and close every valid replacement before normalization or BUSY publication.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+@pytest.mark.parametrize("boundary", ["normalization", "busy-publication"])
+def test_replacement_pre_service_baseexception_closes_owner_and_restores_session(
+    fake_service: FakeVaultService,
+    monkeypatch: pytest.MonkeyPatch,
+    action: Literal["create", "open"],
+    boundary: Literal["normalization", "busy-publication"],
+) -> None:
+    app = opened_application(fake_service, dirty=False)
+    before = app.snapshot
+    passphrase = SecretBuffer.from_bytes(b"fabricated-pre-service-interrupt")
+
+
+
+    #### Interrupt one post-transfer operation before any replacement service call.
+    ####
+    def interrupt(*_args: object, **_kwargs: object) -> object:
+        raise _InjectedReplacementControlFlow()
+
+    if boundary == "normalization":
+        monkeypatch.setattr(Path, "absolute", interrupt)
+    else:
+        monkeypatch.setattr(VaultApplication, "_enter_busy", interrupt)
+
+    result = cast(
+        ApplicationSnapshot,
+        _replacement_command(
+            app,
+            action,
+            Path("fabricated-interrupted.psafe3"),
+            passphrase,
+            "Interrupted",
+        ),
+    )
+
+    assert result.phase is before.phase
+    assert result.dirty is before.dirty
+    assert result.display_label == before.display_label
+    assert result.records == before.records
+    assert result.failure is not None
+    assert passphrase.closed
+    assert fake_service.create_calls == 0
+    assert fake_service.open_calls == 1
 
 
 

@@ -971,9 +971,9 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         old_session = self._session
         candidate: ApplicationSessionT | None = None
         old_terminal_started = False
-        source_path = replacement.path.absolute()
-        self._enter_busy(previous)
         try:
+            source_path = replacement.path.absolute()
+            self._enter_busy(previous)
             if replacement.action == "create":
                 candidate = self._service.create(replacement.path, replacement.passphrase)
             else:

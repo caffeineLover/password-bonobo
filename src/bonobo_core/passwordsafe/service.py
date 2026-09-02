@@ -21,7 +21,7 @@ from .constants import (
     ResourceLimits,
 )
 from .crypto import RandomSource, SystemRandomSource, TwofishBackend
-from .errors import ExternalModificationError, PasswordSafeError, StorageError, StorageReason
+from .errors import ExternalModificationError, StorageError, StorageReason
 from .model import (
     FieldClassification,
     PreservationWarning,
@@ -31,7 +31,12 @@ from .model import (
     documents_equal_exact,
 )
 from .payloads import FieldPayload, InlinePayload
-from .pending import PendingSessionStore, SuspendedSession, _CommittedPendingError
+from .pending import (
+    PendingSessionStore,
+    SuspendedSession,
+    _CommittedPendingError,
+    _PendingSlotAbsentError,
+)
 from .reader import OpenedVault, PasswordSafeReader, VaultCryptoState
 from .schema import ensure_fields_representable
 from .secrets import SecretBuffer
@@ -461,7 +466,7 @@ class VaultService:
     def _pending_is_authoritative(self, source: Path, suspended: SuspendedSession) -> bool:
         try:
             self._pending.verify(source, suspended)
-        except PasswordSafeError:
+        except _PendingSlotAbsentError:
             return False
         except BaseException:
             return True

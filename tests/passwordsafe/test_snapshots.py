@@ -203,6 +203,55 @@ def test_windows_post_create_verifier_failure_leaks_no_retry_artifacts(
 
 
 
+#### Reject malformed offsets and filename bounds from native handle enumeration.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows retained-handle directory enumeration")
+@pytest.mark.parametrize(
+    ("next_offset", "name_length"),
+    [(7, 2), (0, 65536)],
+)
+def test_windows_directory_handle_enumeration_rejects_malformed_native_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    next_offset: int,
+    name_length: int,
+) -> None:
+    from bonobo_core.passwordsafe import _windows_security
+
+    directory = _private_directory(tmp_path)
+    anchor = _windows_security.WindowsDirectoryAnchor.open(directory)
+    assert anchor is not None
+
+
+
+    #### Return one deliberately malformed FILE_ID_BOTH_DIR_INFO record.
+    ####
+    def malformed_enumeration(
+        _handle: wintypes.HANDLE,
+        _information_class: int,
+        buffer: ctypes.Array[ctypes.c_char],
+        buffer_size: int,
+    ) -> bool:
+        ctypes.memset(buffer, 0, buffer_size)
+        record = _windows_security._FileIdBothDirectoryInfo.from_buffer(buffer)
+        record.NextEntryOffset = next_offset
+        record.FileNameLength = name_length
+        return True
+
+    monkeypatch.setattr(
+        _windows_security._KERNEL32,
+        "GetFileInformationByHandleEx",
+        malformed_enumeration,
+    )
+
+    try:
+        with pytest.raises(OSError):
+            tuple(anchor.iter_child_names())
+    finally:
+        anchor.close()
+
+
+
 #### Keep disposition failure path-free while close-on-failure removes the child.
 ####
 @pytest.mark.skipif(os.name != "nt", reason="Windows owned-handle cleanup")

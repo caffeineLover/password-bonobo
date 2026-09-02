@@ -56,6 +56,7 @@ _SLOT_SUFFIX: Final[str] = ".slot"
 _ARTIFACT_PREFIX: Final[str] = ".bonobo-pending-artifact-"
 _ARTIFACT_SUFFIX: Final[str] = ".psafe3"
 _MAX_SLOT_BYTES: Final[int] = 1024
+_MAX_PENDING_DIRECTORY_ENTRIES: Final[int] = 256
 
 
 
@@ -175,6 +176,62 @@ class _CommittedPendingError(StorageError):
 
 
 
+#### Mark only a fully enumerated, positively absent stable pending slot.
+####
+class _PendingSlotAbsentError(StorageError):
+    __slots__ = ()
+
+
+
+    #### Retain a path-free internal distinction for commit reconciliation.
+    ####
+    def __init__(self) -> None:
+        super().__init__(StorageReason.VERIFICATION_FAILED)
+
+
+
+#### Suppress one raw boundary failure until no private exception is active.
+####
+class _ClosedPendingBoundary:
+    __slots__ = ("_failure",)
+
+
+
+    #### Begin with no retained boundary failure.
+    ####
+    def __init__(self) -> None:
+        self._failure: BaseException | None = None
+
+
+
+    #### Enter without performing any path-bearing operation.
+    ####
+    def __enter__(self) -> None:
+        return None
+
+
+
+    #### Retain and suppress one failure for path-free projection after exit.
+    ####
+    def __exit__(
+        self,
+        _exception_type: object,
+        error: BaseException | None,
+        _traceback: object,
+    ) -> bool:
+        self._failure = error
+        return error is not None
+
+
+
+    #### Raise the retained failure only through the closed pending taxonomy.
+    ####
+    def raise_if_failed(self) -> None:
+        if self._failure is not None:
+            _raise_closed_pending_error(self._failure)
+
+
+
 #### Own retained slot and artifact descriptors during verification or cleanup.
 ####
 @dataclass(slots=True)
@@ -276,12 +333,26 @@ class PendingSessionStore:
             _validate_suspended(expected)
         if not callable(validator):
             raise TypeError("pending validator must be callable")
-        with (
-            self._lock,
-            _source_identity_lock(self._snapshot_directory, source_baseline),
-            _destination_lock(self._snapshot_directory, source),
-        ):
-            return self._publish_locked(source, candidate, source_baseline, expected, validator)
+        suspended: SuspendedSession | None = None
+        failure: BaseException | None = None
+        try:
+            with (
+                self._lock,
+                _source_identity_lock(self._snapshot_directory, source_baseline),
+                _destination_lock(self._snapshot_directory, source),
+            ):
+                suspended = self._publish_locked(source, candidate, source_baseline, expected, validator)
+        except BaseException as error:
+            failure = error
+        if failure is not None:
+            if isinstance(failure, _CommittedPendingError):
+                raise failure from None
+            if suspended is not None:
+                raise _CommittedPendingError(suspended) from None
+            _raise_closed_pending_error(failure)
+        if suspended is None:
+            raise StorageError(StorageReason.PUBLICATION_FAILED)
+        return suspended
 
 
 
@@ -291,6 +362,7 @@ class PendingSessionStore:
     def guard_open(self, source: Path) -> Iterator[None]:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
+        failure: BaseException | None = None
         try:
             source_baseline = _capture_regular_file(source)
             with (
@@ -312,7 +384,9 @@ class PendingSessionStore:
                             anchor.close()
                 yield
         except BaseException as error:
-            _raise_closed_pending_error(error)
+            failure = error
+        if failure is not None:
+            _raise_closed_pending_error(failure)
 
 
 
@@ -322,7 +396,10 @@ class PendingSessionStore:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock, _destination_lock(self._snapshot_directory, source):
+        boundary = _ClosedPendingBoundary()
+        with boundary, self._lock, _destination_lock(
+            self._snapshot_directory, source
+        ):
             located: _LocatedPending | None = None
             snapshot: EncryptedSnapshot | None = None
             try:
@@ -370,6 +447,8 @@ class PendingSessionStore:
                 if located is not None:
                     with suppress(BaseException):
                         located.close()
+        boundary.raise_if_failed()
+        raise StorageError(StorageReason.VERIFICATION_FAILED)
 
 
 
@@ -379,13 +458,17 @@ class PendingSessionStore:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock, _destination_lock(self._snapshot_directory, source):
+        boundary = _ClosedPendingBoundary()
+        with boundary, self._lock, _destination_lock(
+            self._snapshot_directory, source
+        ):
             located: _LocatedPending | None = None
             try:
                 located = self._find_locked(source, suspended)
                 self._discard_locked(located)
             except BaseException as error:
                 _raise_closed_pending_error(error)
+        boundary.raise_if_failed()
 
 
 
@@ -395,7 +478,10 @@ class PendingSessionStore:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        with self._lock, _destination_lock(self._snapshot_directory, source):
+        boundary = _ClosedPendingBoundary()
+        with boundary, self._lock, _destination_lock(
+            self._snapshot_directory, source
+        ):
             located: _LocatedPending | None = None
             try:
                 located = self._find_locked(source, suspended)
@@ -429,6 +515,7 @@ class PendingSessionStore:
                 if located is not None:
                     with suppress(BaseException):
                         located.close()
+        boundary.raise_if_failed()
 
 
 
@@ -789,7 +876,7 @@ class PendingSessionStore:
         expected_slot_name: str,
         source_baseline: FileBaseline,
     ) -> bool:
-        for slot_name in _slot_names(self._directory, anchor):
+        for slot_name in _slot_names(anchor):
             located = self._read_located(anchor, slot_name, close_anchor=False)
             if located is None:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
@@ -818,7 +905,7 @@ class PendingSessionStore:
         exact_slot_seen = False
         selected: _LocatedPending | None = None
         try:
-            for slot_name in _slot_names(self._directory, anchor):
+            for slot_name in _slot_names(anchor):
                 located = self._read_located(anchor, slot_name, close_anchor=False)
                 if located is None:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
@@ -856,8 +943,10 @@ class PendingSessionStore:
         matches: list[_LocatedPending] = []
         transferred = False
         expected_slot_name = _slot_name(_vault_locator(source))
+        expected_slot_seen = False
         try:
-            for slot_name in _slot_names(self._directory, anchor):
+            for slot_name in _slot_names(anchor):
+                expected_slot_seen = expected_slot_seen or slot_name == expected_slot_name
                 located = self._read_located(anchor, slot_name, close_anchor=False)
                 if located is None:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
@@ -868,6 +957,8 @@ class PendingSessionStore:
                     matches.append(located)
                 else:
                     _close_located_descriptors(located)
+            if not matches and not expected_slot_seen:
+                raise _PendingSlotAbsentError()
             if len(matches) != 1:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
             result = matches[0]
@@ -1205,14 +1296,15 @@ def _artifact_name(identifier: str) -> str:
 
 #### Enumerate only exact stable slot names while rejecting locator ambiguity.
 ####
-def _slot_names(directory: Path, anchor: _PublicationAnchor) -> tuple[str, ...]:
-    if not anchor.stable():
-        raise StorageError(StorageReason.PREPARATION_FAILED)
-    names: list[str] = []
-    enumeration_failed = False
+def _slot_names(anchor: _PublicationAnchor) -> Iterator[str]:
+    entry_count = 0
     try:
-        for entry in os.scandir(directory):
-            name = entry.name
+        for name in anchor.iter_child_names():
+            entry_count += 1
+            if entry_count > _MAX_PENDING_DIRECTORY_ENTRIES:
+                raise StorageError(StorageReason.VERIFICATION_FAILED)
+            if name in (".", ".."):
+                continue
             if not name.startswith(_SLOT_PREFIX) or not name.endswith(_SLOT_SUFFIX):
                 continue
             locator = name[len(_SLOT_PREFIX): -len(_SLOT_SUFFIX)]
@@ -1220,16 +1312,11 @@ def _slot_names(directory: Path, anchor: _PublicationAnchor) -> tuple[str, ...]:
                 _validate_digest(locator, "pending locator")
             except ValueError:
                 raise StorageError(StorageReason.VERIFICATION_FAILED) from None
-            names.append(name)
+            yield name
     except StorageError:
         raise
     except Exception:
-        enumeration_failed = True
-    if enumeration_failed:
-        raise StorageError(StorageReason.VERIFICATION_FAILED)
-    if len(names) != len(set(names)) or not anchor.stable():
-        raise StorageError(StorageReason.VERIFICATION_FAILED)
-    return tuple(sorted(names))
+        raise StorageError(StorageReason.VERIFICATION_FAILED) from None
 
 
 
@@ -1263,6 +1350,8 @@ def _raise_closed_pending_error(error: BaseException) -> Never:
     if not isinstance(error, Exception):
         raise error
     if isinstance(error, PasswordSafeError):
+        error.__cause__ = None
+        error.__context__ = None
         raise error from None
     raise StorageError(StorageReason.VERIFICATION_FAILED) from None
 

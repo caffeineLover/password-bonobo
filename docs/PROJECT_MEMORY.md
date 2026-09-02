@@ -2,6 +2,35 @@
 
 Last updated: 2026-09-02
 
+## Active Task 4 review-fix round 3
+
+The final independent review round reports one retained-directory enumeration
+Critical, one commit-authority Important, one replacement-ownership Important,
+and one mandatory process-lock error-projection gap.  They are compatible with
+the approved design.  RED/GREEN implementation is complete: the pending store
+streams a retained publication anchor with a strict 256-entry ceiling; POSIX
+enumerates the directory descriptor and Windows uses typed
+`FileIdBothDirectoryInfo` records from the retained handle with bounded parsing.
+Deterministic replace-enumerate-restore ABA probes for alias open/suspend, the
+entry ceiling, and malformed native records pass (5).  An internal exact-absence
+sentinel lets suspension restore an active dirty session only after a complete
+enumeration positively confirms the stable slot is missing; all three typed
+storage uncertainty reasons retain the committed selector and lock the session
+(4).  Replacement normalization and BUSY publication now occur inside the
+transferred-secret ownership scope; the new cases and prior validation,
+reentrant, and deferred-owner cases pass (10).  Process-lock acquire/chmod,
+unlock, and close failures now propagate through one lifecycle aggregator;
+publish/open/discard/verify project raw path-bearing acquisition errors, and
+post-publication teardown failures reconcile to a committed selector (10).
+
+The exact immediate next actions are: run the combined focused Task 4 suite;
+resolve only evidenced regressions; perform the explicit adversarial review
+against all Task 4 findings; run the approved selected suite and every static,
+security, legal, audit, tracked-file, build/wheel, and fresh exact-Botan full
+suite gate; update the Task 4 report with exact evidence; commit the separate
+round-3 fix and checkpoint without amending.  Later approved work remains Tasks
+5 through 8 in order.
+
 ## Completed Task 4 review-fix round 2
 
 Independent re-review confirms every round-1 finding closed and rejects the

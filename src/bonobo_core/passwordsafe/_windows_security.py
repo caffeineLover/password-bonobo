@@ -3,7 +3,7 @@
 import ctypes
 import msvcrt
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from ctypes import wintypes
 from pathlib import Path
 from typing import Final, Protocol, cast
@@ -58,6 +58,7 @@ _GENERIC_READ: Final[int] = 0x80000000
 _GENERIC_WRITE: Final[int] = 0x40000000
 _DELETE: Final[int] = 0x00010000
 _READ_CONTROL: Final[int] = 0x00020000
+_FILE_LIST_DIRECTORY: Final[int] = 0x00000001
 _FILE_ADD_FILE: Final[int] = 0x00000002
 _FILE_TRAVERSE: Final[int] = 0x00000020
 _SYNCHRONIZE: Final[int] = 0x00100000
@@ -79,9 +80,13 @@ _FILE_FLAG_BACKUP_SEMANTICS: Final[int] = 0x02000000
 _INVALID_FILE_ATTRIBUTES: Final[int] = 0xFFFFFFFF
 _FILE_DISPOSITION_INFO_CLASS: Final[int] = 4
 _NT_FILE_RENAME_INFORMATION_CLASS: Final[int] = 10
+_FILE_ID_BOTH_DIRECTORY_INFO_CLASS: Final[int] = 10
+_FILE_ID_BOTH_DIRECTORY_RESTART_INFO_CLASS: Final[int] = 11
+_DIRECTORY_ENUMERATION_BUFFER_BYTES: Final[int] = 64 * 1024
 _INVALID_HANDLE_VALUE: Final[int] = int(ctypes.c_void_p(-1).value or 0)
 _ERROR_FILE_NOT_FOUND: Final[int] = 2
 _ERROR_PATH_NOT_FOUND: Final[int] = 3
+_ERROR_NO_MORE_FILES: Final[int] = 18
 
 
 
@@ -230,6 +235,31 @@ class _FileRenameInfo(ctypes.Structure):
 
 
 
+#### Mirror the bounded prefix of FILE_ID_BOTH_DIR_INFO directory records.
+####
+class _FileIdBothDirectoryInfo(ctypes.Structure):
+    _fields_ = [
+        ("NextEntryOffset", wintypes.DWORD),
+        ("FileIndex", wintypes.DWORD),
+        ("CreationTime", wintypes.LARGE_INTEGER),
+        ("LastAccessTime", wintypes.LARGE_INTEGER),
+        ("LastWriteTime", wintypes.LARGE_INTEGER),
+        ("ChangeTime", wintypes.LARGE_INTEGER),
+        ("EndOfFile", wintypes.LARGE_INTEGER),
+        ("AllocationSize", wintypes.LARGE_INTEGER),
+        ("FileAttributes", wintypes.DWORD),
+        ("FileNameLength", wintypes.DWORD),
+        ("EaSize", wintypes.DWORD),
+        ("ShortNameLength", ctypes.c_byte),
+        ("Reserved", ctypes.c_byte),
+        ("ShortName", wintypes.WCHAR * 12),
+        ("Reserved2", wintypes.WORD),
+        ("FileId", wintypes.LARGE_INTEGER),
+        ("FileName", wintypes.WCHAR * 1),
+    ]
+
+
+
 _ADVAPI32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
 _ADVAPI32.OpenProcessToken.restype = wintypes.BOOL
 _ADVAPI32.GetTokenInformation.argtypes = [
@@ -294,6 +324,13 @@ _KERNEL32.GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
 _KERNEL32.GetFileAttributesW.restype = wintypes.DWORD
 _KERNEL32.GetFileInformationByHandle.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation)]
 _KERNEL32.GetFileInformationByHandle.restype = wintypes.BOOL
+_KERNEL32.GetFileInformationByHandleEx.argtypes = [
+    wintypes.HANDLE,
+    ctypes.c_int,
+    wintypes.LPVOID,
+    wintypes.DWORD,
+]
+_KERNEL32.GetFileInformationByHandleEx.restype = wintypes.BOOL
 _KERNEL32.SetFileInformationByHandle.argtypes = [
     wintypes.HANDLE,
     ctypes.c_int,
@@ -345,6 +382,58 @@ def _is_invalid_handle(handle: wintypes.HANDLE) -> bool:
 ####
 def _close_handle(handle: wintypes.HANDLE) -> bool:
     return _is_invalid_handle(handle) or bool(_KERNEL32.CloseHandle(handle))
+
+
+
+#### Stream and strictly parse names returned for one retained directory handle.
+####
+def _iter_directory_names(handle: wintypes.HANDLE) -> Iterator[str]:
+    information_class = _FILE_ID_BOTH_DIRECTORY_RESTART_INFO_CLASS
+    while True:
+        buffer = ctypes.create_string_buffer(_DIRECTORY_ENUMERATION_BUFFER_BYTES)
+        _WINDOWS_CTYPES.set_last_error(0)
+        if not _KERNEL32.GetFileInformationByHandleEx(
+            handle,
+            information_class,
+            buffer,
+            _DIRECTORY_ENUMERATION_BUFFER_BYTES,
+        ):
+            if _WINDOWS_CTYPES.get_last_error() == _ERROR_NO_MORE_FILES:
+                return
+            raise OSError
+        information_class = _FILE_ID_BOTH_DIRECTORY_INFO_CLASS
+        offset = 0
+        while True:
+            if offset > _DIRECTORY_ENUMERATION_BUFFER_BYTES - _FileIdBothDirectoryInfo.FileName.offset:
+                raise OSError
+            record = _FileIdBothDirectoryInfo.from_buffer(buffer, offset)
+            name_length = int(record.FileNameLength)
+            name_start = offset + _FileIdBothDirectoryInfo.FileName.offset
+            name_end = name_start + name_length
+            if (
+                name_length == 0
+                or name_length % ctypes.sizeof(wintypes.WCHAR) != 0
+                or name_end > _DIRECTORY_ENUMERATION_BUFFER_BYTES
+            ):
+                raise OSError
+            raw_name = ctypes.string_at(ctypes.addressof(buffer) + name_start, name_length)
+            try:
+                name = raw_name.decode("utf-16-le")
+            except UnicodeDecodeError:
+                raise OSError from None
+            if not name or "\x00" in name or (name not in (".", "..") and Path(name).name != name):
+                raise OSError
+            yield name
+            next_offset = int(record.NextEntryOffset)
+            if next_offset == 0:
+                break
+            if (
+                next_offset % 8 != 0
+                or next_offset < _FileIdBothDirectoryInfo.FileName.offset + name_length
+                or next_offset > _DIRECTORY_ENUMERATION_BUFFER_BYTES - offset
+            ):
+                raise OSError
+            offset += next_offset
 
 
 
@@ -733,7 +822,13 @@ class WindowsDirectoryAnchor:
             handle = _open_path(
                 absolute,
                 directory=True,
-                access=_READ_CONTROL | _FILE_READ_ATTRIBUTES | _FILE_ADD_FILE | _FILE_TRAVERSE,
+                access=(
+                    _READ_CONTROL
+                    | _FILE_LIST_DIRECTORY
+                    | _FILE_READ_ATTRIBUTES
+                    | _FILE_ADD_FILE
+                    | _FILE_TRAVERSE
+                ),
             )
             if handle is None:
                 return None
@@ -751,6 +846,21 @@ class WindowsDirectoryAnchor:
         finally:
             if handle is not None:
                 _close_handle(handle)
+
+
+
+    #### Stream names from the retained handle without reopening its pathname.
+    ####
+    def iter_child_names(self) -> Iterator[str]:
+        information = _ByHandleFileInformation()
+        if (
+            _file_identity(self._handle) != self._identity
+            or not _KERNEL32.GetFileInformationByHandle(self._handle, ctypes.byref(information))
+            or not information.dwFileAttributes & _FILE_ATTRIBUTE_DIRECTORY
+            or information.dwFileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            raise OSError
+        yield from _iter_directory_names(self._handle)
 
 
 

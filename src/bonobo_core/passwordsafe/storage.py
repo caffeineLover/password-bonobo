@@ -248,6 +248,13 @@ class _PublicationAnchor(Protocol):
 
 
 
+    #### Stream child names from the retained directory descriptor or handle.
+    ####
+    def iter_child_names(self) -> Iterator[str]:
+        raise NotImplementedError
+
+
+
     #### Create one persistent owner-only child relative to the held directory.
     ####
     def create_persistent(self, name: str) -> tuple[int, tuple[int, int], str | None] | None:
@@ -371,6 +378,18 @@ class _PosixPublicationAnchor:
                 with suppress(BaseException):
                     os.close(descriptor)
             return None
+
+
+
+    #### Stream directory entries from the retained descriptor, never its pathname.
+    ####
+    def iter_child_names(self) -> Iterator[str]:
+        metadata = os.fstat(self._fd)
+        if not stat.S_ISDIR(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != self._identity:
+            raise OSError
+        with os.scandir(self._fd) as entries:
+            for entry in entries:
+                yield entry.name
 
 
 
@@ -1400,6 +1419,8 @@ def _source_identity_lock(working_directory: Path, baseline: FileBaseline) -> It
 def _named_process_lock(working_directory: Path, name: str) -> Iterator[None]:
     path = working_directory / name
     descriptor = -1
+    locked = False
+    failure: BaseException | None = None
     try:
         flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(path, flags, _OWNER_FILE_MODE)
@@ -1408,16 +1429,28 @@ def _named_process_lock(working_directory: Path, name: str) -> Iterator[None]:
             _lock_windows_descriptor(descriptor)
         else:
             _lock_posix_descriptor(descriptor)
+        locked = True
         yield
+    except BaseException as error:
+        failure = error
     finally:
         if descriptor >= 0:
-            with suppress(BaseException):
-                if os.name == "nt":
-                    _unlock_windows_descriptor(descriptor)
-                else:
-                    _unlock_posix_descriptor(descriptor)
-            with suppress(BaseException):
+            if locked:
+                try:
+                    if os.name == "nt":
+                        _unlock_windows_descriptor(descriptor)
+                    else:
+                        _unlock_posix_descriptor(descriptor)
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
+            try:
                 os.close(descriptor)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+    if failure is not None:
+        raise failure
 
 
 
