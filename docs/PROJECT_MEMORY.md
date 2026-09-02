@@ -14,8 +14,9 @@ leaves `/` after an operand visible as division.  All eight focused QML
 contract tests and all 51 offscreen desktop tests pass.  Resolved-file qmllint,
 Ruff, strict mypy for 106 files under default/win32/darwin/linux, Python
 structure, REUSE 169/169, and unstaged/staged whitespace are clean.  The Task 7
-report records the exact RED/GREEN evidence and self-review.  This checkpoint
-is included in a separate repair commit; Task 8 remains next.
+report records the exact RED/GREEN evidence and self-review.  Scoped independent
+re-review confirms the regex-literal interpolation bypass is addressed with no
+new breakage.  Task 7 is complete through `29b6090`; Task 8 remains next.
 
 ## Completed Task 7 review-fix round 1
 
