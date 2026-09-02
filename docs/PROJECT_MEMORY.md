@@ -24,11 +24,11 @@ Task 15 implementation, release verification, and independent review were commit
 `5e1d5d7`. The safe demonstration, operational guide, root status, contributor validation, legal note, and REUSE
 coverage complete the approved lossless PasswordSafe core plan.
 
-Local `main` tracks `origin/main` at `https://github.com/caffeineLover/password-bonobo.git`. The remote's unrelated
+Local `main` uses `origin` at `https://github.com/caffeineLover/password-bonobo.git`. The remote's unrelated
 initial GPLv3 `LICENSE` commit `7cb8203` was fetched and joined to the completed local history by merge commit `11f0ea7`.
 That earlier `963441d` checkpoint passed 645 tests with 12 expected platform-specific skips and 79% coverage in
 107.71 seconds, plus Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates.
-The later synchronized `main` state is `68c1317`, containing the diagnostic and strict-typing repairs recorded below.
+The last pushed `origin/main` state is `68c1317`, containing the diagnostic and strict-typing repairs recorded below.
 
 Hosted run `33549509896` then passed Android arm64 but failed the iOS smoke link, macOS strict mypy, Ubuntu host-library
 discovery, and Windows test suite. Diagnostic repair `caec5f5` is integrated and pushed on `main`. Its follow-up hosted
@@ -40,9 +40,10 @@ preserving the runtime modules and flags. It is integrated and pushed on `main` 
 
 Hosted run `33564705673` confirmed macOS strict mypy now passes. Android passed again; Ubuntu retained the expected
 shared-library ambiguity; iOS retained the missing C++ runtime link failure; and macOS and Windows reached pytest but
-failed 153 and 157 tests respectively at private artifact preparation. Active branch `fix/linux-botan-discovery`
-reproduced Ubuntu's exact unversioned/soname/versioned candidate set in a red regression and now deterministically
-prefers the canonical installed linker name while retaining absent/ambiguous failure behavior.
+failed 153 and 157 tests respectively at private artifact preparation. Commit `f32bd0b` reproduces Ubuntu's exact
+unversioned/soname/versioned candidate set in a red regression and deterministically prefers the canonical installed
+linker name while retaining absent/ambiguous failure behavior. It is fast-forwarded into local `main`, verified there,
+and awaits push; the completed worktree and feature branch have been removed.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -209,6 +210,9 @@ Windows/CPython 3.14.7 suite reports 654 passed, 12 expected skips, 79% coverage
 Autopep8, Ruff, Python structure, Bandit, REUSE 119/119, whitespace, and strict mypy under Darwin, Windows, and Linux
 profiles pass. Independent review identified and closed an Important fail-open case for malformed or cross-platform
 leftovers plus its Minor missing fallback coverage. Follow-up review found no remaining Critical or Important issue.
+Commit `f32bd0b` was fast-forwarded into local `main` after a fresh pre-merge run reported 654 passed, 12 expected
+skips, 79% coverage, and zero failures in 109.87 seconds. The merged `main` tree repeated that result in 108.46 seconds.
+The clean worktree and merged `fix/linux-botan-discovery` branch were then removed.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -238,12 +242,12 @@ the same metadata.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
 - Hosted run `33564705673` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
-  archive smoke link; Ubuntu discovery rejects the real soname chain addressed on the active branch; and private
+  archive smoke link; Ubuntu discovery rejected the real soname chain addressed by local commit `f32bd0b`; and private
   artifact preparation fails across 153 macOS and 157 Windows tests even though all 650 applicable tests pass locally.
 
 ## Exact continuation order after this checkpoint
 
-1. Complete independent review, commit, integrate, and push `fix/linux-botan-discovery`, then verify Ubuntu in CI.
+1. Push local `main`, then verify the Ubuntu repair in the resulting hosted run.
 2. Diagnose the shared macOS/Windows private-artifact preparation failures, then repair the iOS C++ runtime link.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
