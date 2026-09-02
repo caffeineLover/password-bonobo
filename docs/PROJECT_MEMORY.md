@@ -265,6 +265,9 @@ and local branch are removed. The proposed O3 continuation design is
 plan is `docs/superpowers/plans/2026-09-01-vault-application-desktop-vertical-slice.md`. The design selects a
 UI-independent `bonobo_core.application` facade with a thin `bonobo_desktop` PySide6/Qt Quick adapter and treats dirty
 idle lock as authenticated encrypted suspension. All 26 Markdown/document-policy tests pass for these artifacts.
+Documentation-only follow-up run `33585101442` keeps both mobile jobs green but exposes missing REUSE annotations for
+the two new O3 Markdown files on every desktop job; the files themselves and all preceding quality steps pass. The
+current correction adds those exact files to the existing aggregate GPL-3.0-or-later annotation before Task 1 begins.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -298,6 +301,6 @@ the same metadata.
 
 ## Exact continuation order after this checkpoint
 
-1. Review, commit, and push the proposed O3 design and vertical-slice implementation plan.
-2. Choose subagent-driven or inline execution, create an isolated worktree, and execute Task 1 red-first.
-3. Continue the vertical slice in plan order; do not start provider coordination, URL-audit behavior, or mobile clients.
+1. Verify, commit, and push the REUSE correction; fast-forward it into the isolated O3 worktree.
+2. Execute vertical-slice Task 1 red-first under the selected subagent-driven workflow.
+3. Continue the plan in order; do not start provider coordination, URL-audit behavior, or mobile clients.
