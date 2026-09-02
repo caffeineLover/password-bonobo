@@ -6,6 +6,7 @@ source pathname before suspension so no locked session property is accessed.
 
 import os
 from collections.abc import Callable, Iterator
+from contextlib import suppress
 from dataclasses import asdict
 from multiprocessing import get_context
 from multiprocessing.connection import Connection
@@ -82,6 +83,112 @@ class _FailingLockScope:
     ####
     def __exit__(self, *_args: object) -> Literal[False]:
         return False
+
+
+
+#### Delegate retained-directory operations while controlling the final identity check.
+####
+class _FinalIdentityAnchor:
+    __slots__ = ("_anchor", "_stable", "stable_calls")
+
+
+
+    #### Retain the production anchor and one deterministic final-check outcome.
+    ####
+    def __init__(self, anchor: _PublicationAnchor, stable: Callable[[], bool]) -> None:
+        self._anchor = anchor
+        self._stable = stable
+        self.stable_calls = 0
+
+
+
+    #### Stream names from the retained production directory identity.
+    ####
+    def iter_child_names(self) -> Iterator[str]:
+        return self._anchor.iter_child_names()
+
+
+
+    #### Delegate persistent child creation to the retained production anchor.
+    ####
+    def create_persistent(self, name: str) -> tuple[int, tuple[int, int], str | None] | None:
+        return self._anchor.create_persistent(name)
+
+
+
+    #### Delegate read-only child opening to the retained production anchor.
+    ####
+    def open_child(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        return self._anchor.open_child(name)
+
+
+
+    #### Delegate replace-capable child opening to the retained production anchor.
+    ####
+    def open_child_for_replace(self, name: str) -> tuple[int, tuple[int, int]] | None:
+        return self._anchor.open_child_for_replace(name)
+
+
+
+    #### Delegate retained child privacy validation without reopening its pathname.
+    ####
+    def private_child_is_safe(self, descriptor: int, identity: tuple[int, int]) -> bool:
+        return self._anchor.private_child_is_safe(descriptor, identity)
+
+
+
+    #### Delegate exact retained-child replacement to the production anchor.
+    ####
+    def replace_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        return self._anchor.replace_child(descriptor, identity, source_name, destination_name)
+
+
+
+    #### Delegate absent-only retained-child publication to the production anchor.
+    ####
+    def publish_new_child(
+        self,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        return self._anchor.publish_new_child(descriptor, identity, source_name, destination_name)
+
+
+
+    #### Delegate exact retained-child removal to the production anchor.
+    ####
+    def remove_if_same(self, descriptor: int, name: str, identity: tuple[int, int]) -> bool:
+        return self._anchor.remove_if_same(descriptor, name, identity)
+
+
+
+    #### Return only the injected outcome and count each final authorization attempt.
+    ####
+    def stable(self) -> bool:
+        self.stable_calls += 1
+        return self._stable()
+
+
+
+    #### Delegate directory synchronization to the retained production anchor.
+    ####
+    def synchronize(self) -> None:
+        self._anchor.synchronize()
+
+
+
+    #### Release the retained production directory identity.
+    ####
+    def close(self) -> None:
+        self._anchor.close()
 
 
 
@@ -460,6 +567,313 @@ def test_suspend_process_lock_cleanup_failure_locks_with_selector(
         assert str(private_path) not in repr(committed_context)
         committed_context = committed_context.__context__
     monkeypatch.undo()
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
+#### Treat destination-lock teardown after exact discard as committed success.
+####
+@pytest.mark.parametrize("stage", ["unlock", "close"])
+def test_committed_discard_ignores_destination_lock_teardown_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    suspended = service.suspend(_dirty_session(service, source))
+    private_path = tmp_path / "pending-working" / ".fabricated-private.lock"
+    _install_process_lock_fault(monkeypatch, stage, private_path)
+
+    try:
+        service.discard_suspended(source, suspended)
+    finally:
+        monkeypatch.undo()
+
+    with pytest.raises(StorageError):
+        service._pending.verify(source, suspended)
+
+
+
+#### Retain the exact selector after every explicit-discard precommit failure.
+####
+@pytest.mark.parametrize("stage", ["acquire", "chmod", "lookup", "removal"])
+def test_failed_explicit_discard_before_commit_retains_exact_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    suspended = service.suspend(_dirty_session(service, source))
+    private_path = tmp_path / "pending-working" / ".fabricated-private.lock"
+
+
+
+    #### Raise one raw lookup failure before any pending state can be hidden.
+    ####
+    def fail_lookup(
+        _store: PendingSessionStore,
+        _source: Path,
+        _suspended: SuspendedSession,
+    ) -> _LocatedPending:
+        raise OSError(f"fabricated lookup failure at {private_path}")
+
+    if stage in ("acquire", "chmod"):
+        _install_process_lock_fault(monkeypatch, stage, private_path)
+    elif stage == "lookup":
+        monkeypatch.setattr(PendingSessionStore, "_find_locked", fail_lookup)
+    else:
+        service._pending.faults.raise_at(PendingStage.CLEANUP)
+
+    with pytest.raises(StorageError) as captured:
+        service.discard_suspended(source, suspended)
+
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(private_path) not in str(captured.value)
+    assert str(private_path) not in repr(captured.value)
+    assert suspended.identifier not in repr(captured.value)
+    monkeypatch.undo()
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+    with pytest.raises(StorageError):
+        service._pending.verify(source, suspended)
+
+
+
+#### Authorize every completed retained-directory scan against its current path.
+####
+@pytest.mark.parametrize("final_outcome", ["false", "error"])
+@pytest.mark.parametrize(
+    ("operation", "scan_outcome"),
+    [
+        ("guard-open-alias", "positive-match"),
+        ("publish-alias", "positive-match"),
+        ("publish-new", "absence"),
+        ("open", "selected-match"),
+        ("verify", "selected-match"),
+        ("discard", "selected-match"),
+    ],
+)
+def test_complete_pending_scans_require_final_current_anchor_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    scan_outcome: str,
+    final_outcome: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    source_session = _dirty_session(service, source)
+    alias = tmp_path / "fabricated-source-alias.psafe3"
+    alias_session: VaultSession | None = None
+    new_source = tmp_path / "fabricated-new-source.psafe3"
+    new_session: VaultSession | None = None
+    if operation in ("guard-open-alias", "publish-alias"):
+        os.link(source, alias)
+    if operation == "publish-alias":
+        alias_session = service.open(alias, SecretBuffer.from_bytes(b"fabricated-pending-master"))
+        alias_session.add(
+            NewRecord(
+                UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+                "Alias final-anchor edit",
+                SecretBuffer.from_bytes(b"fabricated-alias-final-anchor-secret"),
+            ),
+            alias_session.revision,
+        )
+    if operation == "publish-new":
+        new_session = _dirty_session(service, new_source)
+    suspended = service.suspend(source_session)
+    private_path = tmp_path / "pending-private"
+    production_open = pending_module._open_private_anchor
+    wrapped: list[_FinalIdentityAnchor] = []
+    unexpected_suspended: SuspendedSession | None = None
+    entered_guard = False
+
+
+
+    #### Return the selected false or raw path-bearing final-check outcome.
+    ####
+    def fail_final_identity() -> bool:
+        if final_outcome == "error":
+            raise OSError(f"fabricated final identity failure at {private_path}")
+        return False
+
+
+
+    #### Wrap each production anchor without altering any operation except stable.
+    ####
+    def open_failing_anchor(path: Path) -> _PublicationAnchor:
+        wrapper = _FinalIdentityAnchor(production_open(path), fail_final_identity)
+        wrapped.append(wrapper)
+        return wrapper
+
+    monkeypatch.setattr(pending_module, "_open_private_anchor", open_failing_anchor)
+    try:
+        with pytest.raises(StorageError) as captured:
+            if operation == "guard-open-alias":
+                with service._pending.guard_open(alias):
+                    entered_guard = True
+            elif operation == "publish-alias":
+                assert alias_session is not None
+                unexpected_suspended = service.suspend(alias_session)
+            elif operation == "publish-new":
+                assert new_session is not None
+                unexpected_suspended = service.suspend(new_session)
+            elif operation == "open":
+                service._pending.open(source, suspended).snapshot.close()
+            elif operation == "verify":
+                service._pending.verify(source, suspended)
+            else:
+                service._pending.discard(source, suspended)
+    finally:
+        monkeypatch.undo()
+        if unexpected_suspended is not None:
+            cleanup_source = alias if operation == "publish-alias" else new_source
+            with suppress(StorageError):
+                service.discard_suspended(cleanup_source, unexpected_suspended)
+        if alias_session is not None and not alias_session.locked:
+            alias_session.discard_and_lock()
+        if new_session is not None and not new_session.locked:
+            new_session.discard_and_lock()
+
+    assert not entered_guard
+    assert sum(anchor.stable_calls for anchor in wrapped) == 1, (
+        f"{operation}:{scan_outcome} did not perform exactly one final authorization"
+    )
+    assert captured.value.reason == StorageReason.VERIFICATION_FAILED.value
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(private_path) not in str(captured.value)
+    assert str(private_path) not in repr(captured.value)
+    assert suspended.identifier not in str(captured.value)
+    assert suspended.identifier not in repr(captured.value)
+    assert len(tuple(private_path.glob(".bonobo-pending-slot-*.slot"))) == 1
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
+#### Reject a decoy opened before the authoritative directory returns to its path.
+####
+@pytest.mark.parametrize("operation", ["alias-open", "alias-suspend"])
+def test_decoy_before_anchor_open_requires_final_current_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    source_session = _dirty_session(service, source)
+    alias = tmp_path / "fabricated-decoy-alias.psafe3"
+    os.link(source, alias)
+    alias_session: VaultSession | None = None
+    if operation == "alias-suspend":
+        alias_session = service.open(alias, SecretBuffer.from_bytes(b"fabricated-pending-master"))
+        alias_session.add(
+            NewRecord(
+                UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+                "Alias decoy edit",
+                SecretBuffer.from_bytes(b"fabricated-alias-decoy-secret"),
+            ),
+            alias_session.revision,
+        )
+    suspended = service.suspend(source_session)
+    pending = tmp_path / "pending-private"
+    substitute = _private_directory(tmp_path, "fabricated-decoy-pending")
+    retained = tmp_path / "fabricated-retained-pending"
+    production_open = pending_module._open_private_anchor
+    armed = True
+    restored = False
+    wrapped: list[_FinalIdentityAnchor] = []
+    unexpected_session: VaultSession | None = None
+    unexpected_suspended: SuspendedSession | None = None
+    passphrase = (
+        SecretBuffer.from_bytes(b"fabricated-pending-master")
+        if operation == "alias-open"
+        else None
+    )
+
+
+
+    #### Restore the real directory to its pathname exactly once.
+    ####
+    def restore_real_directory() -> None:
+        nonlocal restored
+        if restored:
+            return
+        pending.replace(substitute)
+        retained.replace(pending)
+        restored = True
+
+
+
+    #### Restore the current pathname immediately before checking the decoy anchor.
+    ####
+    def restore_then_check(anchor: _PublicationAnchor) -> bool:
+        restore_real_directory()
+        return anchor.stable()
+
+
+
+    #### Open the empty decoy first and expose restoration only at final authorization.
+    ####
+    def open_decoy_anchor(path: Path) -> _PublicationAnchor:
+        nonlocal armed
+        if path != pending or not armed:
+            return production_open(path)
+        armed = False
+        pending.replace(retained)
+        substitute.replace(pending)
+        try:
+            anchor = production_open(path)
+        except BaseException:
+            restore_real_directory()
+            raise
+
+
+
+        #### Bind restoration to this retained decoy's final stable check.
+        ####
+        def final_identity() -> bool:
+            return restore_then_check(anchor)
+
+        wrapper = _FinalIdentityAnchor(anchor, final_identity)
+        wrapped.append(wrapper)
+        return wrapper
+
+    monkeypatch.setattr(pending_module, "_open_private_anchor", open_decoy_anchor)
+    try:
+        with pytest.raises(StorageError) as captured:
+            if operation == "alias-open":
+                assert passphrase is not None
+                unexpected_session = service.open(alias, passphrase)
+            else:
+                assert alias_session is not None
+                unexpected_suspended = service.suspend(alias_session)
+    finally:
+        if not restored:
+            restore_real_directory()
+        monkeypatch.undo()
+        if unexpected_session is not None:
+            unexpected_session.lock()
+        if unexpected_suspended is not None:
+            with suppress(StorageError):
+                service.discard_suspended(alias, unexpected_suspended)
+        if alias_session is not None and not alias_session.locked:
+            alias_session.discard_and_lock()
+
+    if passphrase is not None:
+        assert passphrase.closed
+    assert sum(anchor.stable_calls for anchor in wrapped) == 1
+    assert captured.value.reason == StorageReason.VERIFICATION_FAILED.value
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert str(pending) not in repr(captured.value)
+    assert suspended.identifier not in repr(captured.value)
+    assert len(tuple(pending.glob(".bonobo-pending-slot-*.slot"))) == 1
     service._pending.verify(source, suspended)
     service.discard_suspended(source, suspended)
 

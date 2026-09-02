@@ -458,17 +458,19 @@ class PendingSessionStore:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
         _validate_suspended(suspended)
-        boundary = _ClosedPendingBoundary()
-        with boundary, self._lock, _destination_lock(
-            self._snapshot_directory, source
-        ):
-            located: _LocatedPending | None = None
-            try:
+        committed = False
+        failure: BaseException | None = None
+        try:
+            with self._lock, _destination_lock(self._snapshot_directory, source):
                 located = self._find_locked(source, suspended)
                 self._discard_locked(located)
-            except BaseException as error:
-                _raise_closed_pending_error(error)
-        boundary.raise_if_failed()
+                committed = True
+        except BaseException as error:
+            failure = error
+        if committed:
+            return
+        if failure is not None:
+            _raise_closed_pending_error(failure)
 
 
 
@@ -876,6 +878,7 @@ class PendingSessionStore:
         expected_slot_name: str,
         source_baseline: FileBaseline,
     ) -> bool:
+        found = False
         for slot_name in _slot_names(anchor):
             located = self._read_located(anchor, slot_name, close_anchor=False)
             if located is None:
@@ -885,10 +888,11 @@ class PendingSessionStore:
                     located.stored.source_baseline,
                     source_baseline,
                 ):
-                    return True
+                    found = True
             finally:
                 _close_located_descriptors(located)
-        return False
+        _require_current_anchor(anchor)
+        return found
 
 
 
@@ -917,6 +921,7 @@ class PendingSessionStore:
                     identity_match = located
                 else:
                     _close_located_descriptors(located)
+            _require_current_anchor(anchor)
             if expected is None:
                 if exact_slot_seen or identity_match is not None:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
@@ -940,7 +945,7 @@ class PendingSessionStore:
     ####
     def _find_locked(self, source: Path, suspended: SuspendedSession) -> _LocatedPending:
         anchor = _open_private_anchor(self._directory)
-        matches: list[_LocatedPending] = []
+        match: _LocatedPending | None = None
         transferred = False
         expected_slot_name = _slot_name(_vault_locator(source))
         expected_slot_seen = False
@@ -952,22 +957,26 @@ class PendingSessionStore:
                     raise StorageError(StorageReason.VERIFICATION_FAILED)
                 if located.stored.suspended.identifier == suspended.identifier:
                     if slot_name != expected_slot_name or located.stored.suspended != suspended:
-                        located.close()
+                        _close_located_descriptors(located)
                         raise StorageError(StorageReason.VERIFICATION_FAILED)
-                    matches.append(located)
+                    if match is not None:
+                        _close_located_descriptors(located)
+                        raise StorageError(StorageReason.VERIFICATION_FAILED)
+                    match = located
                 else:
                     _close_located_descriptors(located)
-            if not matches and not expected_slot_seen:
+            _require_current_anchor(anchor)
+            if match is None and not expected_slot_seen:
                 raise _PendingSlotAbsentError()
-            if len(matches) != 1:
+            if match is None:
                 raise StorageError(StorageReason.VERIFICATION_FAILED)
-            result = matches[0]
+            result = match
             transferred = True
             return result
         finally:
             if not transferred:
-                for located in matches:
-                    _close_located_descriptors(located)
+                if match is not None:
+                    _close_located_descriptors(match)
                 with suppress(BaseException):
                     anchor.close()
 
@@ -1291,6 +1300,18 @@ def _slot_name(locator: str) -> str:
 def _artifact_name(identifier: str) -> str:
     _validate_digest(identifier, "pending identifier")
     return f"{_ARTIFACT_PREFIX}{identifier}{_ARTIFACT_SUFFIX}"
+
+
+
+#### Require the retained directory to remain authoritative after a complete scan.
+####
+def _require_current_anchor(anchor: _PublicationAnchor) -> None:
+    try:
+        stable = anchor.stable()
+    except BaseException:
+        raise StorageError(StorageReason.VERIFICATION_FAILED) from None
+    if stable is not True:
+        raise StorageError(StorageReason.VERIFICATION_FAILED)
 
 
 

@@ -15,18 +15,33 @@ discard cannot leave the facade holding a dead selector.
 
 The executable repair plan is
 `docs/superpowers/plans/2026-09-02-pending-session-transaction-boundaries.md`.
-No implementation has started.  The previous three-round stop was based on an
-outdated workflow limit; the current subagent-driven instructions permit repair
-rounds 4 and 5 with a fresh implementation agent.  The last verified code
-remains `1f928fc` with checkpoint `48933dc`: focused tests pass 148 with 2
-expected skips, the selected suite passes 267 with 9 expected skips, and the
-exact-DLL full suite passes 815 with 14 expected skips.  All recorded static,
-security, legal, audit, tracked-file, and build gates are green.
+Repair round 4 is active from clean base `7fe0e98`.  The pre-change focused
+Task 4 suite passed 148 tests with 2 expected skips in 138.24 seconds.  The
+retained-anchor matrix and deterministic decoy ABA regressions are now RED:
+the prescribed selection reports 14 failures and 67 deselections in 22.81
+seconds because no completed scan performs final current-path authorization.
 
-Immediate next actions are verification and commit of the approved repair plan,
-then Task 4 repair round 4 under the selected subagent-driven workflow.  Do not
-begin Task 5 until Task 4 receives a clean independent review.  Tasks 5 through
-8 remain approved only in that order.
+The one closed final-anchor helper now authorizes all three scan helpers after
+exhaustion.  Its 14 targeted cases pass, and the complete pending-session and
+storage-fault selection passes 102 tests with 2 expected skips in 136.76
+seconds.  The committed-discard RED first reported 2 failures with 5 precommit
+cases passing; the real-service facade RED then reported 2 failures because it
+published a storage failure and retained the dead selector.  The minimal
+discard-only reconciliation records commit after exact removal and ignores only
+later destination-lock teardown.  Direct, precommit-retry, and facade cases
+pass 9 tests in 13.77 seconds.
+
+Repair-round verification is complete.  The focused suite passes 121 tests with
+2 expected skips in 145.48 seconds; the selected suite passes 289 with 9 skips
+in 176.35 seconds; and the exact-DLL full suite passes 837 with 14 skips in
+242.18 seconds at 80% coverage.  Autopep8 diff, Ruff, strict mypy for all 86
+files under win32, darwin, and linux, Python structure, compatibility (66
+behaviors, 45 features, 55 oracles), provenance, Bandit, pip-audit, REUSE
+140/140, tracked-file and whitespace checks, source/wheel build, and wheel
+inspection pass.  The repair commit containing this checkpoint is ready for a
+scoped independent re-review from base `7fe0e98`.  Do not begin Task 5 until
+Task 4 receives a clean independent review.  Tasks 5 through 8 remain approved
+only in that order.
 
 ## Completed Task 4 review-fix round 3
 

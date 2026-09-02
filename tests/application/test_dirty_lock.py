@@ -1,5 +1,9 @@
 """Verify dirty application lock and unlock retain only private suspension state."""
 
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +14,7 @@ from fakes import (
     fabricated_record_view,
 )
 
+import bonobo_core.passwordsafe.storage as storage_module
 from bonobo_core.application.facade import ApplicationCommandError, VaultApplication
 from bonobo_core.application.types import ApplicationPhase
 from bonobo_core.passwordsafe import (
@@ -17,8 +22,122 @@ from bonobo_core.passwordsafe import (
     AuthenticationReason,
     SecretBuffer,
     SuspendedSession,
+    VaultService,
 )
+from bonobo_core.passwordsafe.crypto import TwofishKey
 from bonobo_core.passwordsafe.errors import StorageError, StorageReason
+
+
+
+#### Implement one deterministic reversible block transform for the real-service facade regression.
+####
+class _XorKey:
+    __slots__ = ("_closed", "_mask")
+
+
+
+    #### Retain one fabricated mask for the lifetime of this test key.
+    ####
+    def __init__(self, key_material: SecretBuffer) -> None:
+        self._mask = bytes(key_material.borrow()[:16])
+        self._closed = False
+
+
+
+    #### Apply the reversible fabricated transform to one exact block.
+    ####
+    def encrypt_block(self, block: bytes) -> bytes:
+        if self._closed:
+            raise RuntimeError("test key is closed")
+        return bytes(value ^ self._mask[index] for index, value in enumerate(block))
+
+
+
+    #### Reverse the same fabricated block transform.
+    ####
+    def decrypt_block(self, block: bytes) -> bytes:
+        return self.encrypt_block(block)
+
+
+
+    #### Make this test key terminal at backend context exit.
+    ####
+    def close(self) -> None:
+        self._closed = True
+
+
+
+#### Supply the deterministic test cipher through the production protocol.
+####
+class _XorBackend:
+
+
+
+    #### Yield one scoped key and close it after the codec operation.
+    ####
+    @contextmanager
+    def key(self, key_material: SecretBuffer) -> Iterator[TwofishKey]:
+        key = _XorKey(key_material)
+        try:
+            yield key
+        finally:
+            key.close()
+
+
+
+    #### Complete the fake backend gate without claiming production suitability.
+    ####
+    def self_test(self) -> None:
+        return None
+
+
+
+#### Inject one post-commit process-lock teardown failure through production locking.
+####
+def _install_process_lock_teardown_fault(
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    private_path: Path,
+) -> None:
+    lock_name = "_lock_windows_descriptor" if os.name == "nt" else "_lock_posix_descriptor"
+    unlock_name = "_unlock_windows_descriptor" if os.name == "nt" else "_unlock_posix_descriptor"
+
+
+
+    #### Raise one raw private-path failure from the selected native seam.
+    ####
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError(f"fabricated {stage} failure at {private_path}")
+
+    if stage == "unlock":
+        monkeypatch.setattr(storage_module, unlock_name, fail)
+        return
+    if stage != "close":
+        raise AssertionError("unsupported fabricated lock teardown stage")
+    production_lock = getattr(storage_module, lock_name)
+    production_close = os.close
+    selected_descriptor = -1
+
+
+
+    #### Remember only the descriptor which successfully obtained the process lock.
+    ####
+    def remember_lock(descriptor: int) -> None:
+        nonlocal selected_descriptor
+        production_lock(descriptor)
+        selected_descriptor = descriptor
+
+
+
+    #### Close the real descriptor, then surface the fabricated close failure.
+    ####
+    def fail_selected_close(descriptor: int) -> None:
+        production_close(descriptor)
+        if descriptor == selected_descriptor:
+            raise OSError(f"fabricated close failure at {private_path}")
+
+    monkeypatch.setattr(storage_module, lock_name, remember_lock)
+    monkeypatch.setattr(os, "close", fail_selected_close)
 
 
 
@@ -187,6 +306,48 @@ def test_failed_explicit_discard_stays_locked_and_can_retry() -> None:
     assert retried.phase is ApplicationPhase.LOCKED
     assert retried.failure is None
     assert service.discard_suspended_calls == 2
+
+
+
+#### Clear committed pending state after destination-lock teardown fails.
+####
+@pytest.mark.parametrize("stage", ["unlock", "close"])
+def test_committed_discard_teardown_failure_clears_facade_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    working = tmp_path / "pending-working"
+    working.mkdir(mode=0o700)
+    working.chmod(0o700)
+    pending = tmp_path / "pending-private"
+    pending.mkdir(mode=0o700)
+    pending.chmod(0o700)
+    service = VaultService(
+        _XorBackend(),
+        working,
+        pending,
+    )
+    app = VaultApplication(service)
+    source = tmp_path / "fabricated-vault.psafe3"
+    opened = app.create(source, SecretBuffer.from_bytes(b"fabricated"), "Fabricated")
+    draft = replace(app.begin_edit(None, opened.generation), title="Unsaved pending title")
+    changed = app.commit_edit(draft, SecretBuffer.from_bytes(b"fabricated-pending-credential"))
+    locked = app.lock(changed.generation)
+    private_path = working / ".fabricated-private.lock"
+    _install_process_lock_teardown_fault(monkeypatch, stage, private_path)
+
+    discarded = app.discard_suspended(locked.generation)
+    monkeypatch.undo()
+
+    assert discarded.phase is ApplicationPhase.LOCKED
+    assert not discarded.dirty
+    assert discarded.records == ()
+    assert discarded.failure is None
+    replacement_passphrase = SecretBuffer.from_bytes(b"fabricated-replacement")
+    replaced = app.create(tmp_path / "fabricated-replacement.psafe3", replacement_passphrase, "Replacement")
+    assert replacement_passphrase.closed
+    assert replaced.phase is ApplicationPhase.UNLOCKED_CLEAN
 
 
 
