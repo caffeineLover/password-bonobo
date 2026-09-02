@@ -40,9 +40,17 @@ Tracked-file policy is clean, REUSE reports 174/174 compliant, and staged plus
 unstaged whitespace checks are clean.  Exact-diff self-review confirms only the
 controller, controller regressions, and this memory are tracked candidates.
 
-The exact next action is the controller's complete final verification on the
-committed branch, followed by branch-finishing options if every gate remains
-green.  Merge and publication remain prohibited until the user selects an
+Independent scoped re-review confirms both findings are addressed with no new
+Critical or Important breakage.  Controller final verification on commit
+`9668ad3` collects 946 tests: 932 pass and 14 declared platform skips, with 80%
+coverage.  Ruff, strict mypy under default/win32/darwin/linux, Python structure,
+QML lint, deployment dry run, document policy, compatibility 66/45/55,
+provenance, tracked-file policy, Bandit, pip-audit, REUSE 174/174, source/wheel
+build and inspection, formatting, and whitespace all exit zero.
+
+The branch is ready for the finishing workflow, subject to the user's
+integration choice and hosted Windows/macOS/Linux evidence after any authorized
+push.  Merge and publication remain prohibited until the user selects an
 integration option.
 
 Hosted Windows/macOS/Linux deployment evidence and the local optional-project /
