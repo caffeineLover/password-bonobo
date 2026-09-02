@@ -33,16 +33,24 @@ pass, and Windows and macOS pass the same desktop/deployment gates.  Ubuntu's
 later full suite reproduces the macOS pending-session result exactly: 71
 failures share the first POSIX pending publication as their root, after 853
 passes and 23 expected skips.  The safe public exception projection intentionally
-hides the underlying native exception, so a direct retained-anchor regression
-now isolates create/write/fsync/absent-only publish and retained-descriptor read.
-It passes on Windows and is added as an early matrix probe before the native
-deployment step.
+hides the underlying native exception, so commit `9c6b1b0` adds a direct retained-
+anchor regression that isolates create/write/fsync/absent-only publish and
+retained-descriptor read.  Hosted diagnostic run `33686744747` passes that probe
+on both Ubuntu and macOS and reaches the later full suite, proving the basic POSIX
+anchor operation is not the failing boundary.
 
-The exact immediate actions are to push that diagnostic regression, observe its
-direct Ubuntu/macOS failure, correct only the proven POSIX native boundary under
-red-first coverage, and monitor a replacement foundation run until all three
-desktop jobs and both mobile jobs reach terminal status.  After hosted success,
-record that exact run here.
+The current diagnostic extends the early matrix probe across the complete
+suspend transaction.  It records only boundary operation names, closed
+outcomes, exception classes, and numeric errno values; it does not retain paths
+or native messages.  The probe passes locally on Windows, Ruff passes its file,
+and strict mypy passes all 110 source files.
+
+The exact immediate actions are to publish the expanded transaction trace,
+observe its Ubuntu/macOS event sequence, identify the single failing boundary,
+then add a red-first behavioral regression and correct only the proven root
+cause.  Monitor the resulting foundation run until all three desktop jobs and
+both mobile jobs reach terminal status.  After hosted success, record that exact
+run here.
 Packaged native artifacts, installers, signing, provider work, URL audit,
 mobile clients, settings, and advanced vault workflows remain outside this
 completed vertical slice.

@@ -290,6 +290,142 @@ def test_native_anchor_publishes_staged_child_by_retained_identity(tmp_path: Pat
 
 
 
+#### Surface only boundary names and closed outcomes when native pending publication fails.
+####
+def test_native_pending_publication_completes_across_platforms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    probe_directory = _private_directory(tmp_path, "trace-anchor")
+    probe_anchor = _open_private_anchor(probe_directory)
+    anchor_type = type(probe_anchor)
+    probe_anchor.close()
+    production_publish = anchor_type.publish_new_child
+    production_synchronize = anchor_type.synchronize
+    production_open = anchor_type.open_child_for_replace
+    production_remove = anchor_type.remove_if_same
+    production_read = PendingSessionStore._read_located
+    production_candidate_cleanup = pending_module._remove_candidate_if_same
+
+
+
+    #### Record one absent-only native publication without retaining names or paths.
+    ####
+    def trace_publish(
+        anchor: _PublicationAnchor,
+        descriptor: int,
+        identity: tuple[int, int],
+        source_name: str,
+        destination_name: str,
+    ) -> bool:
+        try:
+            result = production_publish(anchor, descriptor, identity, source_name, destination_name)
+        except OSError as error:
+            events.append(f"publish:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append(f"publish:{result}")
+        return result
+
+
+
+    #### Record retained-directory synchronization without exposing native messages.
+    ####
+    def trace_synchronize(anchor: _PublicationAnchor) -> None:
+        try:
+            production_synchronize(anchor)
+        except OSError as error:
+            events.append(f"synchronize:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append("synchronize:ok")
+
+
+
+    #### Record whether native identity-bound child opening finds a result.
+    ####
+    def trace_open(
+        anchor: _PublicationAnchor,
+        name: str,
+    ) -> tuple[int, tuple[int, int]] | None:
+        try:
+            result = production_open(anchor, name)
+        except OSError as error:
+            events.append(f"open:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append("open:hit" if result is not None else "open:miss")
+        return result
+
+
+
+    #### Record exact-identity removal outcomes without exposing a child name.
+    ####
+    def trace_remove(
+        anchor: _PublicationAnchor,
+        descriptor: int,
+        name: str,
+        identity: tuple[int, int],
+    ) -> bool:
+        try:
+            result = production_remove(anchor, descriptor, name, identity)
+        except OSError as error:
+            events.append(f"remove:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append(f"remove:{result}")
+        return result
+
+
+
+    #### Record whether post-publication slot resolution succeeds or raises.
+    ####
+    def trace_read(
+        store: PendingSessionStore,
+        anchor: _PublicationAnchor,
+        slot_name: str,
+        *,
+        close_anchor: bool = True,
+    ) -> _LocatedPending | None:
+        try:
+            result = production_read(store, anchor, slot_name, close_anchor=close_anchor)
+        except BaseException as error:
+            events.append(f"read:error:{type(error).__name__}")
+            raise
+        events.append("read:hit" if result is not None else "read:miss")
+        return result
+
+
+
+    #### Record candidate cleanup as the transaction's final native boundary.
+    ####
+    def trace_candidate_cleanup(path: Path, baseline: FileBaseline) -> bool:
+        try:
+            result = production_candidate_cleanup(path, baseline)
+        except BaseException as error:
+            events.append(f"candidate-cleanup:error:{type(error).__name__}")
+            raise
+        events.append(f"candidate-cleanup:{result}")
+        return result
+
+    monkeypatch.setattr(anchor_type, "publish_new_child", trace_publish)
+    monkeypatch.setattr(anchor_type, "synchronize", trace_synchronize)
+    monkeypatch.setattr(anchor_type, "open_child_for_replace", trace_open)
+    monkeypatch.setattr(anchor_type, "remove_if_same", trace_remove)
+    monkeypatch.setattr(PendingSessionStore, "_read_located", trace_read)
+    monkeypatch.setattr(pending_module, "_remove_candidate_if_same", trace_candidate_cleanup)
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-traced-source.psafe3"
+    session = _dirty_session(service, source)
+    events.clear()
+
+    try:
+        suspended = service.suspend(session)
+    except StorageError as error:
+        pytest.fail(f"native pending trace {events!r}; projected={error.reason}")
+
+    assert session.locked
+    assert isinstance(suspended, SuspendedSession)
+
+
+
 #### Hold one pending open guard in a spawned process until its parent releases it.
 ####
 def _hold_pending_identity_guard(
