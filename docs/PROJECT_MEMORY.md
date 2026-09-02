@@ -18,9 +18,10 @@ controller-shutdown failure.  Focused controller tests now pass 10, and the
 complete offscreen desktop suite passes 22.  Scoped Ruff, strict mypy over 15
 files, Python structure, REUSE 156/156, and whitespace checks pass.  The Task 6
 report contains exact commands, outputs, implementation details, and self-review.
-This checkpoint is included in the separate review-fix commit.  Exact next
-action: return that commit for review.  Task 7 remains the next approved
-implementation only after Task 6 review accepts the fix; Task 8 follows Task 7.
+This checkpoint is included in the separate review-fix commit.  Scoped
+independent re-review confirms all four Important findings are addressed with
+no new breakage or out-of-scope observation.  Task 6 is complete through
+`be51cb3`; the exact next action is Task 7, followed by Task 8.
 
 ## Completed Task 6 Qt adapter checkpoint
 
