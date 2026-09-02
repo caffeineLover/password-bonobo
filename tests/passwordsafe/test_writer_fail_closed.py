@@ -709,6 +709,123 @@ def test_candidate_replacement_after_reopen_is_rejected(
 
 
 
+#### Close a newly opened identity guard when validation is interrupted.
+####
+def test_candidate_guard_closes_when_identity_check_is_interrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_directory = _private_directory(tmp_path, "candidates")
+    artifact, output = writer_module._open_candidate(candidate_directory)
+    production_identity = writer_module._descriptor_identity
+    production_open = writer_module._open_candidate_descriptor
+    retained_descriptor: int | None = None
+
+
+
+    #### Capture the platform-specific guard descriptor before validation.
+    ####
+    def observe_open(selected_artifact: writer_module._CandidateArtifact, selected_output: BinaryIO) -> int:
+        nonlocal retained_descriptor
+        retained_descriptor = production_open(selected_artifact, selected_output)
+        return retained_descriptor
+
+    monkeypatch.setattr(writer_module, "_open_candidate_descriptor", observe_open)
+
+
+
+    #### Interrupt only validation of the newly retained descriptor.
+    ####
+    def interrupt_retained_identity(descriptor: int) -> tuple[int, int]:
+        if descriptor == retained_descriptor:
+            raise KeyboardInterrupt("identity validation interrupted")
+        return production_identity(descriptor)
+
+    monkeypatch.setattr(writer_module, "_descriptor_identity", interrupt_retained_identity)
+    descriptor_closed = False
+    try:
+        with output, pytest.raises(KeyboardInterrupt):
+            writer_module._retain_candidate_descriptor(artifact, output)
+        assert retained_descriptor is not None
+        try:
+            os.fstat(retained_descriptor)
+        except OSError:
+            descriptor_closed = True
+        assert descriptor_closed
+    finally:
+        if retained_descriptor is not None and not descriptor_closed:
+            os.close(retained_descriptor)
+        artifact.path.unlink(missing_ok=True)
+
+
+
+#### Close the retained identity guard even when pathname removal is interrupted.
+####
+def test_candidate_guard_closes_when_removal_is_interrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = _XorBackend()
+    reader, opened, _source = _opened_source(tmp_path, backend)
+    candidate_directory = _private_directory(tmp_path, "candidates")
+    writer = PasswordSafeWriter(
+        backend,
+        reader,
+        candidate_directory,
+        random_source=DeterministicRandomSource(bytes(index % 149 for index in range(8192))),
+    )
+    production_retain = writer_module._retain_candidate_descriptor
+    retained_descriptor: int | None = None
+
+
+
+    #### Capture the real retained descriptor before candidate authentication.
+    ####
+    def observe_retain(artifact: writer_module._CandidateArtifact, output: BinaryIO) -> int:
+        nonlocal retained_descriptor
+        retained_descriptor = production_retain(artifact, output)
+        return retained_descriptor
+
+
+
+    #### Cause the handled validation failure that initiates cleanup.
+    ####
+    def reject_candidate(
+        _reader: PasswordSafeReader,
+        _path: Path,
+        _crypto_state: VaultCryptoState,
+    ) -> None:
+        raise IntegrityError(IntegrityReason.HMAC_MISMATCH)
+
+
+
+    #### Interrupt pathname cleanup after the retained descriptor exists.
+    ####
+    def interrupt_removal(_artifact: writer_module._CandidateArtifact) -> bool:
+        raise KeyboardInterrupt("candidate removal interrupted")
+
+    monkeypatch.setattr(writer_module, "_retain_candidate_descriptor", observe_retain)
+    monkeypatch.setattr(PasswordSafeReader, "reopen_candidate", reject_candidate)
+    monkeypatch.setattr(writer_module._CandidateArtifact, "remove", interrupt_removal)
+    descriptor_closed = False
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            writer.write(opened.document, opened.crypto_state)
+        assert retained_descriptor is not None
+        try:
+            os.fstat(retained_descriptor)
+        except OSError:
+            descriptor_closed = True
+        assert descriptor_closed
+    finally:
+        if retained_descriptor is not None and not descriptor_closed:
+            os.close(retained_descriptor)
+        for path in candidate_directory.iterdir():
+            path.unlink()
+        opened.close()
+
+
+
 #### Surface candidate cleanup failure instead of reporting the earlier fault.
 ####
 def test_cleanup_failure_is_observable(

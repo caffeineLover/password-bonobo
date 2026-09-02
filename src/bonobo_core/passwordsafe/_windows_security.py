@@ -402,7 +402,7 @@ def _file_identity(handle: wintypes.HANDLE) -> tuple[int, int] | None:
 
 
 
-#### Require current ownership and a protected DACL containing no broad trustee.
+#### Require private ownership and a protected DACL containing no broad trustee.
 ####
 def _handle_is_private(handle: wintypes.HANDLE) -> bool:
     current = _current_sid()
@@ -425,7 +425,7 @@ def _handle_is_private(handle: wintypes.HANDLE) -> bool:
     if status != 0 or not descriptor.value or not owner.value or not dacl.value:
         return False
     try:
-        if _sid_string(owner) != current_sid:
+        if _sid_string(owner) not in {current_sid, "S-1-5-32-544"}:
             return False
         control = wintypes.WORD()
         revision = wintypes.DWORD()

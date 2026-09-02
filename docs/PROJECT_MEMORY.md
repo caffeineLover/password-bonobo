@@ -219,7 +219,21 @@ creation. Windows rejects the fresh `0o700` directory because the elevated runne
 the owner even though CPython's protected DACL contains only owner rights, SYSTEM, and Administrators. Ubuntu's first
 failure expects `StorageError` where a successful directory retarget correctly raises `ExternalModificationError`.
 Its second failure exposes an inode-reuse ABA: cleanup can unlink a replacement candidate when the original inode was
-released and immediately reused. These diagnoses await an approved bounded repair design.
+released and immediately reused. The approved bounded repair is implemented in worktree branch
+`fix/desktop-private-artifacts` and awaits final review, integration, publication, and hosted proof.
+
+The desktop repair retains an open candidate identity through authentication and failure cleanup, accepts the
+administrator owner only while preserving the protected Windows DACL and exact ACE allowlist, corrects the successful
+POSIX retarget regression to require `ExternalModificationError`, and gives only the macOS pytest process a newly
+created ACL-free temporary root. Production macOS ACL rejection is unchanged. A red Windows native regression proved
+the ownership boundary before implementation. The focused five-test selection passed four tests with one expected
+Windows rename skip. Review then identified and closed one Important `BaseException` descriptor-leak path during guard
+validation or candidate removal; two red-first interruption regressions cover both boundaries, and follow-up review
+found no remaining Critical or Important code issue. The current-head full Windows/CPython 3.14.7 suite reports 657
+passed, 12 expected skips, 79% coverage, and zero failures in 108.71 seconds. Autopep8, Ruff, Python structure, YAML
+parsing, compatibility, provenance, tracked-file,
+Bandit, pip-audit, REUSE 119/119, source/wheel build, wheel inspection, whitespace, and strict mypy under Darwin,
+Windows, and Linux profiles all pass.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -248,12 +262,14 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33576400850` passes Android and proves Ubuntu discovery fixed, but all three desktop jobs fail in pytest
-  for the bounded ACL/test/ABA causes recorded above. iOS still lacks C++ runtime symbols during its static archive link.
+- Hosted run `33576400850` passes Android and proves Ubuntu discovery fixed. Its bounded desktop failures have a locally
+  verified repair awaiting publication and hosted proof. iOS still lacks C++ runtime symbols during its static archive
+  link.
 
 ## Exact continuation order after this checkpoint
 
-1. Obtain approval for the bounded desktop repair design, implement it red-first, and verify all three desktop jobs.
-2. Repair and verify the iOS C++ runtime link.
+1. Review and commit `fix/desktop-private-artifacts`, fast-forward it into `main`, push, and verify all three hosted
+   desktop jobs; fix any bounded regression before proceeding.
+2. Repair and verify the iOS C++ runtime link, then push and observe the hosted cross-build.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

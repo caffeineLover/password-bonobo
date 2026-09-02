@@ -30,7 +30,19 @@ jobs:
       - run: git diff --exit-code -- src tests tools
       - run: uv run ruff check src tests tools
       - run: uv run mypy src tests tools
-      - run: uv run python -m pytest
+      - name: Run tests
+        shell: pwsh
+        run: |
+          if ("${{ runner.os }}" -eq "macOS") {
+            $testTemp = & mktemp -d /tmp/password-bonobo-pytest.XXXXXX
+            if (-not $testTemp -or $LASTEXITCODE -ne 0) { throw "could not create the macOS test temporary root" }
+            & chmod -N $testTemp
+            if ($LASTEXITCODE -ne 0) { throw "could not clear the macOS test temporary-root ACL" }
+            & chmod 700 $testTemp
+            if ($LASTEXITCODE -ne 0) { throw "could not secure the macOS test temporary root" }
+            $env:TMPDIR = $testTemp
+          }
+          uv run python -m pytest
         env:
           BONOBO_TEST_BOTAN_LIBRARY: ${{ steps.botan.outputs.library }}
       - run: uv run python -m tools.check_python_structure src tests tools

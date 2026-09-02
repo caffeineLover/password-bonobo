@@ -72,6 +72,102 @@ def test_snapshot_file_has_protected_owner_only_windows_dacl(tmp_path: Path) -> 
 
 
 
+#### Accept the administrator owner used by elevated CPython 0o700 creation.
+####
+@pytest.mark.skipif(os.name != "nt", reason="Windows DACL behavior")
+def test_windows_private_handle_accepts_protected_administrator_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _windows_security
+
+    current_sid = "S-1-5-21-1000"
+    sid_buffer = ctypes.create_string_buffer(1)
+    ace = _windows_security._AccessAllowedAce()
+    ace.Header.AceType = _windows_security._ACCESS_ALLOWED_ACE_TYPE
+    ace.Header.AceFlags = 0
+    ace.Header.AceSize = ctypes.sizeof(ace)
+    ace.Mask = _windows_security._FILE_ALL_ACCESS
+    rendered_sids = iter(("S-1-5-32-544", "S-1-3-4"))
+
+
+
+    #### Return non-null owner, DACL, and descriptor pointers.
+    ####
+    def get_security_info(
+        _handle: wintypes.HANDLE,
+        _object_type: int,
+        _security_information: int,
+        owner_output: ctypes.c_void_p,
+        _group_output: object,
+        dacl_output: ctypes.c_void_p,
+        _sacl_output: object,
+        descriptor_output: ctypes.c_void_p,
+    ) -> int:
+        ctypes.cast(owner_output, ctypes.POINTER(wintypes.LPVOID)).contents.value = 0x1000
+        ctypes.cast(dacl_output, ctypes.POINTER(wintypes.LPVOID)).contents.value = 0x2000
+        ctypes.cast(descriptor_output, ctypes.POINTER(wintypes.LPVOID)).contents.value = 0x3000
+        return 0
+
+
+
+    #### Report one protected DACL through the native control query.
+    ####
+    def get_security_descriptor_control(
+        _descriptor: wintypes.LPVOID,
+        control_output: ctypes.c_void_p,
+        revision_output: ctypes.c_void_p,
+    ) -> bool:
+        ctypes.cast(control_output, ctypes.POINTER(wintypes.WORD)).contents.value = (
+            _windows_security._SE_DACL_PROTECTED
+        )
+        ctypes.cast(revision_output, ctypes.POINTER(wintypes.DWORD)).contents.value = 1
+        return True
+
+
+
+    #### Report exactly one access-control entry.
+    ####
+    def get_acl_information(
+        _dacl: wintypes.LPVOID,
+        information_output: ctypes.c_void_p,
+        _information_size: int,
+        _information_class: int,
+    ) -> bool:
+        information = ctypes.cast(
+            information_output,
+            ctypes.POINTER(_windows_security._AclSizeInformation),
+        ).contents
+        information.AceCount = 1
+        return True
+
+
+
+    #### Return the retained owner-rights ACE address.
+    ####
+    def get_ace(_dacl: wintypes.LPVOID, _index: int, ace_output: ctypes.c_void_p) -> bool:
+        ctypes.cast(ace_output, ctypes.POINTER(wintypes.LPVOID)).contents.value = ctypes.addressof(ace)
+        return True
+
+    monkeypatch.setattr(
+        _windows_security,
+        "_current_sid",
+        lambda: (sid_buffer, wintypes.LPVOID(1), current_sid),
+    )
+    monkeypatch.setattr(_windows_security, "_sid_string", lambda _sid: next(rendered_sids))
+    monkeypatch.setattr(_windows_security._ADVAPI32, "GetSecurityInfo", get_security_info)
+    monkeypatch.setattr(
+        _windows_security._ADVAPI32,
+        "GetSecurityDescriptorControl",
+        get_security_descriptor_control,
+    )
+    monkeypatch.setattr(_windows_security._ADVAPI32, "GetAclInformation", get_acl_information)
+    monkeypatch.setattr(_windows_security._ADVAPI32, "GetAce", get_ace)
+    monkeypatch.setattr(_windows_security._KERNEL32, "LocalFree", lambda _descriptor: None)
+
+    assert _windows_security._handle_is_private(wintypes.HANDLE(1))
+
+
+
 #### Delete every exclusively created child when post-create verification fails.
 ####
 @pytest.mark.skipif(os.name != "nt", reason="Windows owned-handle cleanup")

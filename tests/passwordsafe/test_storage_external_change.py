@@ -168,12 +168,13 @@ def test_destination_directory_retarget_before_replace_is_rejected(
 
     monkeypatch.setattr(LocalVaultStore, "_create_recovery", retarget_after_recovery)
 
-    with pytest.raises(StorageError):
+    with pytest.raises((ExternalModificationError, StorageError)) as caught:
         store.publish(destination, case.candidate, baseline)
     if not retargeted:
         case.close()
         pytest.skip("open destination directories cannot be renamed")
 
+    assert isinstance(caught.value, ExternalModificationError)
     assert destination.read_bytes() == original
     assert (moved_directory / destination.name).read_bytes() == original
     case.close()

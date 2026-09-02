@@ -52,6 +52,11 @@ from .secrets import SecretBuffer
 
 
 
+if os.name == "nt":
+    from ._windows_security import open_regular_file
+
+
+
 _MAX_FIELD_BYTES: Final[int] = 0xFFFF_FFFF
 _SALT_ATTEMPTS: Final[int] = 32
 _DEFAULT_LIMITS: Final[ResourceLimits] = ResourceLimits()
@@ -279,6 +284,7 @@ class PasswordSafeWriter:
         artifact: _CandidateArtifact | None = None
         vault_keys: VaultKeys | None = None
         reopened: OpenedVault | None = None
+        retained_descriptor: int | None = None
         succeeded = False
         result: EncryptedCandidate | None = None
         failure: BaseException | None = None
@@ -301,6 +307,7 @@ class PasswordSafeWriter:
                     self._limits,
                 )
                 _flush_and_sync(output)
+                retained_descriptor = _retain_candidate_descriptor(artifact, output)
             reopened = reopen(artifact.path)
             if not documents_equal_exact(
                 document,
@@ -330,7 +337,14 @@ class PasswordSafeWriter:
             if vault_keys is not None:
                 with suppress(BaseException):
                     vault_keys.close()
-            if artifact is not None and not succeeded and not artifact.remove() and isinstance(failure, Exception):
+            cleanup_failed = False
+            try:
+                cleanup_failed = artifact is not None and not succeeded and not artifact.remove()
+            finally:
+                if retained_descriptor is not None:
+                    with suppress(OSError):
+                        os.close(retained_descriptor)
+            if cleanup_failed and isinstance(failure, Exception):
                 raise StorageError(StorageReason.PREPARATION_FAILED) from None
         if failure is not None:
             if isinstance(failure, PasswordSafeError):
@@ -407,6 +421,37 @@ def _path_identity(path: Path) -> tuple[int, int]:
     if not stat.S_ISREG(metadata.st_mode):
         raise OSError
     return metadata.st_dev, metadata.st_ino
+
+
+
+#### Retain the created file identity while authentication may lose its pathname.
+####
+def _retain_candidate_descriptor(artifact: _CandidateArtifact, output: BinaryIO) -> int:
+    descriptor: int | None = None
+    try:
+        descriptor = _open_candidate_descriptor(artifact, output)
+        if _descriptor_identity(descriptor) != artifact.identity:
+            raise OSError
+        return descriptor
+    except BaseException as error:
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+        if not isinstance(error, Exception):
+            raise
+        raise StorageError(StorageReason.PREPARATION_FAILED) from None
+
+
+
+#### Open one share-delete identity guard without releasing writer output.
+####
+def _open_candidate_descriptor(artifact: _CandidateArtifact, output: BinaryIO) -> int:
+    if os.name == "nt":
+        descriptor = open_regular_file(artifact.path)
+        if descriptor is None:
+            raise OSError
+        return descriptor
+    return os.dup(output.fileno())
 
 
 
