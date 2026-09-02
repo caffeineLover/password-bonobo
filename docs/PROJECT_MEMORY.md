@@ -2,6 +2,27 @@
 
 Last updated: 2026-09-02
 
+## Desktop vertical slice merged locally
+
+The user selected local integration.  `feature/vault-application-desktop` was
+fast-forward merged into local `main` at `c8dcfb0` after `git pull --ff-only`
+confirmed `origin/main` had not moved.  The merged-result Botan-backed offscreen
+suite collects 946 tests: 932 pass and 14 declared platform skips, with 80%
+coverage.  No push or publication occurred, so `origin/main` remains at the
+pre-merge commit until separately authorized.
+
+The registered feature worktree was removed.  Windows retained its directory
+because six stale pytest processes held retired `.venv` binaries; only those
+exact worktree-local processes were stopped, after which the orphan directory
+was removed, worktrees were pruned, and the merged feature branch was deleted.
+Local `main` is the only registered worktree and is clean.
+
+The exact next action, only if separately authorized, is to push local `main`
+and obtain the pending hosted Windows/macOS/Linux desktop/QML/deployment proof.
+Packaged native artifacts, installers, signing, provider work, URL audit,
+mobile clients, settings, and advanced vault workflows remain outside this
+completed vertical slice.
+
 ## Native-dialog security repair verified
 
 The user authorized one additional narrowly scoped repair-and-review wave for
