@@ -249,11 +249,14 @@ unresolved.
 Worktree branch `fix/ios-cxx-runtime` adds red-first command coverage requiring `-lc++` immediately after the Botan
 static archive only for `ios-arm64`; Android remains unchanged. The minimal implementation now satisfies both focused
 regressions and all 44 build-driver tests. Independent review reports no Critical, Important, or Minor findings.
-Integration, publication, and hosted iOS proof remain next. The current full Windows/CPython 3.14.7 suite uses the
+Commit `6989c2f` is fast-forwarded into local `main`; publication and hosted iOS proof remain next. The pre-merge full
+Windows/CPython 3.14.7 suite uses the
 verified Botan 3.13 DLL and reports 662 passed, 12 expected skips, 79% coverage, and zero failures in 109.53 seconds.
 Ruff, Python structure, Bandit, compatibility, provenance, tracked-file, REUSE 119/119, whitespace, and strict mypy
 under Windows, Darwin, and Linux profiles all pass. Pip-audit finds no known third-party vulnerabilities and skips only
-the unpublished local project; the source distribution build, wheel build, and wheel inspection all pass.
+the unpublished local project; the source distribution build, wheel build, and wheel inspection all pass. The merged
+`main` tree repeats the full suite with 662 passed, 12 expected skips, 79% coverage, and zero failures in 109.63 seconds;
+Ruff and Python structure also pass on the merged tree.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -287,7 +290,7 @@ the same metadata.
 
 ## Exact continuation order after this checkpoint
 
-1. Commit `fix/ios-cxx-runtime`, fast-forward it into `main`, and run merged verification.
-2. Push `main` and observe all five hosted jobs; record the exact hosted result.
+1. Push local `main` and observe all five hosted jobs; record the exact hosted result.
+2. Remove the clean merged iOS worktree and local branch after publication.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
