@@ -24,6 +24,7 @@ from bonobo_core.passwordsafe import (
     SecretLease,
     SetSecretField,
     SetTextField,
+    SuspendedSession,
 )
 from bonobo_core.passwordsafe.crypto import RandomSource, SystemRandomSource
 
@@ -143,6 +144,32 @@ class VaultServiceLike(Protocol[SessionT]):
 
 
 
+    #### Durably suspend one dirty session without replacing its source.
+    ####
+    def suspend(self, session: SessionT) -> SuspendedSession:
+        raise NotImplementedError
+
+
+
+    #### Reauthenticate unchanged source and pending state into one dirty session.
+    ####
+    def resume(
+        self,
+        path: Path,
+        passphrase: SecretBuffer,
+        suspended: SuspendedSession,
+    ) -> SessionT:
+        raise NotImplementedError
+
+
+
+    #### Explicitly remove one selected pending artifact and its stable slot.
+    ####
+    def discard_suspended(self, suspended: SuspendedSession) -> None:
+        raise NotImplementedError
+
+
+
 #### Identify the explicit response to a close or replacement confirmation.
 ####
 class CloseChoice(StrEnum):
@@ -207,7 +234,9 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     _search: str
     _service: VaultServiceLike[ApplicationSessionT]
     _session: ApplicationSessionT | None
+    _source_path: Path | None
     _snapshot: ApplicationSnapshot
+    _suspended: SuspendedSession | None
 
 
 
@@ -234,6 +263,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         self._clipboard = clipboard
         self._browser = browser
         self._session = None
+        self._source_path = None
+        self._suspended = None
         self._generation = 0
         self._next_record_key = 1
         self._draft_revisions = {}
@@ -437,6 +468,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             try:
                 self._service.save(session)
                 saved = True
+                if not session.dirty:
+                    self._suspended = None
                 return self._commit_session(session, previous.display_label)
             except BaseException as error:
                 if saved:
@@ -489,24 +522,104 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
 
 
 
-    #### Lock an unlocked clean session after verifying the caller's snapshot generation.
+    #### Lock clean state directly or suspend dirty state before terminal publication.
     ####
-    #### Dirty lock suspension is deliberately excluded from this early lifecycle
-    #### task and is added only with the authenticated pending-session facility.
+    def lock(self, expected_generation: int) -> ApplicationSnapshot:
+        with self._lock:
+            previous = self._validate_active_generation(expected_generation)
+            session = self._require_session()
+            source_path = self._require_source_path()
+            self._invalidate_decision()
+            self._enter_busy(previous)
+            terminal_started = False
+            try:
+                if previous.phase is ApplicationPhase.UNLOCKED_DIRTY:
+                    suspended = self._service.suspend(session)
+                    terminal_started = True
+                    self._suspended = suspended
+                else:
+                    terminal_started = True
+                    session.lock()
+                self._source_path = source_path
+                return self._commit_locked(previous.display_label)
+            except BaseException as error:
+                if terminal_started:
+                    return self._fail_closed(session, previous.display_label, error)
+                return self._restore_failure(previous, error)
+
+
+
+    #### Preserve the earlier clean-only command as a strict compatibility alias.
     ####
     def lock_clean(self, expected_generation: int) -> ApplicationSnapshot:
         with self._lock:
-            previous = self._validate_active_generation(expected_generation)
-            if previous.phase is not ApplicationPhase.UNLOCKED_CLEAN:
+            if self._snapshot.phase is not ApplicationPhase.UNLOCKED_CLEAN:
                 raise ApplicationCommandError("clean lock requires an unlocked clean session")
-            session = self._require_session()
-            self._invalidate_decision()
+            return self.lock(expected_generation)
+
+
+
+    #### Reauthenticate a locked source and resume pending state when one exists.
+    ####
+    def unlock(self, passphrase: SecretBuffer) -> ApplicationSnapshot:
+        with self._lock:
+            if self._snapshot.phase is not ApplicationPhase.LOCKED:
+                raise ApplicationCommandError("unlock requires a locked vault")
+            if not isinstance(passphrase, SecretBuffer) or passphrase.closed:
+                raise ApplicationCommandError("passphrase is invalid")
+            previous = self._snapshot
+            source_path = self._require_source_path()
+            suspended = self._suspended
+            candidate: ApplicationSessionT | None = None
             self._enter_busy(previous)
             try:
-                session.lock()
-                return self._commit_locked(previous.display_label)
+                candidate = (
+                    self._service.open(source_path, passphrase)
+                    if suspended is None
+                    else self._service.resume(source_path, passphrase, suspended)
+                )
+                records, record_keys = self._project_session(candidate)
+                self._session = candidate
+                self._record_keys = record_keys
+                return self._commit_projected_session(candidate, previous.display_label, records)
             except BaseException as error:
-                return self._fail_closed(session, previous.display_label, error)
+                if candidate is not None:
+                    self._discard_without_masking(candidate)
+                return self._restore_failure(previous, error)
+            finally:
+                with suppress(BaseException):
+                    passphrase.close()
+
+
+
+    #### Explicitly abandon one locked pending revision by exact stable identity.
+    ####
+    def discard_suspended(self, expected_generation: int) -> ApplicationSnapshot:
+        with self._lock:
+            if self._snapshot.phase is not ApplicationPhase.LOCKED:
+                raise ApplicationCommandError("pending discard requires a locked vault")
+            if expected_generation != self._snapshot.generation:
+                raise ApplicationCommandError("application view is stale")
+            suspended = self._suspended
+            if suspended is None:
+                raise ApplicationCommandError("no pending vault state is available")
+            previous = self._snapshot
+            self._enter_busy(previous)
+            try:
+                self._service.discard_suspended(suspended)
+                self._suspended = None
+                self._clear_clipboard_without_masking()
+                return self._publish(
+                    ApplicationPhase.LOCKED,
+                    previous.display_label,
+                    False,
+                    (),
+                    None,
+                    None,
+                    None,
+                )
+            except BaseException as error:
+                return self._restore_failure(previous, error)
 
 
 
@@ -760,6 +873,10 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             raise ApplicationCommandError("passphrase is invalid")
         if not isinstance(display_label, str):
             raise ApplicationCommandError("display label is invalid")
+        if self._suspended is not None and self._session is None:
+            with suppress(BaseException):
+                passphrase.close()
+            raise ApplicationCommandError("pending vault state requires explicit discard")
         self._invalidate_decision()
         return _Replacement(action, path, passphrase, display_label)
 
@@ -836,6 +953,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         old_session = self._session
         candidate: ApplicationSessionT | None = None
         old_terminal_started = False
+        source_path = replacement.path.absolute()
         self._enter_busy(previous)
         try:
             if replacement.action == "create":
@@ -846,8 +964,12 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
             if old_session is not None:
                 old_terminal_started = True
                 old_session.lock() if not old_session.dirty else old_session.discard_and_lock()
+                if self._suspended is not None:
+                    self._service.discard_suspended(self._suspended)
+                    self._suspended = None
                 self._clear_clipboard_without_masking()
             self._session = candidate
+            self._source_path = source_path
             self._record_keys = record_keys
             return self._commit_projected_session(candidate, replacement.display_label, records)
         except BaseException as error:
@@ -873,6 +995,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         try:
             self._service.save(session)
             save_succeeded = True
+            if not session.dirty:
+                self._suspended = None
             saved = ApplicationSnapshot(
                 pending.prior.generation,
                 ApplicationPhase.UNLOCKED_DIRTY if session.dirty else ApplicationPhase.UNLOCKED_CLEAN,
@@ -901,11 +1025,16 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         try:
             if choice is CloseChoice.SAVE:
                 self._service.save(session)
+                if not session.dirty:
+                    self._suspended = None
                 terminal_started = True
                 session.lock()
             else:
                 terminal_started = True
                 session.discard_and_lock()
+                if self._suspended is not None:
+                    self._service.discard_suspended(self._suspended)
+                    self._suspended = None
             return self._commit_locked(previous.display_label)
         except BaseException as error:
             if terminal_started:
@@ -1133,6 +1262,15 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         if self._session is None:
             raise ApplicationCommandError("no unlocked vault is available")
         return self._session
+
+
+
+    #### Return the private source locator retained independently of the session.
+    ####
+    def _require_source_path(self) -> Path:
+        if self._source_path is None:
+            raise ApplicationCommandError("no locked vault source is available")
+        return self._source_path
 
 
 

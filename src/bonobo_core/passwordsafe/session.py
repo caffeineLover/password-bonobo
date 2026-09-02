@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
 from .constants import FieldKind, FormatVersion, RecordFieldType
@@ -25,6 +25,7 @@ from .model import (
     documents_equal_exact,
 )
 from .payloads import FieldPayload, InlinePayload
+from .pending import SuspendedSession
 from .reader import OpenedVault, VaultCryptoState
 from .schema import RECORD_SCHEMA, decode_record_field, encode_new_record_field, encode_record_field
 from .secrets import MAX_SECRET_LEASE_BYTES, SecretBuffer, SecretLease
@@ -209,6 +210,7 @@ class VaultSession:
         "_path",
         "_retired_resources",
         "_save_snapshot",
+        "_suspended",
     )
 
 
@@ -239,6 +241,7 @@ class VaultSession:
         self._original_document = opened.document
         self._changes: tuple[Change, ...] = ()
         self._save_snapshot: VaultDocument | None = None
+        self._suspended: SuspendedSession | None = None
         self._path = path
         self._baseline = baseline
         self._retired_resources: list[VaultDocument | OpenedVault] = []
@@ -262,7 +265,7 @@ class VaultSession:
     @property
     def dirty(self) -> bool:
         with self._lock:
-            return bool(self._changes)
+            return bool(self._changes) or self._suspended is not None
 
 
 
@@ -291,6 +294,15 @@ class VaultSession:
         with self._lock:
             self._require_active()
             return self._opened.crypto_state
+
+
+
+    #### Return path-free pending identity retained until save or discard cleanup.
+    ####
+    @property
+    def _suspended_for_service(self) -> SuspendedSession | None:
+        with self._lock:
+            return self._suspended
 
 
 
@@ -550,6 +562,67 @@ class VaultSession:
             snapshot = self._require_save_snapshot()
             snapshot.close()
             self._save_snapshot = None
+
+
+
+    #### Construct one dirty session from an authenticated pending artifact.
+    ####
+    @classmethod
+    def _resume(
+        cls,
+        opened: OpenedVault,
+        path: Path,
+        baseline: FileBaseline,
+        suspended: SuspendedSession,
+    ) -> Self:
+        if not isinstance(opened, OpenedVault):
+            raise TypeError("resumed session requires an authenticated pending vault")
+        if not isinstance(path, Path):
+            raise TypeError("resumed session path must use Path")
+        if not isinstance(baseline, FileBaseline):
+            raise TypeError("resumed session baseline must use FileBaseline")
+        if not isinstance(suspended, SuspendedSession):
+            raise TypeError("resumed session metadata must use SuspendedSession")
+        if (
+            opened.source_snapshot.size != suspended.size
+            or opened.source_snapshot.sha256 != suspended.sha256
+            or baseline.sha256 != suspended.source_sha256
+        ):
+            raise ValueError("resumed session does not match its authenticated bindings")
+        session = cls.__new__(cls)
+        session._opened = opened
+        session._document = opened.document
+        session._original_document = opened.document
+        session._changes = ()
+        session._save_snapshot = None
+        session._path = path
+        session._baseline = baseline
+        session._retired_resources = []
+        session._suspended = suspended
+        session._locked = False
+        session._lock = RLock()
+        return session
+
+
+
+    #### Close one frozen dirty revision only after pending publication commits.
+    ####
+    def _finish_suspend(self) -> None:
+        with self._lock:
+            snapshot = self._require_save_snapshot()
+            snapshot.close()
+            self._save_snapshot = None
+            self._close_resources()
+
+
+
+    #### Forget one pending identity only after exact artifact cleanup succeeds.
+    ####
+    def _finish_pending_cleanup(self, suspended: SuspendedSession) -> None:
+        with self._lock:
+            if self._suspended != suspended:
+                raise ValueError("pending cleanup does not match the resumed session")
+            self._suspended = None
 
 
 

@@ -2,6 +2,42 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 4 checkpoint
+
+Task 4 is complete on `feature/vault-application-desktop` from base `491802a`.
+The coherent Task 4 commit contains this checkpoint.  The initial focused RED
+failed collection only because `SuspendedSession` and the suspension APIs were
+absent.  Subsequent RED cycles exposed Windows sharing constraints, pathname
+replacement during candidate cleanup, and a combined post-commit source change
+plus pending-cleanup failure that left the live save snapshot wedged.  The final
+implementation uses separate read and replace descriptor phases, exact anchored
+cleanup, and clears the service commit flag before rollback so every failed
+preflight retains a mutable dirty session.
+
+The private pending store now publishes one bounded authenticated encrypted
+artifact through a stable path-derived locator and a random 256-bit path-free
+selector.  It reuses the protected-directory, descriptor identity, bounded I/O,
+file/directory synchronization, and exact-cleanup primitives; rejects malformed,
+ambiguous, replaced, symlink/reparse, ownership, ACL, size, and digest state; and
+atomically retains either the old or new visible slot.  Suspend never changes the
+source.  Resume reauthenticates both unchanged source and pending ciphertext,
+binds publication to the original full baseline, retains pending identity until
+successful save cleanup, and closes the caller passphrase on every path.  The
+facade keeps source and suspended metadata private, supports clean lock and dirty
+suspend, fails safely while locked on resume, requires explicit pending discard,
+and clears owned clipboard content at terminal transitions.
+
+Final verification is GREEN: focused Task 4 tests are 37 passed with 2 Windows
+symbolic-link capability skips; the required writer/storage/service/application
+selection is 207 passed with 9 expected platform skips; and the canonical
+Botan-backed full suite is 755 passed with 14 expected skips.  Autopep8, Ruff,
+strict mypy for win32/darwin/linux (86 files each), Python structure,
+compatibility (66 behaviors, 45 features, 55 oracles), provenance, Bandit,
+pip-audit, REUSE (138/138), tracked-file, source/wheel build, wheel inspection,
+and staged/unstaged whitespace checks pass.  The Task 4 report is in the approved
+SDD workspace.  Immediate next action is controller review of the Task 4 commit;
+later approved work remains Tasks 5 through 8 in order.
+
 ## Completed Task 3 checkpoint
 
 Task 3 of the vault-application desktop vertical slice is committed as

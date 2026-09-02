@@ -37,6 +37,7 @@ from .errors import (
     UnsupportedFormatReason,
 )
 from .model import PreservationWarning, PreservationWarningCode, RecordHandle, RevisionToken
+from .pending import SuspendedSession
 from .secrets import SecretBuffer, SecretClosedError, SecretLease
 from .service import SaveResult, VaultService
 from .session import (
@@ -103,6 +104,7 @@ __all__ = (
     "StaleRevisionError",
     "StorageError",
     "StorageReason",
+    "SuspendedSession",
     "UnsavedChangesError",
     "UnsupportedFormatError",
     "UnsupportedFormatReason",

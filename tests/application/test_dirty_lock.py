@@ -1,0 +1,214 @@
+"""Verify dirty application lock and unlock retain only private suspension state."""
+
+from pathlib import Path
+
+import pytest
+from fakes import (
+    FakeVaultService,
+    FakeVaultSession,
+    RecordingClipboard,
+    fabricated_record_view,
+)
+
+from bonobo_core.application.facade import ApplicationCommandError, VaultApplication
+from bonobo_core.application.types import ApplicationPhase
+from bonobo_core.passwordsafe import (
+    AuthenticationError,
+    AuthenticationReason,
+    SecretBuffer,
+    SuspendedSession,
+)
+from bonobo_core.passwordsafe.errors import StorageError, StorageReason
+
+
+
+#### Suspend dirty state before publishing the terminal locked snapshot.
+####
+def test_dirty_lock_uses_service_suspension_and_clears_public_records() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    service.suspended_result = SuspendedSession("a" * 64, "b" * 64, "c" * 64, 512)
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+
+    locked = app.lock(opened.generation)
+
+    assert service.suspend_calls == 1
+    assert locked.phase is ApplicationPhase.LOCKED
+    assert locked.records == ()
+    assert "aaaaaaaa" not in repr(locked)
+
+
+
+#### Reauthenticate and resume pending state using a caller-owned passphrase.
+####
+def test_unlock_resumes_pending_state_and_closes_passphrase() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    resumed = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service.resume_session = resumed
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    app.lock(opened.generation)
+    passphrase = SecretBuffer.from_bytes(b"fabricated")
+
+    unlocked = app.unlock(passphrase)
+
+    assert service.resume_calls == 1
+    assert passphrase.closed
+    assert unlocked.phase is ApplicationPhase.UNLOCKED_DIRTY
+
+
+
+#### Keep a safe locked snapshot and pending state after failed authentication.
+####
+def test_failed_unlock_remains_locked_and_can_retry() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    resumed = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service.resume_session = resumed
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    app.lock(opened.generation)
+    failed_passphrase = SecretBuffer.from_bytes(b"fabricated-wrong")
+    service.resume_error = AuthenticationError(AuthenticationReason.PASSWORD_CHECK_FAILED)
+
+    failed = app.unlock(failed_passphrase)
+
+    assert failed.phase is ApplicationPhase.LOCKED
+    assert failed.failure is not None
+    assert failed_passphrase.closed
+    service.resume_error = None
+    retried = app.unlock(SecretBuffer.from_bytes(b"fabricated"))
+    assert retried.phase is ApplicationPhase.UNLOCKED_DIRTY
+
+
+
+#### Require explicit pending discard before replacing a locked dirty source.
+####
+def test_locked_pending_state_requires_explicit_discard_before_replacement() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    locked = app.lock(opened.generation)
+    replacement_passphrase = SecretBuffer.from_bytes(b"fabricated-replacement")
+
+    with pytest.raises(ApplicationCommandError):
+        app.open(Path("fabricated-other.psafe3"), replacement_passphrase, "Other")
+
+    assert replacement_passphrase.closed
+    discarded = app.discard_suspended(locked.generation)
+    assert service.discard_suspended_calls == 1
+    assert discarded.phase is ApplicationPhase.LOCKED
+
+
+
+#### Keep the dirty unlocked projection when suspension fails before commit.
+####
+def test_dirty_lock_precommit_failure_remains_unlocked_and_does_not_clear_clipboard() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    service.suspend_error = StorageError(StorageReason.PUBLICATION_FAILED)
+    clipboard = RecordingClipboard()
+    app = VaultApplication(service, clipboard=clipboard)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+
+    failed = app.lock(opened.generation)
+
+    assert failed.phase is ApplicationPhase.UNLOCKED_DIRTY
+    assert failed.failure is not None
+    assert session.dirty
+    assert not session.locked
+    assert clipboard.clear_calls == 0
+
+
+
+#### Clear adapter-owned clipboard content when dirty lock becomes terminal.
+####
+def test_dirty_lock_clears_clipboard_only_after_successful_terminal_transition() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    clipboard = RecordingClipboard()
+    app = VaultApplication(service, clipboard=clipboard)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+
+    locked = app.lock(opened.generation)
+
+    assert locked.phase is ApplicationPhase.LOCKED
+    assert clipboard.clear_calls == 1
+
+
+
+#### Retain private pending metadata after failed explicit discard so retry is possible.
+####
+def test_failed_explicit_discard_stays_locked_and_can_retry() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=True)
+    service = FakeVaultService(session)
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    locked = app.lock(opened.generation)
+    service.discard_suspended_error = StorageError(StorageReason.PUBLICATION_FAILED)
+
+    failed = app.discard_suspended(locked.generation)
+
+    assert failed.phase is ApplicationPhase.LOCKED
+    assert failed.failure is not None
+    service.discard_suspended_error = None
+    retried = app.discard_suspended(failed.generation)
+    assert retried.phase is ApplicationPhase.LOCKED
+    assert retried.failure is None
+    assert service.discard_suspended_calls == 2
+
+
+
+#### Reauthenticate a clean locked source without fabricating a pending revision.
+####
+def test_clean_unlock_reopens_source_and_closes_passphrase() -> None:
+    session = FakeVaultSession((fabricated_record_view(),), dirty=False)
+    service = FakeVaultService(session)
+    reopened = FakeVaultSession((fabricated_record_view(),), dirty=False)
+    service.open_session = reopened
+    app = VaultApplication(service)
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated"),
+        "Fabricated",
+    )
+    app.lock(opened.generation)
+    passphrase = SecretBuffer.from_bytes(b"fabricated")
+
+    unlocked = app.unlock(passphrase)
+
+    assert unlocked.phase is ApplicationPhase.UNLOCKED_CLEAN
+    assert service.open_calls == 2
+    assert service.resume_calls == 0
+    assert passphrase.closed

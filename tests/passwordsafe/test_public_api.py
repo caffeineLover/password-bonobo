@@ -56,6 +56,7 @@ def test_public_surface_contains_only_reviewed_categories() -> None:
         "StaleRevisionError",
         "StorageError",
         "StorageReason",
+        "SuspendedSession",
         "UnsavedChangesError",
         "UnsupportedFormatError",
         "UnsupportedFormatReason",

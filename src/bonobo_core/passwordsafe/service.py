@@ -31,10 +31,12 @@ from .model import (
     documents_equal_exact,
 )
 from .payloads import FieldPayload, InlinePayload
+from .pending import PendingSessionStore, SuspendedSession, _CommittedPendingError
 from .reader import OpenedVault, PasswordSafeReader, VaultCryptoState
 from .schema import ensure_fields_representable
 from .secrets import SecretBuffer
 from .session import VaultSession
+from .snapshots import EncryptedSnapshot
 from .storage import (
     LocalVaultStore,
     PublishedFile,
@@ -150,7 +152,7 @@ def _reject_unscoped_candidate(_path: Path) -> None:
 #### Compose and coordinate the complete local PasswordSafe core.
 ####
 class VaultService:
-    __slots__ = ("_limits", "_lock", "_random", "_reader", "_store", "_writer")
+    __slots__ = ("_limits", "_lock", "_pending", "_random", "_reader", "_store", "_writer")
 
 
 
@@ -186,6 +188,11 @@ class VaultService:
             working_directory,
             recovery_directory,
             validator=_reject_unscoped_candidate,
+            random_source=selected_random,
+        )
+        self._pending = PendingSessionStore(
+            recovery_directory,
+            working_directory,
             random_source=selected_random,
         )
         self._lock = RLock()
@@ -278,6 +285,7 @@ class VaultService:
     def save(self, session: VaultSession) -> SaveResult:
         _validate_session(session)
         with self._lock:
+            suspended = session._suspended_for_service
             initial_iterations = session._crypto_state_for_service.iterations
             selected_iterations = session._crypto_state_for_service.serialization_iterations
             snapshot = session._prepare_save()
@@ -311,6 +319,9 @@ class VaultService:
                 warnings = opened.document.warnings
                 session._finish_save(opened, published)
                 opened = None
+                if suspended is not None:
+                    self._pending.discard(suspended)
+                    session._finish_pending_cleanup(suspended)
                 completed = True
                 result = _save_result(
                     published,
@@ -326,6 +337,120 @@ class VaultService:
                 if not completed and not committed:
                     with suppress(BaseException):
                         session._abort_save()
+
+
+
+    #### Durably suspend one dirty revision without replacing its source file.
+    ####
+    def suspend(self, session: VaultSession) -> SuspendedSession:
+        _validate_session(session)
+        with self._lock:
+            if not session.dirty:
+                raise ValueError("only a dirty session can be suspended")
+            source = session.path
+            baseline = session.baseline
+            if self._store.capture(source) != baseline:
+                raise ExternalModificationError()
+            snapshot = session._prepare_save()
+            committed = False
+            suspended: SuspendedSession | None = None
+            try:
+                candidate = self._writer.write(snapshot, session._crypto_state_for_service)
+                try:
+                    suspended = self._pending.publish(
+                        source,
+                        candidate,
+                        baseline,
+                        validator=_RetainedCandidateValidator(
+                            self._reader,
+                            session._crypto_state_for_service,
+                            snapshot,
+                        ),
+                    )
+                except _CommittedPendingError as error:
+                    suspended = error.suspended
+                    self._pending.verify(suspended)
+                committed = True
+                if self._store.capture(source) != baseline:
+                    committed = False
+                    self._pending.discard(suspended)
+                    raise ExternalModificationError()
+                session._finish_suspend()
+                return suspended
+            finally:
+                if not committed and not session.locked:
+                    with suppress(BaseException):
+                        session._abort_save()
+
+
+
+    #### Reauthenticate unchanged source and pending ciphertext into a dirty session.
+    ####
+    def resume(
+        self,
+        path: Path,
+        passphrase: SecretBuffer,
+        suspended: SuspendedSession,
+    ) -> VaultSession:
+        _validate_passphrase(passphrase)
+        if not isinstance(suspended, SuspendedSession):
+            raise TypeError("resume metadata must use SuspendedSession")
+        destination = _absolute_path(path)
+        pending_snapshot: EncryptedSnapshot | None = None
+        source_opened: OpenedVault | None = None
+        pending_opened: OpenedVault | None = None
+        try:
+            with self._lock:
+                current = self._store.capture(destination)
+                opened_pending = self._pending.open(suspended)
+                pending_snapshot = opened_pending.snapshot
+                source_baseline = opened_pending.source_baseline
+                if (
+                    current != source_baseline
+                    or current.sha256 != suspended.source_sha256
+                ):
+                    raise ExternalModificationError()
+                source_opened = self._reader.open(destination, passphrase)
+                if (
+                    source_opened.source_snapshot.size != current.size
+                    or source_opened.source_snapshot.sha256 != current.sha256
+                    or self._store.capture(destination) != current
+                ):
+                    raise ExternalModificationError()
+                pending_opened = self._reader.open_snapshot(pending_snapshot, passphrase)
+                pending_snapshot = None
+                if (
+                    pending_opened.source_snapshot.size != suspended.size
+                    or pending_opened.source_snapshot.sha256 != suspended.sha256
+                ):
+                    raise StorageError(StorageReason.VERIFICATION_FAILED)
+                self._pending.verify(suspended)
+                session = VaultSession._resume(
+                    pending_opened,
+                    destination,
+                    source_baseline,
+                    suspended,
+                )
+                pending_opened = None
+                return session
+        finally:
+            if pending_opened is not None:
+                _close_without_masking(pending_opened)
+            if source_opened is not None:
+                _close_without_masking(source_opened)
+            if pending_snapshot is not None:
+                _close_without_masking(pending_snapshot)
+            _close_without_masking(passphrase)
+
+
+
+    #### Explicitly remove only one selected unchanged pending artifact and slot.
+    ####
+    def discard_suspended(self, suspended: SuspendedSession) -> None:
+        if not isinstance(suspended, SuspendedSession):
+            raise TypeError("discard metadata must use SuspendedSession")
+        with self._lock:
+            self._pending.discard(suspended)
 
 
 
@@ -643,6 +768,8 @@ def _validate_session(session: VaultSession) -> None:
 
 #### Close one resource owner without replacing an active operation failure.
 ####
-def _close_without_masking(owner: FieldPayload | OpenedVault | SecretBuffer | VaultDocument) -> None:
+def _close_without_masking(
+    owner: EncryptedSnapshot | FieldPayload | OpenedVault | SecretBuffer | VaultDocument,
+) -> None:
     with suppress(BaseException):
         owner.close()
