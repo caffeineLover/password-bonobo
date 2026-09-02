@@ -213,27 +213,35 @@ Commit `f32bd0b` was fast-forwarded into local `main` after a fresh pre-merge ru
 skips, 79% coverage, and zero failures in 109.87 seconds. The merged `main` tree repeated that result in 108.46 seconds.
 The clean worktree and merged `fix/linux-botan-discovery` branch were then removed.
 
-Hosted run `33576400850` then proved the discovery repair and bounded the next desktop work. macOS rejects inherited
-extended ACLs present below the hosted temporary directory; its two real native ACL probes fail before private artifact
-creation. Windows rejects the fresh `0o700` directory because the elevated runner can make `BUILTIN\\Administrators`
+Hosted run `33576400850` then proved the discovery repair and bounded the next desktop work. macOS rejects private
+objects before artifact creation; its two real native ACL probes expose the same verifier failure. Windows rejects the
+fresh `0o700` directory because the elevated runner can make `BUILTIN\\Administrators`
 the owner even though CPython's protected DACL contains only owner rights, SYSTEM, and Administrators. Ubuntu's first
 failure expects `StorageError` where a successful directory retarget correctly raises `ExternalModificationError`.
 Its second failure exposes an inode-reuse ABA: cleanup can unlink a replacement candidate when the original inode was
-released and immediately reused. The approved bounded repair is implemented in worktree branch
-`fix/desktop-private-artifacts` and awaits final review, integration, publication, and hosted proof.
+released and immediately reused.
 
 The desktop repair retains an open candidate identity through authentication and failure cleanup, accepts the
 administrator owner only while preserving the protected Windows DACL and exact ACE allowlist, corrects the successful
-POSIX retarget regression to require `ExternalModificationError`, and gives only the macOS pytest process a newly
-created ACL-free temporary root. Production macOS ACL rejection is unchanged. A red Windows native regression proved
-the ownership boundary before implementation. The focused five-test selection passed four tests with one expected
-Windows rename skip. Review then identified and closed one Important `BaseException` descriptor-leak path during guard
-validation or candidate removal; two red-first interruption regressions cover both boundaries, and follow-up review
-found no remaining Critical or Important code issue. The current-head full Windows/CPython 3.14.7 suite reports 657
-passed, 12 expected skips, 79% coverage, and zero failures in 108.71 seconds. Autopep8, Ruff, Python structure, YAML
-parsing, compatibility, provenance, tracked-file,
-Bandit, pip-audit, REUSE 119/119, source/wheel build, wheel inspection, whitespace, and strict mypy under Darwin,
-Windows, and Linux profiles all pass.
+POSIX retarget regression to require `ExternalModificationError`, and initially isolated the macOS pytest temporary
+root. A red Windows native regression proved the ownership boundary before implementation. Review then identified and
+closed one Important `BaseException` descriptor-leak path during guard validation or candidate removal; two red-first
+interruption regressions cover both boundaries, and follow-up review found no remaining Critical or Important code
+issue. Commit `6605e04` is integrated and pushed. Its merged `main` suite reports 657 passed, 12 expected skips, 79%
+coverage, and zero failures in 108.18 seconds. Autopep8, Ruff, Python structure, YAML parsing, compatibility, provenance,
+tracked-file, Bandit, pip-audit, REUSE 119/119, source/wheel build, wheel inspection, whitespace, and strict mypy under
+Darwin, Windows, and Linux profiles all pass.
+
+Hosted run `33582756604` proves the Ubuntu and Windows desktop jobs and Android cross-build now pass. macOS still fails
+because the temporary-root theory was wrong, and iOS retains the known C++ runtime link failure. Apple Libc source shows
+that `acl_get_fd_np` represents an absent ACL property as `NULL` with `errno=ENOENT`; the verifier incorrectly treated
+all null returns as failures. Worktree branch `fix/macos-no-acl-sentinel` adds a red regression for that exact safe
+sentinel, continues rejecting null with any other errno and every actual/anomalous ACL, and removes the ineffective
+temporary-root workaround. The snapshot security file passes 50 tests with 7 platform skips. All three strict mypy
+profiles and the current-head full suite pass: 658 passed, 12 expected skips, 79% coverage, and zero failures in 109.93
+seconds. Review found no Critical or Important issue; its Minor request for explicit wrong-errno and invalid-pointer
+cases is incorporated, and the expanded snapshot selection passes 54 tests with 7 platform skips. Integration,
+publication, and hosted macOS proof remain next.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -262,14 +270,12 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33576400850` passes Android and proves Ubuntu discovery fixed. Its bounded desktop failures have a locally
-  verified repair awaiting publication and hosted proof. iOS still lacks C++ runtime symbols during its static archive
-  link.
+- Hosted run `33582756604` proves Ubuntu, Windows, and Android pass. The locally verified macOS absent-ACL sentinel
+  repair awaits publication and hosted proof. iOS still lacks C++ runtime symbols during its static archive link.
 
 ## Exact continuation order after this checkpoint
 
-1. Review and commit `fix/desktop-private-artifacts`, fast-forward it into `main`, push, and verify all three hosted
-   desktop jobs; fix any bounded regression before proceeding.
+1. Review and commit `fix/macos-no-acl-sentinel`, fast-forward it into `main`, push, and verify hosted macOS pytest.
 2. Repair and verify the iOS C++ runtime link, then push and observe the hosted cross-build.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

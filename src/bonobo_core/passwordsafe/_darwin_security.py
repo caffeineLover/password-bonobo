@@ -127,10 +127,11 @@ _ACL_API: _AclApi | None = _load_acl_api()
 
 
 
-#### Require one open descriptor to have a successfully read, empty extended ACL.
+#### Require one open descriptor to have no extended ACL entry or property.
 ####
 #### Every allocated acl_t is freed before the fixed safe failure is raised.
-#### Darwin reports a valid empty ACL as no first entry with errno EINVAL.
+#### Darwin reports no ACL property as NULL with ENOENT and an allocated empty
+#### ACL as no first entry with EINVAL.
 ####
 def require_no_extended_acl(descriptor: int) -> None:
     api = _ACL_API
@@ -141,7 +142,10 @@ def require_no_extended_acl(descriptor: int) -> None:
     try:
         ctypes.set_errno(0)
         allocated = api.get_fd(descriptor, _ACL_TYPE_EXTENDED)
-        if allocated is None or isinstance(allocated, bool) or allocated <= 0:
+        allocated_errno = ctypes.get_errno()
+        if allocated is None:
+            failed = allocated_errno != errno.ENOENT
+        elif isinstance(allocated, bool) or allocated <= 0:
             failed = True
         else:
             acl = allocated

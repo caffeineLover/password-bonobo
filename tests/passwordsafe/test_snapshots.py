@@ -574,6 +574,7 @@ class _FakeDarwinAclApi:
         self,
         *,
         acl: int | None = 0x1234,
+        get_errno: int = 0,
         entry_result: int = -1,
         entry_errno: int = errno.EINVAL,
         entry_pointer: int | None = None,
@@ -581,6 +582,7 @@ class _FakeDarwinAclApi:
         free_result: int = 0,
     ) -> None:
         self.acl = acl
+        self.get_errno = get_errno
         self.entry_result = entry_result
         self.entry_errno = entry_errno
         self.entry_pointer = entry_pointer
@@ -596,6 +598,7 @@ class _FakeDarwinAclApi:
     ####
     def get_fd(self, descriptor: int, acl_type: int) -> int | None:
         self.get_calls.append((descriptor, acl_type))
+        ctypes.set_errno(self.get_errno)
         return self.acl
 
 
@@ -640,6 +643,24 @@ def test_darwin_acl_helper_accepts_empty_acl_and_frees_it(
 
 
 
+#### Accept the native absent-property sentinel as proof of no extended ACL.
+####
+def test_darwin_acl_helper_accepts_absent_acl_property(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bonobo_core.passwordsafe import _darwin_security
+
+    api = _FakeDarwinAclApi(acl=None, get_errno=errno.ENOENT)
+    monkeypatch.setattr(_darwin_security, "_ACL_API", api)
+
+    _darwin_security.require_no_extended_acl(42)
+
+    assert api.get_calls == [(42, 0x100)]
+    assert api.entry_calls == []
+    assert api.free_calls == []
+
+
+
 #### Reject an allocated ACL containing even one entry and still free it once.
 ####
 def test_darwin_acl_helper_rejects_any_entry_and_frees_it(
@@ -658,14 +679,20 @@ def test_darwin_acl_helper_rejects_any_entry_and_frees_it(
 
 
 
-#### Fail closed when native ACL retrieval returns its null failure sentinel.
+#### Fail closed on every null or invalid ACL result except NULL plus ENOENT.
 ####
+@pytest.mark.parametrize(
+    ("acl", "get_errno"),
+    [(None, 0), (None, errno.EIO), (False, errno.ENOENT), (0, errno.ENOENT), (-1, errno.ENOENT)],
+)
 def test_darwin_acl_helper_rejects_acl_get_failure_without_free(
+    acl: int | None,
+    get_errno: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from bonobo_core.passwordsafe import _darwin_security
 
-    api = _FakeDarwinAclApi(acl=None)
+    api = _FakeDarwinAclApi(acl=acl, get_errno=get_errno)
     monkeypatch.setattr(_darwin_security, "_ACL_API", api)
 
     with pytest.raises(StorageError) as caught:
