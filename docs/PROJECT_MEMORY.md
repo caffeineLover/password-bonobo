@@ -11,7 +11,26 @@ Do not store raw transcripts, credentials, machine-specific research paths, or h
 
 This file is Markdown-only.  Do not create a second project-memory location or a LaTeX/PDF derivative.
 
-## Active Task 1 checkpoint
+## Active Task 2 checkpoint
+
+Task 2 of the approved vault-application desktop vertical slice is implemented
+on `feature/vault-application-desktop`, based on Task 1 commit `19e9360`, and
+is ready to commit.  It adds the serialized UI-independent lifecycle facade,
+safe public command exports, and headless fake-service tests.  The binding
+replacement rule is proved: an open from dirty unlocked state returns an
+`AWAITING_DECISION` replacement token without calling the service; resolving
+it attempts authentication before old-work discard, so a failure retains the
+original dirty session with only a safe failure.  The full Windows suite with
+the established verified Botan DLL reports 698 passed and 12 expected skips in
+107.88 seconds.  Focused application/service tests report 51 passed; application
+Ruff, structure, and the exact repository-wide strict mypy checks pass under
+Windows, macOS, and Linux for 79 source files.  The Task 1-only fabricated
+`RecordView` factory now lives in the Task 2 application fakes rather than
+creating a second module path in PasswordSafe test helpers.  Immediate next
+actions: commit Task 2, then continue only with approved Task 3.  Later
+approved work remains Tasks 4 through 8 in order.
+
+## Completed Task 1 checkpoint
 
 Task 1 of the approved vault-application desktop vertical slice has completed implementation and verification on
 `feature/vault-application-desktop`.  It adds the UI-independent non-secret DTOs, safe PasswordSafe error projection,

@@ -4,9 +4,9 @@ Projection owns no domain identities and never mutates the immutable views it
 receives from the authenticated PasswordSafe session.
 """
 
+from fakes import fabricated_record_view
 from hypothesis import given
 from hypothesis import strategies as st
-from tests.passwordsafe.helpers import fabricated_record_view
 
 from bonobo_core.application import RecordKey, RecordSummary, project_records, search_records
 from bonobo_core.passwordsafe import RecordView

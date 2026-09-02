@@ -86,6 +86,9 @@ def test_application_package_exports_only_the_reviewed_contract() -> None:
         "DecisionToken",
         "RecordKey",
         "RecordSummary",
+        "ApplicationCommandError",
+        "CloseChoice",
+        "VaultApplication",
         "project_records",
         "search_records",
     }

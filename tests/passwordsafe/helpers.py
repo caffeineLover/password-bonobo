@@ -10,27 +10,7 @@ import hmac
 from collections.abc import Sequence
 
 from bonobo_core.passwordsafe.crypto import TwofishBackend
-from bonobo_core.passwordsafe.model import RecordHandle, RevisionToken
 from bonobo_core.passwordsafe.secrets import SecretBuffer
-from bonobo_core.passwordsafe.session import RecordView
-
-
-
-#### Construct one stable public view with a deliberately sensitive URL.
-####
-#### Application projection tests reuse this single object for the facade-owned
-#### handle mapping.  The URL verifies that list summaries do not carry it.
-####
-def fabricated_record_view() -> RecordView:
-    return RecordView(
-        RecordHandle(),
-        RevisionToken(),
-        "Alpha Portal",
-        "Research",
-        "sample-user",
-        "https://example.invalid/private",
-        False,
-    )
 
 
 

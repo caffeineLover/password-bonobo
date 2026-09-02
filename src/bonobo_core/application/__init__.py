@@ -5,19 +5,23 @@ and deterministic projections for adapters such as desktop and future mobile UI.
 """
 
 from .errors import ApplicationFailure, ApplicationFailureReason
+from .facade import ApplicationCommandError, CloseChoice, VaultApplication
 from .projection import project_records, search_records
 from .types import ApplicationPhase, ApplicationSnapshot, DecisionToken, RecordKey, RecordSummary
 
 
 
 __all__ = (
+    "ApplicationCommandError",
     "ApplicationFailure",
     "ApplicationFailureReason",
     "ApplicationPhase",
     "ApplicationSnapshot",
+    "CloseChoice",
     "DecisionToken",
     "RecordKey",
     "RecordSummary",
+    "VaultApplication",
     "project_records",
     "search_records",
 )
