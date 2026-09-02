@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: true
+      - name: Install Linux desktop runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libegl1
       - run: uv sync --locked --no-default-groups --group dev --group desktop-test --extra desktop
       - name: Run offscreen desktop and QML tests
         run: uv run python -m pytest tests/desktop -q

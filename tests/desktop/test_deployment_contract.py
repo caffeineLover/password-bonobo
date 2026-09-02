@@ -276,6 +276,45 @@ def test_desktop_ci_installs_extra_and_runs_offscreen_smoke() -> None:
 
 
 
+#### Ensure PySide can load QtGui on the Ubuntu runner before any desktop command starts.
+####
+def test_desktop_ci_installs_linux_egl_runtime_before_pyside() -> None:
+    workflow = load_foundation_workflow()
+    quality = _job(workflow, "quality")
+    steps = _sequence(quality.get("steps"), "quality steps")
+    run_steps = tuple(_mapping(step, "quality step") for step in steps if "run" in _mapping(step, "quality step"))
+    commands = tuple(tuple(shlex.split(str(step["run"]), posix=True)) for step in run_steps)
+    install_command = (
+        "sudo",
+        "apt-get",
+        "update",
+        "&&",
+        "sudo",
+        "apt-get",
+        "install",
+        "--yes",
+        "libegl1",
+    )
+    sync_command = (
+        "uv",
+        "sync",
+        "--locked",
+        "--no-default-groups",
+        "--group",
+        "dev",
+        "--group",
+        "desktop-test",
+        "--extra",
+        "desktop",
+    )
+
+    assert install_command in commands, "quality job must install Ubuntu's libEGL runtime"
+    install_index = commands.index(install_command)
+    assert run_steps[install_index].get("if") == "runner.os == 'Linux'"
+    assert install_index < commands.index(sync_command)
+
+
+
 #### Keep mobile compile/link jobs on the base project plus development tools only.
 ####
 def test_mobile_ci_excludes_desktop_dependencies() -> None:

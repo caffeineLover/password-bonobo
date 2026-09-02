@@ -72,8 +72,7 @@ def test_clipboard_expiry_clears_only_the_owned_value(qtbot: QtBot) -> None:
     with SecretLease.from_bytes(b"fabricated-password") as lease:
         port.copy(lease, lifetime_seconds=1)
 
-    with qtbot.waitSignal(clipboard.dataChanged, timeout=2000):
-        pass
+    qtbot.waitUntil(lambda: clipboard.text() == "", timeout=2000)
 
     assert clipboard.text() == ""
 

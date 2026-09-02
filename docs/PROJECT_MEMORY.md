@@ -2,23 +2,34 @@
 
 Last updated: 2026-09-02
 
-## Desktop vertical slice merged locally
+## Hosted desktop proof correction in progress
 
-The user selected local integration.  `feature/vault-application-desktop` was
-fast-forward merged into local `main` at `c8dcfb0` after `git pull --ff-only`
-confirmed `origin/main` had not moved.  The merged-result Botan-backed offscreen
-suite collects 946 tests: 932 pass and 14 declared platform skips, with 80%
-coverage.  No push or publication occurred, so `origin/main` remains at the
-pre-merge commit until separately authorized.
+The user authorized publication and hosted verification.  The completed desktop
+vertical slice and its local integration record were pushed through commit
+`92400d7`.  Hosted foundation run `33685474332` is the exact-commit proof run.
+Its Android and iOS cross-build/link jobs pass.  Ubuntu 24.04 fails before test
+collection because importing PySide6 QtGui cannot resolve `libEGL.so.1`; the
+macOS and Windows quality jobs continue independently because the matrix does
+not fail fast.
 
-The registered feature worktree was removed.  Windows retained its directory
-because six stale pytest processes held retired `.venv` binaries; only those
-exact worktree-local processes were stopped, after which the orphan directory
-was removed, worktrees were pruned, and the merged feature branch was deleted.
-Local `main` is the only registered worktree and is clean.
+A red-first parsed-workflow regression proves the quality matrix must install
+Ubuntu's `libegl1` runtime, only on Linux and before dependency synchronization
+or any PySide command.  The minimal workflow change satisfies that contract.
+During broader local verification, the Windows clipboard expiry test repeatedly
+returned on a queued notification from the original clipboard write rather than
+the later expiry.  The test now waits for its actual observable contract—the
+owned value becoming empty—and no clipboard production code changed.
 
-The exact next action, only if separately authorized, is to push local `main`
-and obtain the pending hosted Windows/macOS/Linux desktop/QML/deployment proof.
+The parsed deployment/workflow file passes all 9 tests.  Clipboard expiry passes
+five consecutive isolated runs, and the complete desktop selection passes all
+91 tests.  Ruff passes the changed files and the entire source/test/tool tree;
+strict mypy passes all 110 source files when invoked with the repository's full
+roots; autopep8 reports no diff; and the Python structure gate passes.
+
+The exact immediate actions are to complete document-policy, provenance,
+tracked-file, REUSE, and whitespace checks; commit and push the correction; then
+monitor the new foundation run until all three desktop jobs and both mobile jobs
+reach terminal status.  After hosted success, record that exact run here.
 Packaged native artifacts, installers, signing, provider work, URL audit,
 mobile clients, settings, and advanced vault workflows remain outside this
 completed vertical slice.
