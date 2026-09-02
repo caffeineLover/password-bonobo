@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-02
 
-## Active Task 4 review-fix round 3
+## Completed Task 4 review-fix round 3
 
 The final independent review round reports one retained-directory enumeration
 Critical, one commit-authority Important, one replacement-ownership Important,
@@ -21,15 +21,25 @@ transferred-secret ownership scope; the new cases and prior validation,
 reentrant, and deferred-owner cases pass (10).  Process-lock acquire/chmod,
 unlock, and close failures now propagate through one lifecycle aggregator;
 publish/open/discard/verify project raw path-bearing acquisition errors, and
-post-publication teardown failures reconcile to a committed selector (10).
+post-publication teardown failures reconcile to a committed selector (10).  An
+adversarial self-review found that a generator context manager could retain a
+raw lock error in implicit exception context; the final boundary object projects
+only path-free exceptions and the complete diagnostic-chain regressions pass
+(11).
 
-The exact immediate next actions are: run the combined focused Task 4 suite;
-resolve only evidenced regressions; perform the explicit adversarial review
-against all Task 4 findings; run the approved selected suite and every static,
-security, legal, audit, tracked-file, build/wheel, and fresh exact-Botan full
-suite gate; update the Task 4 report with exact evidence; commit the separate
-round-3 fix and checkpoint without amending.  Later approved work remains Tasks
-5 through 8 in order.
+Final verification is GREEN.  The combined focused Task 4 suite passes 148
+tests with 2 expected Windows capability skips in 138.41 seconds; the approved
+selected suite passes 267 with 9 expected skips in 145.05 seconds; and the fresh
+exact-DLL Botan suite passes 815 with 14 expected skips in 212.15 seconds at 80%
+coverage.  Ruff, autopep8 diff, strict mypy for all 86 files under win32,
+darwin, and linux, Python structure, compatibility (66 behaviors, 45 features,
+55 oracles), provenance, Bandit, pip-audit, REUSE 138/138, tracked-file and
+whitespace checks, source/wheel build, and wheel inspection pass.  The separate
+non-amended final repair commit is `1f928fc` (`fix: close final suspended-session
+review gaps`).  The Task 4 report records the complete final-round RED/GREEN,
+architecture, ownership, failure-invariant, verification, and adversarial
+self-review evidence.  Immediate next action is controller final review of Task
+4.  Later approved work remains Tasks 5 through 8 in order.
 
 ## Completed Task 4 review-fix round 2
 
