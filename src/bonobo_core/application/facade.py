@@ -431,7 +431,11 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     ####
     def create(self, path: Path, passphrase: SecretBuffer, display_label: str) -> ApplicationSnapshot:
         with self._lock:
-            replacement = self._validated_replacement("create", path, passphrase, display_label)
+            try:
+                replacement = self._validated_replacement("create", path, passphrase, display_label)
+            except BaseException:
+                self._close_secret_without_masking(passphrase)
+                raise
             if self._is_dirty_unlocked():
                 return self._await_replacement(replacement)
             return self._run_replacement(replacement)
@@ -446,7 +450,11 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     ####
     def open(self, path: Path, passphrase: SecretBuffer, display_label: str) -> ApplicationSnapshot:
         with self._lock:
-            replacement = self._validated_replacement("open", path, passphrase, display_label)
+            try:
+                replacement = self._validated_replacement("open", path, passphrase, display_label)
+            except BaseException:
+                self._close_secret_without_masking(passphrase)
+                raise
             if self._is_dirty_unlocked():
                 return self._await_replacement(replacement)
             return self._run_replacement(replacement)

@@ -21,7 +21,7 @@ from .constants import (
     ResourceLimits,
 )
 from .crypto import RandomSource, SystemRandomSource, TwofishBackend
-from .errors import ExternalModificationError, StorageError, StorageReason
+from .errors import ExternalModificationError, PasswordSafeError, StorageError, StorageReason
 from .model import (
     FieldClassification,
     PreservationWarning,
@@ -281,11 +281,11 @@ class VaultService:
         database_name: str = "",
         iterations: int = MINIMUM_ITERATIONS,
     ) -> VaultSession:
-        _validate_passphrase(passphrase)
-        destination = _absolute_path(path)
         document: VaultDocument | None = None
         opened: OpenedVault | None = None
         try:
+            _validate_passphrase(passphrase)
+            destination = _absolute_path(path)
             with self._lock:
                 document = _new_document(database_name, self._random)
                 candidate = self._writer.write_new(document, passphrase, iterations=iterations)
@@ -310,10 +310,10 @@ class VaultService:
     #### Capture, authenticate, and bind one unchanged local encrypted vault.
     ####
     def open(self, path: Path, passphrase: SecretBuffer) -> VaultSession:
-        _validate_passphrase(passphrase)
-        destination = _absolute_path(path)
         opened: OpenedVault | None = None
         try:
+            _validate_passphrase(passphrase)
+            destination = _absolute_path(path)
             with self._lock, self._pending.guard_open(destination):
                 baseline = self._store.capture(destination)
                 opened = self._reader.open(destination, passphrase)
@@ -414,37 +414,58 @@ class VaultService:
             snapshot = session._prepare_save()
             committed = False
             suspended: SuspendedSession | None = None
+            published = False
             try:
-                candidate = self._writer.write(snapshot, session._crypto_state_for_service)
                 try:
-                    suspended = self._pending.publish(
-                        source,
-                        candidate,
-                        baseline,
-                        expected=expected,
-                        validator=_RetainedPendingValidator(
-                            self._reader,
-                            session._crypto_state_for_service,
-                            snapshot,
-                        ),
-                    )
-                except _CommittedPendingError as error:
-                    suspended = error.suspended
-                    self._pending.verify(source, suspended)
-                committed = True
-                if self._store.capture(source) != baseline:
-                    committed = False
-                    self._pending.discard(source, suspended)
-                    raise ExternalModificationError()
-                try:
+                    candidate = self._writer.write(snapshot, session._crypto_state_for_service)
+                    try:
+                        suspended = self._pending.publish(
+                            source,
+                            candidate,
+                            baseline,
+                            expected=expected,
+                            validator=_RetainedPendingValidator(
+                                self._reader,
+                                session._crypto_state_for_service,
+                                snapshot,
+                            ),
+                        )
+                    except _CommittedPendingError as error:
+                        suspended = error.suspended
+                        published = True
+                        self._pending.verify(source, suspended)
+                    else:
+                        published = True
+                    if self._store.capture(source) != baseline:
+                        self._pending.discard(source, suspended)
+                        raise ExternalModificationError()
                     session._finish_suspend()
+                    committed = True
                 except BaseException:
-                    raise _CommittedSuspendError(suspended) from None
+                    if published and suspended is not None and self._pending_is_authoritative(source, suspended):
+                        with suppress(BaseException):
+                            session._finish_suspend()
+                        committed = True
+                        raise _CommittedSuspendError(suspended) from None
+                    raise
                 return suspended
             finally:
                 if not committed and not session.locked:
                     with suppress(BaseException):
                         session._abort_save()
+
+
+
+    #### Conservatively reconcile whether a published pending selector remains exact.
+    ####
+    def _pending_is_authoritative(self, source: Path, suspended: SuspendedSession) -> bool:
+        try:
+            self._pending.verify(source, suspended)
+        except PasswordSafeError:
+            return False
+        except BaseException:
+            return True
+        return True
 
 
 
@@ -605,11 +626,11 @@ class VaultService:
         target_version: FormatVersion | None = None,
         iterations: int = MINIMUM_ITERATIONS,
     ) -> SaveResult:
-        _validate_passphrase(passphrase)
-        output = _absolute_path(destination)
         snapshot: VaultDocument | None = None
         exported: VaultDocument | None = None
         try:
+            _validate_passphrase(passphrase)
+            output = _absolute_path(destination)
             _validate_session(session)
             with self._lock:
                 snapshot = session._export_snapshot()
@@ -657,10 +678,10 @@ class VaultService:
         recovery: RecoveryRevision,
         passphrase: SecretBuffer,
     ) -> VaultSession:
-        _validate_passphrase(passphrase)
-        destination = _absolute_path(path)
         opened: OpenedVault | None = None
         try:
+            _validate_passphrase(passphrase)
+            destination = _absolute_path(path)
             with self._lock:
                 baseline = self._store.capture(destination)
                 published = self._store.restore(

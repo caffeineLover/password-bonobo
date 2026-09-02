@@ -6,7 +6,10 @@ source pathname before suspension so no locked session property is accessed.
 
 import os
 from dataclasses import asdict
+from multiprocessing import get_context
+from multiprocessing.connection import Connection
 from pathlib import Path
+from threading import Event, Thread
 from uuid import UUID
 
 import pytest
@@ -43,6 +46,13 @@ from bonobo_core.passwordsafe.storage import (
 
 
 
+#### Represent an injected process-control failure without aborting the pytest run.
+####
+class _InjectedControlFlow(BaseException):
+    pass
+
+
+
 #### Assemble one deterministic service with persistent private pending storage.
 ####
 def _service(tmp_path: Path) -> VaultService:
@@ -52,6 +62,35 @@ def _service(tmp_path: Path) -> VaultService:
         _private_directory(tmp_path, "pending-private"),
         random_source=DeterministicRandomSource(bytes((index + 73) % 251 for index in range(131072))),
     )
+
+
+
+#### Hold one pending open guard in a spawned process until its parent releases it.
+####
+def _hold_pending_identity_guard(
+    pending: str,
+    working: str,
+    source: str,
+    connection: Connection,
+) -> None:
+    store = PendingSessionStore(Path(pending), Path(working))
+    with store.guard_open(Path(source)):
+        connection.send("locked")
+        connection.recv()
+
+
+
+#### Attempt an alias guard and report only after entering the protected region.
+####
+def _acquire_pending_alias_guard(
+    pending: Path,
+    working: Path,
+    source: Path,
+    acquired: Event,
+) -> None:
+    store = PendingSessionStore(pending, working)
+    with store.guard_open(source):
+        acquired.set()
 
 
 
@@ -91,6 +130,103 @@ def test_dirty_suspend_is_authenticated_private_and_leaves_source_unchanged(tmp_
     assert suspended.size > 0
     assert not hasattr(suspended, "path")
     assert str(source) not in repr(suspended)
+
+
+
+#### Block a fresh open through a hard link when the file identity has pending work.
+####
+def test_fresh_open_rejects_pending_source_hard_link_alias(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    suspended = service.suspend(_dirty_session(service, source))
+    alias = tmp_path / "fabricated-open-alias.psafe3"
+    os.link(source, alias)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-pending-master")
+    unexpectedly_opened: VaultSession | None = None
+
+    try:
+        with pytest.raises(StorageError):
+            unexpectedly_opened = service.open(alias, passphrase)
+    finally:
+        if unexpectedly_opened is not None:
+            unexpectedly_opened.lock()
+
+    assert passphrase.closed
+    service.discard_suspended(source, suspended)
+
+
+
+#### Refuse a second initial suspension reached through the same hard-link identity.
+####
+def test_alias_initial_suspend_cannot_publish_a_second_visible_slot(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    source_session = _dirty_session(service, source)
+    alias = tmp_path / "fabricated-suspend-alias.psafe3"
+    os.link(source, alias)
+    alias_session = service.open(alias, SecretBuffer.from_bytes(b"fabricated-pending-master"))
+    alias_session.add(
+        NewRecord(
+            UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+            "Alias-only pending edit",
+            SecretBuffer.from_bytes(b"fabricated-alias-secret"),
+        ),
+        alias_session.revision,
+    )
+    suspended = service.suspend(source_session)
+
+    with pytest.raises(StorageError):
+        service.suspend(alias_session)
+
+    slots = tuple((tmp_path / "pending-private").glob(".bonobo-pending-slot-*.slot"))
+    assert len(slots) == 1
+    assert alias_session.dirty
+    assert not alias_session.locked
+    service._pending.verify(source, suspended)
+    alias_session.discard_and_lock()
+    service.discard_suspended(source, suspended)
+
+
+
+#### Serialize cross-process alias guards by source identity rather than pathname.
+####
+def test_pending_identity_guard_blocks_hard_link_alias_across_processes(tmp_path: Path) -> None:
+    pending = _private_directory(tmp_path, "identity-pending")
+    working = _private_directory(tmp_path, "identity-working")
+    source = tmp_path / "fabricated-identity-source.psafe3"
+    alias = tmp_path / "fabricated-identity-alias.psafe3"
+    source.write_bytes(b"fabricated encrypted identity bytes")
+    os.link(source, alias)
+    context = get_context("spawn")
+    parent_connection, child_connection = context.Pipe()
+    process = context.Process(
+        target=_hold_pending_identity_guard,
+        args=(str(pending), str(working), str(source), child_connection),
+    )
+    process.start()
+    contender: Thread | None = None
+    acquired = Event()
+    try:
+        assert parent_connection.poll(5.0)
+        assert parent_connection.recv() == "locked"
+        contender = Thread(
+            target=_acquire_pending_alias_guard,
+            args=(pending, working, alias, acquired),
+        )
+        contender.start()
+        assert not acquired.wait(0.25)
+    finally:
+        if process.is_alive():
+            parent_connection.send("release")
+        if contender is not None:
+            contender.join(timeout=5.0)
+        process.join(timeout=5.0)
+        parent_connection.close()
+        child_connection.close()
+
+    assert acquired.is_set()
+    assert process.exitcode == 0
+    assert contender is not None and not contender.is_alive()
 
 
 
@@ -678,9 +814,9 @@ def test_resume_rejects_symbolic_link_pending_artifact(tmp_path: Path) -> None:
 
 
 
-#### Abort the live save snapshot even when post-commit source cleanup also fails.
+#### Reconcile a still-authoritative selector after retarget cleanup fails.
 ####
-def test_suspend_source_change_with_pending_cleanup_failure_keeps_session_mutable(
+def test_suspend_source_change_with_pending_cleanup_failure_locks_with_selector(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -722,16 +858,114 @@ def test_suspend_source_change_with_pending_cleanup_failure_keeps_session_mutabl
     monkeypatch.setattr(LocalVaultStore, "capture", replace_before_second_capture)
     monkeypatch.setattr(PendingSessionStore, "discard", reject_pending_cleanup)
 
-    with pytest.raises(StorageError):
+    with pytest.raises(StorageError) as captured:
+        service.suspend(session)
+
+    monkeypatch.undo()
+    assert captures == 2
+    suspended = getattr(captured.value, "suspended", None)
+    assert isinstance(suspended, SuspendedSession)
+    assert session.locked
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
+#### Reconcile a source-capture BaseException after pending publication commits.
+####
+def test_suspend_postpublication_capture_failure_locks_with_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    production_capture = LocalVaultStore.capture
+    captures = 0
+
+
+
+    #### Interrupt only the service capture performed after pending publication.
+    ####
+    def fail_second_capture(store: LocalVaultStore, path: Path) -> FileBaseline:
+        nonlocal captures
+        if store is service._store and path == source:
+            captures += 1
+            if captures == 2:
+                raise _InjectedControlFlow()
+        return production_capture(store, path)
+
+    monkeypatch.setattr(LocalVaultStore, "capture", fail_second_capture)
+
+    with pytest.raises(StorageError) as captured:
+        service.suspend(session)
+
+    suspended = getattr(captured.value, "suspended", None)
+    assert captures == 2
+    assert isinstance(suspended, SuspendedSession)
+    assert session.locked
+    service._pending.verify(source, suspended)
+    service.discard_suspended(source, suspended)
+
+
+
+#### Restore the true dirty session when failed cleanup already removed the selector.
+####
+def test_suspend_removed_selector_aborts_frozen_snapshot_and_remains_mutable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    source = tmp_path / "fabricated-source.psafe3"
+    session = _dirty_session(service, source)
+    replacement = tmp_path / "fabricated-external-source.psafe3"
+    replacement_session = service.create(
+        replacement,
+        SecretBuffer.from_bytes(b"fabricated-pending-master"),
+    )
+    replacement_session.lock()
+    production_capture = LocalVaultStore.capture
+    production_discard = PendingSessionStore.discard
+    captures = 0
+
+
+
+    #### Retarget the source before the service's post-publication capture.
+    ####
+    def replace_before_second_capture(store: LocalVaultStore, path: Path) -> FileBaseline:
+        nonlocal captures
+        if store is service._store and path == source:
+            captures += 1
+            if captures == 2:
+                replacement.replace(source)
+        return production_capture(store, path)
+
+
+
+    #### Raise after exact discard has already removed the new selector.
+    ####
+    def discard_then_interrupt(
+        store: PendingSessionStore,
+        selected_source: Path,
+        suspended: SuspendedSession,
+    ) -> None:
+        production_discard(store, selected_source, suspended)
+        raise _InjectedControlFlow()
+
+    monkeypatch.setattr(LocalVaultStore, "capture", replace_before_second_capture)
+    monkeypatch.setattr(PendingSessionStore, "discard", discard_then_interrupt)
+
+    with pytest.raises(_InjectedControlFlow):
         service.suspend(session)
 
     assert captures == 2
     assert not session.locked
     assert session.dirty
+    assert session._save_snapshot is None
     session.add(
         NewRecord(
             UUID("99999999-9999-4999-8999-999999999999"),
-            "Mutable after failed suspend",
+            "Mutable after removed pending selector",
             SecretBuffer.from_bytes(b"fabricated-after-failure"),
         ),
         session.revision,

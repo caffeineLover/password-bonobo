@@ -1379,6 +1379,25 @@ def _write_descriptor_bytes(descriptor: int, payload: bytes) -> None:
 @contextmanager
 def _destination_lock(working_directory: Path, destination: Path) -> Iterator[None]:
     name = f"{_vault_locator(destination)}.lock"
+    with _named_process_lock(working_directory, name):
+        yield
+
+
+
+#### Hold one cross-process lock shared by every hard link to a source identity.
+####
+@contextmanager
+def _source_identity_lock(working_directory: Path, baseline: FileBaseline) -> Iterator[None]:
+    name = f"source-{_source_identity_locator(baseline)}.lock"
+    with _named_process_lock(working_directory, name):
+        yield
+
+
+
+#### Acquire one private named lock using the established platform primitives.
+####
+@contextmanager
+def _named_process_lock(working_directory: Path, name: str) -> Iterator[None]:
     path = working_directory / name
     descriptor = -1
     try:
@@ -1399,6 +1418,19 @@ def _destination_lock(working_directory: Path, destination: Path) -> Iterator[No
                     _unlock_posix_descriptor(descriptor)
             with suppress(BaseException):
                 os.close(descriptor)
+
+
+
+#### Derive a private stable lock locator from path-free device/file identity.
+####
+def _source_identity_locator(baseline: FileBaseline) -> str:
+    if not isinstance(baseline, FileBaseline):
+        raise TypeError("source identity must use FileBaseline")
+    file_id = baseline.windows_file_id if os.name == "nt" else baseline.inode
+    if baseline.device is None or file_id is None:
+        raise StorageError(StorageReason.PREPARATION_FAILED)
+    identity = f"{baseline.device}:{file_id}".encode("ascii")
+    return hashlib.sha256(identity).hexdigest()
 
 
 

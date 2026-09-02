@@ -5,6 +5,7 @@ replacement safety, and owned passphrase lifetime without touching real files.
 """
 
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from fakes import FakeVaultService, FakeVaultSession, fabricated_record_view
@@ -18,6 +19,28 @@ from bonobo_core.passwordsafe import (
     StorageError,
     StorageReason,
 )
+
+
+
+#### Represent an injected validation BaseException without stopping pytest.
+####
+class _InjectedReplacementControlFlow(BaseException):
+    pass
+
+
+
+#### Invoke one public replacement boundary with deliberately runtime-typed inputs.
+####
+def _replacement_command(
+    app: VaultApplication[FakeVaultSession],
+    action: Literal["create", "open"],
+    path: object,
+    passphrase: SecretBuffer,
+    display_label: object,
+) -> object:
+    if action == "create":
+        return app.create(path, passphrase, display_label)  # type: ignore[arg-type]
+    return app.open(path, passphrase, display_label)  # type: ignore[arg-type]
 
 
 
@@ -104,6 +127,148 @@ def test_create_commits_a_clean_session_and_closes_passphrase(fake_service: Fake
 
     assert fake_service.create_calls == 1
     assert result.phase is ApplicationPhase.UNLOCKED_CLEAN
+    assert passphrase.closed
+
+
+
+#### Close a valid replacement input rejected by an invalid path.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+def test_replacement_invalid_path_closes_passphrase(
+    fake_service: FakeVaultService,
+    action: Literal["create", "open"],
+) -> None:
+    app = VaultApplication(fake_service)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-invalid-path")
+
+    with pytest.raises(ApplicationCommandError):
+        _replacement_command(app, action, object(), passphrase, "Fabricated")
+
+    assert passphrase.closed
+
+
+
+#### Close a valid replacement input rejected by an invalid display label.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+def test_replacement_invalid_display_label_closes_passphrase(
+    fake_service: FakeVaultService,
+    action: Literal["create", "open"],
+) -> None:
+    app = VaultApplication(fake_service)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-invalid-label")
+
+    with pytest.raises(ApplicationCommandError):
+        _replacement_command(
+            app,
+            action,
+            Path("fabricated-vault.psafe3"),
+            passphrase,
+            object(),
+        )
+
+    assert passphrase.closed
+
+
+
+#### Close a valid replacement input rejected during a reentrant BUSY phase.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+def test_replacement_busy_rejection_closes_passphrase(
+    fake_service: FakeVaultService,
+    action: Literal["create", "open"],
+) -> None:
+    app = VaultApplication(fake_service)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-busy-rejection")
+    rejected = False
+
+
+
+    #### Reenter only while the outer open has published BUSY internally.
+    ####
+    def reject_during_open() -> None:
+        nonlocal rejected
+        with pytest.raises(ApplicationCommandError):
+            _replacement_command(
+                app,
+                action,
+                Path("fabricated-nested.psafe3"),
+                passphrase,
+                "Nested",
+            )
+        rejected = True
+
+    fake_service.on_open = reject_during_open
+    opened = app.open(
+        Path("fabricated-vault.psafe3"),
+        SecretBuffer.from_bytes(b"fabricated-outer"),
+        "Fabricated",
+    )
+
+    assert opened.phase is ApplicationPhase.UNLOCKED_CLEAN
+    assert rejected
+    assert passphrase.closed
+
+
+
+#### Close only the newly rejected input while a deferred decision retains its owner.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+def test_replacement_awaiting_decision_rejection_closes_only_new_passphrase(
+    fake_service: FakeVaultService,
+    action: Literal["create", "open"],
+) -> None:
+    app = opened_application(fake_service, dirty=True)
+    deferred = SecretBuffer.from_bytes(b"fabricated-deferred-owner")
+    pending = app.open(Path("fabricated-other.psafe3"), deferred, "Other")
+    rejected = SecretBuffer.from_bytes(b"fabricated-awaiting-rejection")
+
+    with pytest.raises(ApplicationCommandError):
+        _replacement_command(
+            app,
+            action,
+            Path("fabricated-third.psafe3"),
+            rejected,
+            "Third",
+        )
+
+    assert rejected.closed
+    assert not deferred.closed
+    canceled = app.resolve_close(pending.decision, CloseChoice.CANCEL)
+    assert canceled.phase is ApplicationPhase.UNLOCKED_DIRTY
+    assert deferred.closed
+
+
+
+#### Close a valid replacement input when validation itself raises BaseException.
+####
+@pytest.mark.parametrize("action", ["create", "open"])
+def test_replacement_validation_baseexception_closes_passphrase(
+    fake_service: FakeVaultService,
+    monkeypatch: pytest.MonkeyPatch,
+    action: Literal["create", "open"],
+) -> None:
+    app = VaultApplication(fake_service)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-validation-interrupt")
+
+
+
+    #### Interrupt before ownership can be transferred into a replacement object.
+    ####
+    def interrupt_validation(*_args: object, **_kwargs: object) -> object:
+        raise _InjectedReplacementControlFlow()
+
+    monkeypatch.setattr(VaultApplication, "_validated_replacement", interrupt_validation)
+
+    with pytest.raises(_InjectedReplacementControlFlow):
+        _replacement_command(
+            app,
+            action,
+            Path("fabricated-interrupted.psafe3"),
+            passphrase,
+            "Interrupted",
+        )
+
     assert passphrase.closed
 
 

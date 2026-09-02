@@ -13,6 +13,7 @@ import pytest
 from helpers import DeterministicRandomSource
 from test_writer import _PASSPHRASE, _opened_source, _private_directory, _XorBackend
 
+import bonobo_core.passwordsafe.service as service_module
 from bonobo_core.passwordsafe.constants import (
     CURRENT_FORMAT_VERSION,
     FILE_TAG,
@@ -32,6 +33,20 @@ from bonobo_core.passwordsafe.secrets import SecretBuffer
 from bonobo_core.passwordsafe.service import SaveResult, VaultService
 from bonobo_core.passwordsafe.session import NewRecord, SetTextField
 from bonobo_core.passwordsafe.storage import StorageStage
+
+
+
+#### Represent early process-control failure without terminating the test runner.
+####
+class _InjectedValidationControlFlow(BaseException):
+    pass
+
+
+
+#### Interrupt path normalization before a public service operation enters its body.
+####
+def _interrupt_path_validation(_path: Path) -> Path:
+    raise _InjectedValidationControlFlow()
 
 
 
@@ -91,6 +106,82 @@ def test_create_edit_save_reopen_consumes_passphrases(tmp_path: Path) -> None:
     assert reopened.records()[0].handle != record.handle
     assert reopened.records()[0].title == "Alpha Portal"
     reopened.lock()
+
+
+
+#### Close create input when path normalization raises a BaseException early.
+####
+def test_create_early_validation_baseexception_closes_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-create-validation")
+    monkeypatch.setattr(service_module, "_absolute_path", _interrupt_path_validation)
+
+    with pytest.raises(_InjectedValidationControlFlow):
+        service.create(tmp_path / "fabricated-create.psafe3", passphrase)
+
+    assert passphrase.closed
+
+
+
+#### Close open input when path normalization raises a BaseException early.
+####
+def test_open_early_validation_baseexception_closes_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-open-validation")
+    monkeypatch.setattr(service_module, "_absolute_path", _interrupt_path_validation)
+
+    with pytest.raises(_InjectedValidationControlFlow):
+        service.open(tmp_path / "fabricated-open.psafe3", passphrase)
+
+    assert passphrase.closed
+
+
+
+#### Close export input when destination validation raises before session checks.
+####
+def test_export_early_validation_baseexception_closes_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-export-validation")
+    monkeypatch.setattr(service_module, "_absolute_path", _interrupt_path_validation)
+
+    with pytest.raises(_InjectedValidationControlFlow):
+        service.export(
+            object(),  # type: ignore[arg-type]
+            tmp_path / "fabricated-export.psafe3",
+            passphrase,
+        )
+
+    assert passphrase.closed
+
+
+
+#### Close restore input when source validation raises before selector checks.
+####
+def test_restore_early_validation_baseexception_closes_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(tmp_path)
+    passphrase = SecretBuffer.from_bytes(b"fabricated-restore-validation")
+    monkeypatch.setattr(service_module, "_absolute_path", _interrupt_path_validation)
+
+    with pytest.raises(_InjectedValidationControlFlow):
+        service.restore(
+            tmp_path / "fabricated-restore.psafe3",
+            object(),  # type: ignore[arg-type]
+            passphrase,
+        )
+
+    assert passphrase.closed
 
 
 

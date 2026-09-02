@@ -33,6 +33,7 @@ from .storage import (
     _PublicationAnchor,
     _read_descriptor_bytes,
     _require_private_directory,
+    _source_identity_lock,
     _validate_digest,
     _vault_locator,
     _write_descriptor_bytes,
@@ -275,7 +276,11 @@ class PendingSessionStore:
             _validate_suspended(expected)
         if not callable(validator):
             raise TypeError("pending validator must be callable")
-        with self._lock, _destination_lock(self._snapshot_directory, source):
+        with (
+            self._lock,
+            _source_identity_lock(self._snapshot_directory, source_baseline),
+            _destination_lock(self._snapshot_directory, source),
+        ):
             return self._publish_locked(source, candidate, source_baseline, expected, validator)
 
 
@@ -287,12 +292,19 @@ class PendingSessionStore:
         if not isinstance(source, Path):
             raise TypeError("pending source must use Path")
         try:
-            with self._lock, _destination_lock(self._snapshot_directory, source):
+            source_baseline = _capture_regular_file(source)
+            with (
+                self._lock,
+                _source_identity_lock(self._snapshot_directory, source_baseline),
+                _destination_lock(self._snapshot_directory, source),
+            ):
+                if _capture_regular_file(source) != source_baseline:
+                    raise ExternalModificationError()
                 anchor: _PublicationAnchor | None = None
                 try:
                     anchor = _open_private_anchor(self._directory)
                     slot_name = _slot_name(_vault_locator(source))
-                    if slot_name in _slot_names(self._directory, anchor):
+                    if self._source_has_pending_locked(anchor, slot_name, source_baseline):
                         raise StorageError(StorageReason.VERIFICATION_FAILED)
                 finally:
                     if anchor is not None:
@@ -519,12 +531,12 @@ class PendingSessionStore:
             anchor = _open_private_anchor(self._directory)
             locator = _vault_locator(source)
             slot_name = _slot_name(locator)
-            previous = self._read_located(anchor, slot_name, close_anchor=False)
-            if (
-                (expected is None and previous is not None)
-                or (expected is not None and (previous is None or previous.stored.suspended != expected))
-            ):
-                raise StorageError(StorageReason.VERIFICATION_FAILED)
+            previous = self._publication_previous_locked(
+                anchor,
+                slot_name,
+                source_baseline,
+                expected,
+            )
             identifier = self._new_identifier(anchor)
             artifact_name = _artifact_name(identifier)
             temporary_name = f".bonobo-pending-write-{secrets.token_hex(16)}"
@@ -766,6 +778,74 @@ class PendingSessionStore:
                 return identifier
             os.close(opened[0])
         raise StorageError(StorageReason.PREPARATION_FAILED)
+
+
+
+    #### Report any exact-path or same-file-identity pending slot after validation.
+    ####
+    def _source_has_pending_locked(
+        self,
+        anchor: _PublicationAnchor,
+        expected_slot_name: str,
+        source_baseline: FileBaseline,
+    ) -> bool:
+        for slot_name in _slot_names(self._directory, anchor):
+            located = self._read_located(anchor, slot_name, close_anchor=False)
+            if located is None:
+                raise StorageError(StorageReason.VERIFICATION_FAILED)
+            try:
+                if slot_name == expected_slot_name or _same_source_identity(
+                    located.stored.source_baseline,
+                    source_baseline,
+                ):
+                    return True
+            finally:
+                _close_located_descriptors(located)
+        return False
+
+
+
+    #### Select the sole exact expected slot and reject every identity alias.
+    ####
+    def _publication_previous_locked(
+        self,
+        anchor: _PublicationAnchor,
+        expected_slot_name: str,
+        source_baseline: FileBaseline,
+        expected: SuspendedSession | None,
+    ) -> _LocatedPending | None:
+        identity_match: _LocatedPending | None = None
+        exact_slot_seen = False
+        selected: _LocatedPending | None = None
+        try:
+            for slot_name in _slot_names(self._directory, anchor):
+                located = self._read_located(anchor, slot_name, close_anchor=False)
+                if located is None:
+                    raise StorageError(StorageReason.VERIFICATION_FAILED)
+                exact_slot_seen = exact_slot_seen or slot_name == expected_slot_name
+                if _same_source_identity(located.stored.source_baseline, source_baseline):
+                    if identity_match is not None:
+                        _close_located_descriptors(located)
+                        raise StorageError(StorageReason.VERIFICATION_FAILED)
+                    identity_match = located
+                else:
+                    _close_located_descriptors(located)
+            if expected is None:
+                if exact_slot_seen or identity_match is not None:
+                    raise StorageError(StorageReason.VERIFICATION_FAILED)
+                return None
+            if (
+                identity_match is None
+                or identity_match.slot_name != expected_slot_name
+                or identity_match.stored.suspended != expected
+            ):
+                raise StorageError(StorageReason.VERIFICATION_FAILED)
+            selected = identity_match
+            identity_match = None
+            return selected
+        finally:
+            if identity_match is not None:
+                _close_located_descriptors(identity_match)
 
 
 
@@ -1158,6 +1238,22 @@ def _slot_names(directory: Path, anchor: _PublicationAnchor) -> tuple[str, ...]:
 def _validate_suspended(suspended: SuspendedSession) -> None:
     if not isinstance(suspended, SuspendedSession):
         raise TypeError("pending selector must use SuspendedSession")
+
+
+
+#### Compare stable device/file identity without changing path-bound metadata.
+####
+def _same_source_identity(left: FileBaseline, right: FileBaseline) -> bool:
+    left_file_id = left.windows_file_id if os.name == "nt" else left.inode
+    right_file_id = right.windows_file_id if os.name == "nt" else right.inode
+    if (
+        left.device is None
+        or right.device is None
+        or left_file_id is None
+        or right_file_id is None
+    ):
+        raise StorageError(StorageReason.VERIFICATION_FAILED)
+    return (left.device, left_file_id) == (right.device, right_file_id)
 
 
 
