@@ -47,17 +47,26 @@ This proves the rejection is during staging, validation, or authentication
 before the first publication call.  The trace contains no paths or native
 messages.
 
-The current diagnostic adds the transaction's own stage markers plus closed
-outcomes for child creation, descriptor identity validation, candidate copy,
-and baseline capture.  It passes locally on Windows.  Ruff and strict mypy pass
-the revised file and all 110 source files.
+Commit `ef82eac` adds the transaction's own stage markers plus closed outcomes
+for child creation, descriptor identity validation, candidate copy, and baseline
+capture.  Hosted run `33687550170` proves the exact root on macOS: after entering
+preparation, `_PosixPublicationAnchor.open_child` leaks
+`FileNotFoundError(ENOENT)` while probing a fresh artifact identifier.  Ubuntu's
+preceding trace was identical and uses the same POSIX implementation.  The
+cross-platform anchor contract expects an absent child to return `None`, as the
+Windows implementation already does.
 
-The exact immediate actions are to publish the expanded pre-publication trace,
-observe its Ubuntu/macOS event sequence, identify the single failing boundary,
-then add a red-first behavioral regression and correct only the proven root
-cause.  Monitor the resulting foundation run until all three desktop jobs and
-both mobile jobs reach terminal status.  After hosted success, record that exact
-run here.
+A platform-independent regression then failed locally with that exact leaked
+`FileNotFoundError`.  The minimal production correction catches only
+`FileNotFoundError` from the POSIX anchored open and returns `None`; the new
+contract regression and the complete native pending transaction probe now pass.
+Ruff passes the changed files and strict mypy passes all 110 source files.  The
+affected pending/storage suite reports 93 passed and 7 expected platform skips
+in 140.18 seconds.
+
+The exact immediate actions are to publish the root-cause correction and monitor
+its replacement foundation run until all three desktop jobs and both mobile jobs
+reach terminal status.  After hosted success, record that exact run here.
 Packaged native artifacts, installers, signing, provider work, URL audit,
 mobile clients, settings, and advanced vault workflows remain outside this
 completed vertical slice.

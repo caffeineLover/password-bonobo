@@ -19,6 +19,28 @@ from tests.passwordsafe.test_writer import _private_directory
 
 
 
+#### Translate a missing POSIX anchored child into the cross-platform absent result.
+####
+def test_posix_anchor_missing_child_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    anchor = object.__new__(_PosixPublicationAnchor)
+    anchor._fd = -1
+    anchor._identity = (1, 1)
+    anchor._path = Path("fabricated-posix-anchor")
+
+
+
+    #### Model the native absent-child result independently of the Windows host.
+    ####
+    def missing_child(*_args: object, **_kwargs: object) -> int:
+        raise FileNotFoundError(2, "fabricated missing child")
+
+    monkeypatch.setattr(_PosixPublicationAnchor, "stable", lambda _anchor: True)
+    monkeypatch.setattr(os, "open", missing_child)
+
+    assert anchor.open_child("fabricated-absent-child") is None
+
+
+
 #### Reject publication after another writer changes the captured destination.
 ####
 def test_external_change_blocks_publication(tmp_path: Path) -> None:

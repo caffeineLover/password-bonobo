@@ -426,7 +426,10 @@ class _PosixPublicationAnchor:
             return None
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
         flags |= getattr(os, "O_NONBLOCK", 0)
-        descriptor = os.open(name, flags, dir_fd=self._fd)
+        try:
+            descriptor = os.open(name, flags, dir_fd=self._fd)
+        except FileNotFoundError:
+            return None
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode) or not self.stable():
             os.close(descriptor)
