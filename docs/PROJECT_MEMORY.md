@@ -2,6 +2,23 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 5 review-fix round 1
+
+The Task 5 review repair corrects commit `0902a02`'s bounded shutdown and
+diagnostic defects: desktop teardown now invokes the facade's terminal
+`lock(snapshot.generation)` operation, which suspends a dirty session before
+engine destruction; import-boundary diagnostics now contain only an import
+identifier; and base-import failures raise a fixed status message without raw
+subprocess output.  Dirty-session and diagnostic regressions were observed RED
+before the production edits.
+
+Last verified: the desktop main/import-boundary/package/wheel selection passed
+with 16 tests; Ruff, strict mypy, Python structure, and `git diff --check`
+passed.  The Task 5 report has the detailed commands and outcomes.  There is
+no active Task 5 work after the separate review-fix commit.  The immediate next
+approved action is the next assigned vertical-slice task; QML resources and CI
+workflow work remain assigned to Tasks 7 and 8 respectively.
+
 ## Completed Task 5 desktop foundation
 
 Task 5 of the approved vault-application desktop vertical slice adds the

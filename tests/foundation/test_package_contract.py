@@ -5,6 +5,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 import bonobo_core
 
@@ -39,7 +42,28 @@ def test_application_core_imports_without_desktop_dependencies() -> None:
         text=True,
     )
 
-    assert result.returncode == 0, result.stderr
+    if result.returncode != 0:
+        raise AssertionError("base core import must succeed")
+
+
+
+#### Keep a failed base-import diagnostic independent from raw subprocess output.
+####
+#### The subprocess may include a private working directory or arbitrary
+#### exception text.  This contract requires the test failure to remain one
+#### fixed status message instead of passing that output to pytest.
+####
+def test_application_core_import_failure_uses_a_safe_fixed_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *_arguments, **_kwargs: SimpleNamespace(returncode=1, stderr="private-path and raw exception"),
+    )
+
+    with pytest.raises(AssertionError) as caught:
+        test_application_core_imports_without_desktop_dependencies()
+
+    assert str(caught.value) == "base core import must succeed"
 
 
 

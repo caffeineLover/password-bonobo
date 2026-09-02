@@ -56,15 +56,16 @@ def _botan_library_path() -> Path | None:
 
 
 
-#### Request a facade lock during GUI teardown without masking process shutdown.
+#### Request a terminal facade lock during GUI teardown without masking shutdown.
 ####
 #### The facade owns the authenticated session and dirty-suspension lifecycle.
-#### A shutdown request is best effort here because this skeleton has no QML
-#### decision workflow yet; later controller work will present that decision.
+#### Unlike the interactive close command, terminal lock suspends dirty state
+#### before the engine is destroyed.  Failures remain best effort here because
+#### the skeleton has no QML error-recovery workflow yet.
 ####
 def _request_shutdown_lock(application: VaultApplication[VaultSession]) -> None:
     with suppress(Exception):
-        application.request_close(application.snapshot.generation)
+        application.lock(application.snapshot.generation)
 
 
 
