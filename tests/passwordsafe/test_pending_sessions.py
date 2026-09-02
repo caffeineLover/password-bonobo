@@ -31,6 +31,7 @@ from bonobo_core.passwordsafe import (
 from bonobo_core.passwordsafe.errors import StorageError, StorageReason
 from bonobo_core.passwordsafe.model import VaultDocument
 from bonobo_core.passwordsafe.pending import (
+    PendingFaults,
     PendingSessionStore,
     PendingStage,
     _LocatedPending,
@@ -41,6 +42,8 @@ from bonobo_core.passwordsafe.storage import (
     FileBaseline,
     LocalVaultStore,
     StorageStage,
+    _capture_open_descriptor,
+    _copy_path_to_descriptor,
     _PublicationAnchor,
 )
 from bonobo_core.passwordsafe.storage import (
@@ -303,10 +306,119 @@ def test_native_pending_publication_completes_across_platforms(
     probe_anchor.close()
     production_publish = anchor_type.publish_new_child
     production_synchronize = anchor_type.synchronize
+    production_create = anchor_type.create_persistent
+    production_open_child = anchor_type.open_child
     production_open = anchor_type.open_child_for_replace
+    production_private_safe = anchor_type.private_child_is_safe
     production_remove = anchor_type.remove_if_same
     production_read = PendingSessionStore._read_located
     production_candidate_cleanup = pending_module._remove_candidate_if_same
+    production_copy = _copy_path_to_descriptor
+    production_capture = _capture_open_descriptor
+    production_validate = pending_module._validate_private_child
+    service = _service(tmp_path)
+    fault_type = type(service._pending.faults)
+    production_hit = fault_type._hit
+
+
+
+    #### Record the last transaction stage entered before any closed failure.
+    ####
+    def trace_hit(faults: PendingFaults, stage: PendingStage) -> None:
+        events.append(f"stage:{stage.value}")
+        production_hit(faults, stage)
+
+
+
+    #### Record persistent child creation without retaining its generated name.
+    ####
+    def trace_create(
+        anchor: _PublicationAnchor,
+        name: str,
+    ) -> tuple[int, tuple[int, int], str | None] | None:
+        try:
+            result = production_create(anchor, name)
+        except OSError as error:
+            events.append(f"create:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append("create:hit" if result is not None else "create:miss")
+        return result
+
+
+
+    #### Record read-only child lookup without retaining the generated name.
+    ####
+    def trace_open_child(
+        anchor: _PublicationAnchor,
+        name: str,
+    ) -> tuple[int, tuple[int, int]] | None:
+        try:
+            result = production_open_child(anchor, name)
+        except OSError as error:
+            events.append(f"open-child:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append("open-child:hit" if result is not None else "open-child:miss")
+        return result
+
+
+
+    #### Record descriptor identity validation as a closed Boolean outcome.
+    ####
+    def trace_private_safe(
+        anchor: _PublicationAnchor,
+        descriptor: int,
+        identity: tuple[int, int],
+    ) -> bool:
+        try:
+            result = production_private_safe(anchor, descriptor, identity)
+        except OSError as error:
+            events.append(f"private-safe:error:{type(error).__name__}:{error.errno}")
+            raise
+        events.append(f"private-safe:{result}")
+        return result
+
+
+
+    #### Record candidate-to-staging copy completion without retaining file data.
+    ####
+    def trace_copy(source: Path, destination_descriptor: int) -> None:
+        try:
+            production_copy(source, destination_descriptor)
+        except BaseException as error:
+            events.append(f"copy:error:{type(error).__name__}")
+            raise
+        events.append("copy:ok")
+
+
+
+    #### Record each stable descriptor baseline capture as a closed outcome.
+    ####
+    def trace_capture(descriptor: int) -> FileBaseline:
+        try:
+            result = production_capture(descriptor)
+        except BaseException as error:
+            events.append(f"capture:error:{type(error).__name__}")
+            raise
+        events.append("capture:ok")
+        return result
+
+
+
+    #### Record owner-only child validation without exposing a child name.
+    ####
+    def trace_validate(
+        directory: Path,
+        anchor: _PublicationAnchor,
+        name: str,
+        descriptor: int,
+        identity: tuple[int, int],
+    ) -> None:
+        try:
+            production_validate(directory, anchor, name, descriptor, identity)
+        except BaseException as error:
+            events.append(f"validate:error:{type(error).__name__}")
+            raise
+        events.append("validate:ok")
 
 
 
@@ -405,13 +517,19 @@ def test_native_pending_publication_completes_across_platforms(
         events.append(f"candidate-cleanup:{result}")
         return result
 
+    monkeypatch.setattr(fault_type, "_hit", trace_hit)
+    monkeypatch.setattr(anchor_type, "create_persistent", trace_create)
+    monkeypatch.setattr(anchor_type, "open_child", trace_open_child)
+    monkeypatch.setattr(anchor_type, "private_child_is_safe", trace_private_safe)
     monkeypatch.setattr(anchor_type, "publish_new_child", trace_publish)
     monkeypatch.setattr(anchor_type, "synchronize", trace_synchronize)
     monkeypatch.setattr(anchor_type, "open_child_for_replace", trace_open)
     monkeypatch.setattr(anchor_type, "remove_if_same", trace_remove)
     monkeypatch.setattr(PendingSessionStore, "_read_located", trace_read)
     monkeypatch.setattr(pending_module, "_remove_candidate_if_same", trace_candidate_cleanup)
-    service = _service(tmp_path)
+    monkeypatch.setattr(pending_module, "_copy_path_to_descriptor", trace_copy)
+    monkeypatch.setattr(pending_module, "_capture_open_descriptor", trace_capture)
+    monkeypatch.setattr(pending_module, "_validate_private_child", trace_validate)
     source = tmp_path / "fabricated-traced-source.psafe3"
     session = _dirty_session(service, source)
     events.clear()

@@ -39,13 +39,20 @@ retained-descriptor read.  Hosted diagnostic run `33686744747` passes that probe
 on both Ubuntu and macOS and reaches the later full suite, proving the basic POSIX
 anchor operation is not the failing boundary.
 
-The current diagnostic extends the early matrix probe across the complete
-suspend transaction.  It records only boundary operation names, closed
-outcomes, exception classes, and numeric errno values; it does not retain paths
-or native messages.  The probe passes locally on Windows, Ruff passes its file,
-and strict mypy passes all 110 source files.
+Commit `43fd277` extends the early matrix probe across the complete suspend
+transaction.  Hosted run `33687193423` produces the identical safe trace on
+Ubuntu and macOS: identity-bound open and removal occur only during successful
+candidate rollback, while neither publication nor synchronization is reached.
+This proves the rejection is during staging, validation, or authentication
+before the first publication call.  The trace contains no paths or native
+messages.
 
-The exact immediate actions are to publish the expanded transaction trace,
+The current diagnostic adds the transaction's own stage markers plus closed
+outcomes for child creation, descriptor identity validation, candidate copy,
+and baseline capture.  It passes locally on Windows.  Ruff and strict mypy pass
+the revised file and all 110 source files.
+
+The exact immediate actions are to publish the expanded pre-publication trace,
 observe its Ubuntu/macOS event sequence, identify the single failing boundary,
 then add a red-first behavioral regression and correct only the proven root
 cause.  Monitor the resulting foundation run until all three desktop jobs and
