@@ -240,8 +240,20 @@ sentinel, continues rejecting null with any other errno and every actual/anomalo
 temporary-root workaround. The snapshot security file passes 50 tests with 7 platform skips. All three strict mypy
 profiles and the current-head full suite pass: 658 passed, 12 expected skips, 79% coverage, and zero failures in 109.93
 seconds. Review found no Critical or Important issue; its Minor request for explicit wrong-errno and invalid-pointer
-cases is incorporated, and the expanded snapshot selection passes 54 tests with 7 platform skips. Integration,
-publication, and hosted macOS proof remain next.
+cases is incorporated, and the expanded snapshot selection passes 54 tests with 7 platform skips. Commit `3c5b538` is
+integrated and pushed. Its merged suite reports 662 passed, 12 expected skips, 79% coverage, and zero failures in
+107.85 seconds. Hosted run `33583601745` proves every desktop job and Android pass. Its only failure is the iOS link,
+where the Botan archive leaves `___cxa_guard_release`, `___cxa_throw`, `___gxx_personality_v0`, and `std::__1` symbols
+unresolved.
+
+Worktree branch `fix/ios-cxx-runtime` adds red-first command coverage requiring `-lc++` immediately after the Botan
+static archive only for `ios-arm64`; Android remains unchanged. The minimal implementation now satisfies both focused
+regressions and all 44 build-driver tests. Independent review reports no Critical, Important, or Minor findings.
+Integration, publication, and hosted iOS proof remain next. The current full Windows/CPython 3.14.7 suite uses the
+verified Botan 3.13 DLL and reports 662 passed, 12 expected skips, 79% coverage, and zero failures in 109.53 seconds.
+Ruff, Python structure, Bandit, compatibility, provenance, tracked-file, REUSE 119/119, whitespace, and strict mypy
+under Windows, Darwin, and Linux profiles all pass. Pip-audit finds no known third-party vulnerabilities and skips only
+the unpublished local project; the source distribution build, wheel build, and wheel inspection all pass.
 
 Local command form uses `python -m uv` because the `uv` console executable is not discoverable on this Windows PATH.
 REUSE uses `--no-multiprocessing` because Python 3.14 Windows worker startup was unstable while single-process checks
@@ -270,12 +282,12 @@ the same metadata.
 - Future binary/mobile dependencies require Python 3.14 and platform requalification.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
-- Hosted run `33582756604` proves Ubuntu, Windows, and Android pass. The locally verified macOS absent-ACL sentinel
-  repair awaits publication and hosted proof. iOS still lacks C++ runtime symbols during its static archive link.
+- Hosted run `33583601745` proves all three desktop jobs and Android pass. iOS still lacks C++ runtime symbols until
+  the current target-specific `-lc++` repair is integrated and exercised by the hosted linker.
 
 ## Exact continuation order after this checkpoint
 
-1. Review and commit `fix/macos-no-acl-sentinel`, fast-forward it into `main`, push, and verify hosted macOS pytest.
-2. Repair and verify the iOS C++ runtime link, then push and observe the hosted cross-build.
+1. Commit `fix/ios-cxx-runtime`, fast-forward it into `main`, and run merged verification.
+2. Push `main` and observe all five hosted jobs; record the exact hosted result.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.

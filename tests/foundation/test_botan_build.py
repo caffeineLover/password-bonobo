@@ -907,6 +907,7 @@ def test_mobile_smoke_link_uses_twofish_ffi_and_resolved_toolchain(tmp_path: Pat
     library_index = command.index(str(library))
     assert command[source_index - 2:source_index] == ("-x", "c")
     assert command[library_index - 2:library_index] == ("-x", "none")
+    assert "-lc++" not in command
     assert f"-I{output_directory / 'include' / 'botan-3'}" in command
     assert str(library) in command
     assert "botan_block_cipher_init" in source
@@ -954,7 +955,10 @@ def test_ios_smoke_link_keeps_resolved_abi_flags(tmp_path: Path) -> None:
         runner=run_compiler,
     )
 
-    assert commands[0][1:5] == ("-isysroot", str(sdk.resolve()), "-arch", "arm64")
+    command = commands[0]
+    library_index = command.index(str(library))
+    assert command[1:5] == ("-isysroot", str(sdk.resolve()), "-arch", "arm64")
+    assert command[library_index + 1] == "-lc++"
 
 
 

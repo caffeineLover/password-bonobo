@@ -625,6 +625,7 @@ def link_mobile_smoke_program(
         source_path.write_text(BOTAN_FFI_SMOKE_SOURCE, encoding="utf-8", newline="\n")
     except OSError as error:
         raise BotanBuildError("mobile smoke preparation failed") from error
+    runtime_libraries = ("-lc++",) if target == "ios-arm64" else ()
     command = (
         str(compiler),
         *abi_arguments,
@@ -636,6 +637,7 @@ def link_mobile_smoke_program(
         "-x",
         "none",
         str(library_path),
+        *runtime_libraries,
         "-o",
         str(linked_path),
     )
