@@ -37,6 +37,7 @@ path = [
     "docs/superpowers/plans/2026-09-01-vault-application-desktop-vertical-slice.md",
     "docs/superpowers/specs/2026-08-23-lossless-passwordsafe-core-design.md",
     "docs/superpowers/specs/2026-09-01-vault-application-desktop-foundation-design.md",
+    "docs/superpowers/specs/2026-09-02-pending-session-transaction-boundaries-design.md",
     "examples/passwordsafe_core_demo.py",
     "pyproject.toml",
     "src/bonobo_core/__init__.py",

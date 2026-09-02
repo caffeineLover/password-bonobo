@@ -2,32 +2,30 @@
 
 Last updated: 2026-09-02
 
-## Blocked Task 4 final review
+## Active Task 4 transaction-boundary revision
 
-Task 4 remains unapproved after the third and final repair round permitted by
-the selected subagent-driven workflow.  Final independent review of
-`adae714..48933dc` reports one Critical and one Important finding.  The
-Critical is a retained-directory binding race: direct fd/handle enumeration
-is correct, but before trusting absence it does not recheck that the retained
-anchor is still the current pending-directory pathname.  A valid empty decoy
-installed before anchor open and replaced by the real directory afterward can
-hide the authoritative slot and permit a hard-link alias open.  The Important
-finding is post-discard reconciliation: after exact slot and artifact removal,
-a destination-lock teardown failure is still reported as retryable failure,
-so the facade retains a dead selector whose retry is missing.
+The user approved a narrow architectural revision for the two remaining Task 4
+findings.  The design addendum is
+`docs/superpowers/specs/2026-09-02-pending-session-transaction-boundaries-design.md`.
+It requires every retained-handle slot scan to finish under the existing bound
+and pass a final current-path identity check before absence or selection is
+trusted.  It also requires explicit discard to distinguish pre-commit failure
+from post-commit destination-lock teardown so an irreversible successful
+discard cannot leave the facade holding a dead selector.
 
-All other Task 4 findings are closed, and the last verified implementation
-remains committed as `1f928fc` with checkpoint `48933dc`.  Its focused suite
-passes 148 tests with 2 expected skips, the selected suite passes 267 with 9
-expected skips, and the exact-DLL full suite passes 815 with 14 expected skips;
-all recorded static, security, legal, audit, tracked-file, and build gates are
-green.  Do not begin Task 5.  The next action requires user direction because
-the selected workflow forbids an automatic fourth repair attempt: either
-approve a plan revision/new Task 4 execution or explicitly authorize an
-exceptional fourth scoped repair for (1) a final current-path identity check
-before trusting retained-anchor absence and (2) committed-success handling
-across discard lock teardown.  Tasks 5 through 8 remain approved only after
-Task 4 receives a clean independent review.
+No implementation has started.  The previous three-round stop was based on an
+outdated workflow limit; the current subagent-driven instructions permit repair
+rounds 4 and 5 with a fresh implementation agent.  The last verified code
+remains `1f928fc` with checkpoint `48933dc`: focused tests pass 148 with 2
+expected skips, the selected suite passes 267 with 9 expected skips, and the
+exact-DLL full suite passes 815 with 14 expected skips.  All recorded static,
+security, legal, audit, tracked-file, and build gates are green.
+
+Immediate next actions are user review of the written addendum, creation and
+commit of its implementation plan after approval, then Task 4 repair round 4
+under the selected subagent-driven workflow.  Do not begin Task 5 until Task 4
+receives a clean independent review.  Tasks 5 through 8 remain approved only in
+that order.
 
 ## Completed Task 4 review-fix round 3
 
