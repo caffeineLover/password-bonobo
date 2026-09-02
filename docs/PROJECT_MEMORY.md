@@ -34,6 +34,22 @@ reaches a DTO or snapshot.  The regression passes, as do the application plus
 relevant PasswordSafe selection (76), strict mypy on win32/darwin/linux (83
 files each), Ruff, Python structure, whitespace, and the Botan-backed full
 suite (713 passed, 12 expected skips, 107.48 seconds).  Immediate next action:
+commit the Task 3 review-fix round 2 change, then continue only with approved
+Task 4.
+
+Review-fix round 2 is verified and ready to commit.  The red regressions proved
+that a new draft created by `begin_edit(None)` could use a later out-of-band
+session revision and that a directly fabricated new draft was accepted.  The
+facade now privately captures the current revision by draft generation at
+`begin_edit(None)`, consumes and validates it before one add mutation, and
+clears pending captures on every published generation.  The capture never
+enters `RecordDraft`, a snapshot, or any diagnostic.  The focused record-command
+tests pass (8), as do application plus relevant PasswordSafe session/service
+tests (75), Ruff, Python structure, whitespace, and strict mypy on
+win32/darwin/linux (83 files each).  The canonical Botan-backed full suite
+passes with 715 tests and 12 expected skips in 109.39 seconds.  Exact next
+actions: update the Task 3 report, rerun post-documentation structure and
+whitespace checks, commit this review fix without amending prior commits, then
 continue only with approved Task 4.
 
 ## Purpose and resume protocol

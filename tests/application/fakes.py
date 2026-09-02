@@ -86,6 +86,13 @@ class FakeVaultSession:
 
 
 
+    #### Simulate an external revision change without any application notification.
+    ####
+    def advance_revision_out_of_band(self) -> None:
+        self._revision = RevisionToken()
+
+
+
     #### Return current immutable record views as the real session's public API does.
     ####
     def records(self) -> tuple[RecordView, ...]:

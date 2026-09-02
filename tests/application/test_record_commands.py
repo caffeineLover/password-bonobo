@@ -109,7 +109,12 @@ def test_new_draft_in_empty_vault_commits_one_add_with_a_closed_secret() -> None
     session = FakeVaultSession(())
     application = VaultApplication(FakeVaultService(session))
     application.open(Path("fabricated-empty.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
-    draft = RecordDraft(None, application.snapshot.generation, "First Record", "Research", "sample-user", False)
+    draft = replace(
+        application.begin_edit(None, application.snapshot.generation),
+        title="First Record",
+        group="Research",
+        username="sample-user",
+    )
     password = SecretBuffer.from_bytes(b"fabricated-first-password")
 
     result = application.commit_edit(draft, password)
@@ -119,3 +124,42 @@ def test_new_draft_in_empty_vault_commits_one_add_with_a_closed_secret() -> None
     assert result.records[0].title == "First Record"
     assert application.test_session_change_count == 1
     assert "fabricated-first-password" not in repr(result)
+
+
+
+#### Reject a new draft when its privately captured document revision becomes stale.
+####
+def test_new_draft_rejects_out_of_band_revision_without_mutation() -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-empty.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    draft = replace(application.begin_edit(None, application.snapshot.generation), title="First Record")
+    before = application.snapshot
+    session.advance_revision_out_of_band()
+    password = SecretBuffer.from_bytes(b"fabricated-first-password")
+
+    with pytest.raises(ApplicationCommandError, match="record draft is stale"):
+        application.commit_edit(draft, password)
+
+    assert password.closed
+    assert session.change_count == 0
+    assert application.snapshot == before
+
+
+
+#### Reject a caller-fabricated new draft that has no private revision capture.
+####
+def test_new_draft_without_private_revision_capture_is_rejected() -> None:
+    session = FakeVaultSession(())
+    application = VaultApplication(FakeVaultService(session))
+    application.open(Path("fabricated-empty.psafe3"), SecretBuffer.from_bytes(b"fabricated-unlock"), "Fabricated")
+    before = application.snapshot
+    draft = RecordDraft(None, before.generation, "First Record", "Research", "sample-user", False)
+    password = SecretBuffer.from_bytes(b"fabricated-first-password")
+
+    with pytest.raises(ApplicationCommandError, match="record draft is stale"):
+        application.commit_edit(draft, password)
+
+    assert password.closed
+    assert session.change_count == 0
+    assert application.snapshot == before

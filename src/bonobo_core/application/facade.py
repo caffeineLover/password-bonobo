@@ -201,6 +201,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
     _generation: int
     _lock: RLock
     _next_record_key: int
+    _new_draft_revisions: dict[int, RevisionToken]
     _random: RandomSource
     _record_keys: dict[RecordHandle, RecordKey]
     _record_revisions: dict[RecordKey, RevisionToken]
@@ -236,6 +237,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         self._session = None
         self._generation = 0
         self._next_record_key = 1
+        self._new_draft_revisions = {}
         self._record_keys = {}
         self._record_revisions = {}
         self._search = ""
@@ -308,6 +310,8 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         with self._lock:
             previous = self._validate_active_generation(expected_generation)
             if key is None:
+                session = self._require_session()
+                self._new_draft_revisions[previous.generation] = self._current_revision(session)
                 return RecordDraft(None, previous.generation, "", "", "", False)
             handle = self._resolve_handle(key)
             session = self._require_session()
@@ -526,12 +530,15 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         if password is None:
             raise ApplicationCommandError("new record password is required")
         session = self._require_session()
+        revision = self._consume_new_draft_revision(draft.generation)
+        if self._current_revision(session) is not revision:
+            raise ApplicationCommandError("record draft is stale")
         self._enter_busy(previous)
         mutated = False
         try:
             url_text = self._secret_text(url)
             new_record = NewRecord(uuid4(), draft.title, password, draft.username, draft.group, url_text)
-            session.add(new_record, self._current_revision(session))
+            session.add(new_record, revision)
             mutated = True
             records = self._refresh_active_projection(session)
             return self._publish(
@@ -689,6 +696,16 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         revision = session.revision
         if not isinstance(revision, RevisionToken):
             raise ApplicationCommandError("record revision is unavailable")
+        return revision
+
+
+
+    #### Consume the private revision captured while creating one new-record draft.
+    ####
+    def _consume_new_draft_revision(self, generation: int) -> RevisionToken:
+        revision = self._new_draft_revisions.pop(generation, None)
+        if revision is None:
+            raise ApplicationCommandError("record draft is stale")
         return revision
 
 
@@ -1081,6 +1098,7 @@ class VaultApplication[ApplicationSessionT: VaultSessionLike]:
         failure: ApplicationFailure | None,
         decision: DecisionToken | None,
     ) -> ApplicationSnapshot:
+        self._new_draft_revisions.clear()
         self._generation += 1
         self._snapshot = ApplicationSnapshot(
             self._generation,
