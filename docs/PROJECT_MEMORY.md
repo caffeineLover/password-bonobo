@@ -2,6 +2,32 @@
 
 Last updated: 2026-09-02
 
+## Final re-review blocked by two native-dialog security boundaries
+
+Scoped re-review of final fix commit `e6eb534` confirms all seven original
+Important findings and both promoted Task 6 test gaps are addressed.  It found
+two new Important defects introduced by the native-dialog repair.  Create/open
+currently retains the controller's raw passphrase bytearray for the entire
+blocking dialog instead of converting immediately to a `SecretBuffer` owner.
+If native selection raises, the QML-facing slot wipes input but re-raises the
+arbitrary exception, allowing unredacted native diagnostics to cross the safe
+failure boundary instead of emitting the fixed argument-free rejection.
+
+These are real load-bearing security findings, not parked minors.  The mandated
+single final fix wave and single scoped re-review are exhausted, so the branch
+must not merge or publish in this state.  The exact next actions, if another
+repair wave is authorized, are: (1) take passphrase ownership before opening the
+dialog and close it on cancellation/native failure; (2) contain every dialog
+exception inside the controller, set only a closed generic failure key, and emit
+the argument-free rejection; (3) add red-first coverage for blocking-dialog
+ownership and exception redaction; (4) run focused desktop gates, one scoped
+review, then the complete Botan-backed final suite and finishing workflow.
+
+Hosted Windows/macOS/Linux deployment evidence and the local optional-project /
+`dumpbin` warnings remain integration checks after the security boundary is
+clean.  The feature branch and isolated worktree are preserved; no merge, push,
+publication, packaged artifact, installer, or signing action occurred.
+
 ## Completed final desktop review fix wave
 
 The single permitted final-review repair closes all seven Important findings
