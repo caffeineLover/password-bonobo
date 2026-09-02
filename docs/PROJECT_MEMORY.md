@@ -28,7 +28,8 @@ Local `main` uses `origin` at `https://github.com/caffeineLover/password-bonobo.
 initial GPLv3 `LICENSE` commit `7cb8203` was fetched and joined to the completed local history by merge commit `11f0ea7`.
 That earlier `963441d` checkpoint passed 645 tests with 12 expected platform-specific skips and 79% coverage in
 107.71 seconds, plus Ruff, strict mypy, Python structure, Bandit, REUSE, provenance, tracked-file, and whitespace gates.
-The last pushed `origin/main` state is `68c1317`, containing the diagnostic and strict-typing repairs recorded below.
+The pushed `origin/main` history contains the diagnostic, strict-typing, and Linux Botan-discovery repairs recorded
+below.
 
 Hosted run `33549509896` then passed Android arm64 but failed the iOS smoke link, macOS strict mypy, Ubuntu host-library
 discovery, and Windows test suite. Diagnostic repair `caec5f5` is integrated and pushed on `main`. Its follow-up hosted
@@ -43,7 +44,7 @@ shared-library ambiguity; iOS retained the missing C++ runtime link failure; and
 failed 153 and 157 tests respectively at private artifact preparation. Commit `f32bd0b` reproduces Ubuntu's exact
 unversioned/soname/versioned candidate set in a red regression and deterministically prefers the canonical installed
 linker name while retaining absent/ambiguous failure behavior. It is fast-forwarded into local `main`, verified there,
-and awaits push; the completed worktree and feature branch have been removed.
+and pushed to `origin/main`; the completed worktree and feature branch have been removed.
 
 The lossless-core implementation range on `feature/lossless-passwordsafe-core` is `a0f9a22..5e1d5d7`.
 
@@ -242,12 +243,12 @@ the same metadata.
 - Task 14's mobile gates provide compile/link evidence only. They cannot resolve the pending iOS distribution terms or
   establish execution on physical Android/iOS devices.
 - Hosted run `33564705673` failed four of five jobs after Android passed. iOS lacks C++ runtime symbols during its static
-  archive smoke link; Ubuntu discovery rejected the real soname chain addressed by local commit `f32bd0b`; and private
+  archive smoke link; Ubuntu discovery rejected the real soname chain addressed by pushed commit `f32bd0b`; and private
   artifact preparation fails across 153 macOS and 157 Windows tests even though all 650 applicable tests pass locally.
 
 ## Exact continuation order after this checkpoint
 
-1. Push local `main`, then verify the Ubuntu repair in the resulting hosted run.
+1. Verify the Ubuntu repair in the hosted run triggered by the `f32bd0b` push.
 2. Diagnose the shared macOS/Windows private-artifact preparation failures, then repair the iOS C++ runtime link.
 3. After all five hosted jobs pass, begin a separate design and plan for the vault application core and desktop
    foundation. Do not start provider coordination, URL-audit behavior, or mobile clients first.
