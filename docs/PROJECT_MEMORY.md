@@ -2,6 +2,56 @@
 
 Last updated: 2026-09-02
 
+## Completed Task 4 review-fix round 2
+
+Independent re-review confirms every round-1 finding closed and rejects the
+current Task 4 range for three remaining mandatory boundaries: pending guards
+and locks are path-locator rather than source-identity based; a failure after
+pending publication can lose an authoritative selector and wedge the frozen
+session; and several service/facade early validation paths retain a transferred
+valid passphrase.  These findings are compatible with the approved design.
+
+The approved repair keeps stable slot publication and resume bound to the exact
+original path locator, while deriving an additional private cross-process guard
+from the captured device/file identity.  Open and suspension will scan and
+validate all source-bound slots under that identity guard so hard-link aliases
+cannot bypass or publish a second slot.  Every post-publication suspension
+failure will query the exact new selector: authoritative state is reconciled to
+a locked session and committed marker, while absent state aborts the frozen
+snapshot and leaves the true dirty session active.  Valid transferred secrets
+will be owned by outer cleanup around all named validation and `BaseException`
+paths, without closing a replacement secret intentionally retained behind an
+active dirty decision.  Immediate next actions are add and observe the complete
+RED matrix, implement each boundary in security order, then run the full Task 4
+verification and commit separately without amending.  Later approved work
+remains Tasks 5 through 8 in order.
+
+The complete round-2 matrix is now RED/GREEN.  Three identity regressions first
+proved alias open, alias initial suspension, and cross-process alias guards all
+bypassed the original path lock; they now share a private device/file-ID lock
+while stable slots remain bound to the exact path locator.  Two
+post-publication regressions first lost an authoritative selector on retarget
+cleanup failure and propagated a capture `BaseException`; both now reconcile to
+a locked committed marker, while the already-removed selector case aborts the
+frozen snapshot and remains mutable.  Four service and ten facade ownership
+cases first retained valid secrets and now close them on all tested early
+validation/phase/`BaseException` paths while preserving the deliberately
+deferred replacement owner.  The combined focused set passes 128 tests with 2
+expected Windows capability skips, and the approved selected suite passes 245
+with 9 expected skips.  A final self-review tightened the validated identity
+scan to constant descriptor space; the focused set remained green afterward.
+Ruff, autopep8 diff, strict mypy for all 86 files under win32, darwin, and linux,
+Python structure, compatibility (66 behaviors, 45 features, 55 oracles),
+provenance, Bandit, pip-audit, REUSE 138/138, tracked-file and whitespace checks,
+source/wheel build, and wheel inspection pass.  The final post-refactor
+exact-DLL full suite passes 793 tests with 14 expected skips in 191.84 seconds.
+The Task 4 report records the complete round-2 RED/GREEN matrix, ownership and
+failure invariants, exact verification, files, and self-review.  The separate
+non-amended repair commit is `ea8bf93` (`fix: bind pending sessions to source
+identity`).  Immediate next action is commit this documentation checkpoint,
+then controller review of Task 4.  Later approved work remains Tasks 5 through
+8 in order.
+
 ## Completed Task 4 review-fix round 1
 
 Independent review rejected `ac87962` with one Critical selector-CAS gap,
